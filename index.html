@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>River Flood Lab</title>
+<meta name="description" content="River Flood Lab: a browser teaching tool for how river flow, water level, obstructions and bridges interact. Not a flood risk assessment.">
+<style>
+:root{--rf-bg:#fff;--rf-ink:#222;--rf-muted:#666;--rf-line:#ddd;--rf-accent:#1f5fa8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--rf-bg:#16181b;--rf-ink:#e8e8e8;--rf-muted:#a0a4aa;--rf-line:#33373d;--rf-accent:#7fb2ee}}
+:root[data-theme="dark"]{--rf-bg:#16181b;--rf-ink:#e8e8e8;--rf-muted:#a0a4aa;--rf-line:#33373d;--rf-accent:#7fb2ee}
+html,body{margin:0;background:var(--rf-bg);color:var(--rf-ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:46rem;margin:0 auto;padding:2rem 16px}
+h1{font-weight:600;margin:0 0 .5rem}
+p{color:var(--rf-muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>River Flood Lab</h1>
+  <p>In development. The hydraulic engine is in place; the interface, site data and 3D view follow.</p>
+  <p><strong>Teaching model — not a flood risk assessment.</strong></p>
+</main>
+
+<script id="rfl-engine">
+/* River Flood Lab — hydraulic engine.
+ *
+ * Steady, gradually varied, subcritical flow in one dimension, solved
+ * section by section with the standard-step method:
+ *   Chow, V. T. (1959) Open-Channel Hydraulics, ch. 10;
+ *   US Army Corps of Engineers, HEC-RAS Hydraulic Reference Manual, ch. 2
+ *   (energy equation, conveyance subdivision, average-conveyance friction
+ *   slope, discharge-weighted reach length, contraction/expansion losses)
+ *   and ch. 5 (bridges: energy method, Yarnell's pier equation,
+ *   contraction and expansion reaches).
+ *
+ * Units: metres, seconds, m³/s. A section is a ground line across the flow,
+ * offsets y increasing from left bank to right bank looking downstream.
+ * Chainage x is measured upstream from the downstream end of the model.
+ */
+const RFL = (() => {
+  'use strict';
+  const G = 9.81;
+  const isNum = v => typeof v === 'number' && isFinite(v);
+
+  // ---------- ground-line geometry ----------
+
+  function dedupe(pts) {
+    const out = [];
+    for (const p of pts) {
+      const l = out[out.length - 1];
+      if (!l || l[0] !== p[0] || l[1] !== p[1]) out.push(p);
+    }
+    return out;
+  }
+
+  // Part of a ground line between offsets a and b, ends interpolated.
+  function clip(pts, a, b) {
+    const out = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [y1, z1] = pts[i], [y2, z2] = pts[i + 1];
+      if (y2 < a || y1 > b) continue;
+      if (y2 === y1) { out.push([y1, z1], [y2, z2]); continue; }
+      const at = v => z1 + (z2 - z1) * (v - y1) / (y2 - y1);
+      const ya = Math.max(a, y1), yb = Math.min(b, y2);
+      out.push([ya, at(ya)], [yb, at(yb)]);
+    }
+    return dedupe(out);
+  }
+
+  // Raise a ground line to at least `top`, adding the points where it crosses.
+  function raise(pts, top) {
+    const out = [];
+    for (let i = 0; i < pts.length; i++) {
+      const [y, z] = pts[i];
+      if (i > 0) {
+        const [yp, zp] = pts[i - 1];
+        if ((zp - top) * (z - top) < 0) out.push([yp + (y - yp) * (top - zp) / (z - zp), top]);
+      }
+      out.push([y, Math.max(z, top)]);
+    }
+    return dedupe(out);
+  }
+
+  // A blocked obstruction: the ground between y0 and y1 is raised to `top`
+  // (HEC-RAS "blocked obstruction": area removed, its sides become wetted perimeter).
+  function applyBlock(pts, y0, y1, top) {
+    const ymin = pts[0][0], ymax = pts[pts.length - 1][0];
+    y0 = Math.max(y0, ymin); y1 = Math.min(y1, ymax);
+    if (!(y1 > y0)) return pts;
+    const left = y0 > ymin ? clip(pts, ymin, y0) : [];
+    const mid = raise(clip(pts, y0, y1), top);
+    const right = y1 < ymax ? clip(pts, y1, ymax) : [];
+    return dedupe(left.concat(mid, right));
+  }
+
+  function groundAt(pts, y) {
+    if (y <= pts[0][0]) return pts[0][1];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [y1, z1] = pts[i], [y2, z2] = pts[i + 1];
+      if (y >= y1 && y <= y2) return y2 === y1 ? Math.max(z1, z2) : z1 + (z2 - z1) * (y - y1) / (y2 - y1);
+    }
+    return pts[pts.length - 1][1];
+  }
+
+  // Area, wetted perimeter and top width of the water between offsets a and b.
+  // `ceil` is a bridge soffit: water above it is cut off and the soffit it
+  // touches is wetted perimeter (pressure flow).
+  function wetted(pts, ws, a, b, ceil) {
+    const s = isNum(ceil) ? Math.min(ws, ceil) : ws;
+    const roof = isNum(ceil) && ws > ceil;
+    let A = 0, P = 0, T = 0;
+    const seg = clip(pts, a, b);
+    for (let i = 0; i < seg.length - 1; i++) {
+      const [y1, z1] = seg[i], [y2, z2] = seg[i + 1];
+      const dy = y2 - y1, len = Math.hypot(dy, z2 - z1);
+      const d1 = s - z1, d2 = s - z2;
+      if (dy === 0) { P += Math.max(0, Math.min(s, Math.max(z1, z2)) - Math.min(z1, z2)); continue; }
+      if (d1 > 0 && d2 > 0) {
+        A += (d1 + d2) / 2 * dy; P += len; T += dy; if (roof) P += dy;
+      } else if (d1 > 0 || d2 > 0) {
+        const dp = Math.max(d1, d2), f = dp / (Math.abs(d1) + Math.abs(d2));
+        A += 0.5 * dp * dy * f; P += len * f; T += dy * f; if (roof) P += dy * f;
+      }
+    }
+    return { A, P, T };
+  }
+
+  // Offsets [a,b] minus a list of excluded spans.
+  function subtractSpans(a, b, spans) {
+    let parts = [[a, b]];
+    for (const [c, d] of spans) {
+      const next = [];
+      for (const [p, q] of parts) {
+        if (d <= p || c >= q) { next.push([p, q]); continue; }
+        if (c > p) next.push([p, c]);
+        if (d < q) next.push([d, q]);
+      }
+      parts = next;
+    }
+    return parts;
+  }
+
+  // ---------- one section at one water level ----------
+
+  // prep: { x, pts (blocks applied), banks:{left,right}, n:{lob,ch,rob},
+  //         ceil, excl:[{a,b,elev}], bridge }
+  function hydraulics(prep, ws, Q) {
+    const pts = prep.pts, ymin = pts[0][0], ymax = pts[pts.length - 1][0];
+    const bl = Math.min(Math.max(prep.banks.left, ymin), ymax);
+    const br = Math.min(Math.max(prep.banks.right, bl), ymax);
+    const spans = prep.excl.filter(e => !(ws > e.elev)).map(e => [e.a, e.b]);
+    const subs = [['lob', ymin, bl, prep.n.lob], ['ch', bl, br, prep.n.ch], ['rob', br, ymax, prep.n.rob]];
+    const out = { ws, sub: {}, A: 0, P: 0, T: 0, K: 0, flags: [] };
+    let sumK3A2 = 0;
+    for (const [key, a, b, n] of subs) {
+      let A = 0, P = 0, T = 0;
+      if (b > a) for (const [p, q] of subtractSpans(a, b, spans)) {
+        const w = wetted(pts, ws, p, q, prep.ceil);
+        A += w.A; P += w.P; T += w.T;
+      }
+      // Water above an end of the ground line is held by a vertical wall.
+      if (key === 'lob' && ws > pts[0][1] && !spans.some(([c]) => c <= ymin)) { P += ws - pts[0][1]; out.flags.push('wall-left'); }
+      if (key === 'rob' && ws > pts[pts.length - 1][1] && !spans.some(([, d]) => d >= ymax)) { P += ws - pts[pts.length - 1][1]; out.flags.push('wall-right'); }
+      const K = A > 0 && P > 0 ? A * Math.pow(A / P, 2 / 3) / n : 0;
+      out.sub[key] = { A, P, T, K, n };
+      out.A += A; out.P += P; out.T += T; out.K += K;
+      if (A > 0) sumK3A2 += K * K * K / (A * A);
+    }
+    out.alpha = out.K > 0 ? out.A * out.A * sumK3A2 / (out.K * out.K * out.K) : 1;
+    out.V = out.A > 0 ? Q / out.A : Infinity;
+    out.hv = out.alpha * out.V * out.V / (2 * G);
+    out.E = ws + out.hv;
+    out.Fr = out.A > 0 && out.T > 0 ? out.V / Math.sqrt(G * out.A / out.T) : Infinity;
+    for (const k in out.sub) {
+      const s = out.sub[k];
+      s.Q = out.K > 0 ? Q * s.K / out.K : 0;
+      s.V = s.A > 0 ? s.Q / s.A : 0;
+    }
+    if (prep.bridge) {
+      if (ws > prep.bridge.highChord) out.flags.push('overtopping');
+      else if (ws > prep.bridge.lowChord) out.flags.push('pressure');
+    }
+    return out;
+  }
+
+  function bedLevel(pts) { return Math.min(...pts.map(p => p[1])); }
+
+  // Water level of least specific energy (critical depth).
+  function criticalWS(prep, Q) {
+    const bed = bedLevel(prep.pts);
+    const top = Math.max(...prep.pts.map(p => p[1])) + 20;
+    const E = ws => hydraulics(prep, ws, Q).E;
+    let best = bed + 1e-3, bestE = E(best);
+    const N = 400;
+    for (let i = 1; i <= N; i++) {
+      const ws = bed + 1e-3 + (top - bed) * Math.pow(i / N, 2);
+      const e = E(ws);
+      if (e < bestE) { bestE = e; best = ws; }
+    }
+    // golden-section refinement around the best scan point
+    const step = (top - bed) / N;
+    let a = Math.max(bed + 1e-4, best - 2 * step), b = best + 2 * step;
+    const r = (Math.sqrt(5) - 1) / 2;
+    let c = b - r * (b - a), d = a + r * (b - a), Ec = E(c), Ed = E(d);
+    for (let i = 0; i < 80; i++) {
+      if (Ec < Ed) { b = d; d = c; Ed = Ec; c = b - r * (b - a); Ec = E(c); }
+      else { a = c; c = d; Ec = Ed; d = a + r * (b - a); Ed = E(d); }
+    }
+    return (a + b) / 2;
+  }
+
+  // Root of an increasing function on [lo, hi], growing hi until it brackets.
+  function bisect(f, lo, hi) {
+    let flo = f(lo), fhi = f(hi), grow = 0;
+    while (fhi < 0 && grow++ < 60) { hi = lo + (hi - lo) * 2; fhi = f(hi); }
+    if (fhi < 0 || flo > 0) return null;
+    for (let i = 0; i < 100; i++) {
+      const m = (lo + hi) / 2, fm = f(m);
+      if (fm > 0) hi = m; else lo = m;
+      if (hi - lo < 1e-7) break;
+    }
+    return (lo + hi) / 2;
+  }
+
+  function normalWS(prep, Q, slope) {
+    const bed = bedLevel(prep.pts);
+    return bisect(ws => hydraulics(prep, ws, Q).K * Math.sqrt(slope) - Q, bed + 1e-6, bed + 1);
+  }
+
+  // ---------- building the model ----------
+
+  // Ground line at a fraction s (0..1) of a section's width.
+  function atFraction(sec, s) {
+    const a = sec.pts[0][0], b = sec.pts[sec.pts.length - 1][0];
+    return groundAt(sec.pts, a + s * (b - a));
+  }
+
+  // Linear interpolation between two surveyed sections, point by point on
+  // the union of their fractional offsets.
+  function interpolateSection(dn, up, x) {
+    const t = (x - dn.x) / (up.x - dn.x);
+    const lerp = (p, q) => p + (q - p) * t;
+    const frac = sec => { const a = sec.pts[0][0], w = sec.pts[sec.pts.length - 1][0] - a; return sec.pts.map(p => (p[0] - a) / w); };
+    const fr = [...new Set(frac(dn).concat(frac(up)).map(v => +v.toFixed(9)))].sort((p, q) => p - q);
+    const a = lerp(dn.pts[0][0], up.pts[0][0]);
+    const b = lerp(dn.pts[dn.pts.length - 1][0], up.pts[up.pts.length - 1][0]);
+    return {
+      id: `${dn.id || 'xs'}+${(x - dn.x).toFixed(1)}`, x, interpolated: true,
+      pts: fr.map(s => [a + s * (b - a), lerp(atFraction(dn, s), atFraction(up, s))]),
+      banks: { left: lerp(dn.banks.left, up.banks.left), right: lerp(dn.banks.right, up.banks.right) },
+      n: { ...dn.n },
+    };
+  }
+
+  function sectionAt(sorted, x) {
+    const hit = sorted.find(s => Math.abs(s.x - x) < 1e-6);
+    if (hit) return null;
+    for (let i = 0; i < sorted.length - 1; i++) {
+      if (x > sorted[i].x && x < sorted[i + 1].x) return interpolateSection(sorted[i], sorted[i + 1], x);
+    }
+    return null;
+  }
+
+  // Each blockage is a set of blocked spans over a range of chainage.
+  function blockages(model) {
+    const list = [];
+    for (const ob of model.obstructions || []) {
+      list.push({ kind: 'obstruction', id: ob.id, x0: ob.x0, x1: ob.x1, blocks: [{ y0: ob.y0, y1: ob.y1, top: ob.top }] });
+    }
+    for (const br of model.bridges || []) {
+      const blocks = [{ y0: -Infinity, y1: br.openLeft, top: br.highChord }, { y0: br.openRight, y1: Infinity, top: br.highChord }];
+      for (const p of br.piers || []) blocks.push({ y0: p.y - p.width / 2, y1: p.y + p.width / 2, top: br.highChord, pier: true });
+      list.push({ kind: 'bridge', id: br.id, x0: br.x, x1: br.x + br.length, blocks, bridge: br });
+    }
+    return list;
+  }
+
+  // Eddy zones: the separated, dead-water areas beside and behind a
+  // blockage. Flow re-expands downstream at 1:ER and contracts upstream at
+  // 1:CR (HEC-RAS Hydraulic Reference Manual, ch. 5, contraction and
+  // expansion reach lengths). The zones carry no flow in the calculation
+  // until the water rises above the blockage; the swirl inside them is not
+  // computed.
+  function eddySpan(block, d, R, ymin, ymax) {
+    const leftEdge = block.y0 <= ymin, rightEdge = block.y1 >= ymax;
+    if (leftEdge && rightEdge) return null;
+    const a = leftEdge ? ymin : block.y0 + d / R;
+    const b = rightEdge ? ymax : block.y1 - d / R;
+    return b > a ? [a, b] : null;
+  }
+
+  function eddyLength(block, R, ymin, ymax) {
+    const leftEdge = block.y0 <= ymin, rightEdge = block.y1 >= ymax;
+    if (leftEdge && rightEdge) return 0;
+    const w = Math.min(block.y1, ymax) - Math.max(block.y0, ymin);
+    return R * (leftEdge || rightEdge ? w : w / 2);
+  }
+
+  function prepare(model) {
+    const eddy = { on: true, cr: 1, er: 2, ...(model.eddy || {}) };
+    let secs = model.sections.map(s => ({ ...s, pts: s.pts.map(p => [p[0], p[1]]) })).sort((a, b) => a.x - b.x);
+    const blk = blockages(model);
+    // Make sure every blockage has a section to act on.
+    const extra = [];
+    for (const b of blk) {
+      const xs = b.kind === 'bridge' ? [b.x0, b.x1] : (secs.some(s => s.x >= b.x0 && s.x <= b.x1) ? [] : [(b.x0 + b.x1) / 2]);
+      for (const x of xs) { const s = sectionAt(secs, x); if (s) extra.push(s); }
+    }
+    secs = secs.concat(extra).sort((a, b) => a.x - b.x);
+    // A surveyed section's reach lengths run to the next surveyed section;
+    // once a section is inserted below it they no longer apply.
+    secs = secs.map((s, i) => i > 0 && secs[i - 1].interpolated && s.lengths ? { ...s, lengths: undefined } : s);
+    const preps = secs.map(s => ({
+      id: s.id, x: s.x, interpolated: !!s.interpolated, raw: s.pts, pts: s.pts,
+      banks: s.banks, n: s.n, lengths: s.lengths, ceil: undefined, bridge: null, eddies: [],
+      excl: [
+        ...(s.ineffective || []).map(e => ({ a: e.y0, b: e.y1, elev: e.elev, kind: 'ineffective' })),
+        ...(s.levees && s.levees.left ? [{ a: -Infinity, b: s.levees.left.y, elev: s.levees.left.z, kind: 'levee' }] : []),
+        ...(s.levees && s.levees.right ? [{ a: s.levees.right.y, b: Infinity, elev: s.levees.right.z, kind: 'levee' }] : []),
+      ],
+    }));
+    const zones = [];
+    for (const b of blk) {
+      for (const p of preps) {
+        if (p.x < b.x0 - 1e-6 || p.x > b.x1 + 1e-6) continue;
+        for (const k of b.blocks) p.pts = applyBlock(p.pts, k.y0, k.y1, k.top);
+        if (b.kind === 'bridge') { p.ceil = b.bridge.lowChord; p.bridge = b.bridge; }
+      }
+      if (!eddy.on) continue;
+      for (const k of b.blocks) {
+        const ref = preps.find(p => p.x >= b.x0 - 1e-6) || preps[0];
+        const ymin = ref.raw[0][0], ymax = ref.raw[ref.raw.length - 1][0];
+        const zone = { blockage: b.id, kind: b.kind, x0: b.x0, x1: b.x1, top: k.top,
+          downstream: eddyLength(k, eddy.er, ymin, ymax), upstream: eddyLength(k, eddy.cr, ymin, ymax), spans: [] };
+        for (const p of preps) {
+          let d, R;
+          if (p.x < b.x0 - 1e-6) { d = b.x0 - p.x; R = eddy.er; } else if (p.x > b.x1 + 1e-6) { d = p.x - b.x1; R = eddy.cr; } else continue;
+          const pymin = p.raw[0][0], pymax = p.raw[p.raw.length - 1][0];
+          const span = eddySpan(k, d, R, pymin, pymax);
+          if (!span) continue;
+          p.excl.push({ a: span[0], b: span[1], elev: k.top, kind: 'eddy' });
+          p.eddies.push(span);
+          zone.spans.push({ x: p.x, a: span[0], b: span[1] });
+        }
+        zones.push(zone);
+      }
+    }
+    return { preps, zones, blockages: blk };
+  }
+
+  // ---------- the profile ----------
+
+  // model: { sections, obstructions, bridges, eddy:{on,cr,er},
+  //          boundary:{type:'normal',slope} | {type:'ws',ws},
+  //          coeff:{cc,ce,bridgeCc,bridgeCe} }
+  function solve(model, Q) {
+    if (!isNum(Q) || Q <= 0) return { error: 'Flow must be a positive number.' };
+    if (!model || !Array.isArray(model.sections) || model.sections.length < 2) return { error: 'At least two cross-sections are needed.' };
+    const coeff = { cc: 0.1, ce: 0.3, bridgeCc: 0.3, bridgeCe: 0.5, ...(model.coeff || {}) };
+    const { preps, zones, blockages: blk } = prepare(model);
+    const results = [];
+    const bnd = model.boundary || { type: 'normal', slope: 0.001 };
+    const first = preps[0];
+    let ws0 = bnd.type === 'ws' && isNum(bnd.ws) ? bnd.ws : normalWS(first, Q, bnd.slope);
+    const flags0 = [];
+    const wc0 = criticalWS(first, Q);
+    if (ws0 === null || ws0 < wc0) { ws0 = wc0; flags0.push('critical'); }
+    let h = hydraulics(first, ws0, Q);
+    h.flags.push(...flags0);
+    results.push(pack(first, h, wc0));
+    for (let i = 1; i < preps.length; i++) {
+      const dn = preps[i - 1], up = preps[i], hdn = h;
+      const nearBridge = !!(dn.bridge || up.bridge);
+      const cc = nearBridge ? coeff.bridgeCc : coeff.cc, ce = nearBridge ? coeff.bridgeCe : coeff.ce;
+      const dx = up.x - dn.x;
+      const f = ws => {
+        const hu = hydraulics(up, ws, Q);
+        const Sf = Math.pow(2 * Q / (hdn.K + hu.K), 2);
+        const qs = ['lob', 'ch', 'rob'].map(k => (hdn.sub[k].Q + hu.sub[k].Q) / 2);
+        const tot = qs[0] + qs[1] + qs[2];
+        // Discharge-weighted reach length; overbank lengths differ on a bend.
+        const Ls = up.lengths ? [up.lengths.lob, up.lengths.ch, up.lengths.rob].map(v => isNum(v) ? v : dx) : [dx, dx, dx];
+        const L = tot > 0 ? (Ls[0] * qs[0] + Ls[1] * qs[1] + Ls[2] * qs[2]) / tot : dx;
+        const C = hdn.hv > hu.hv ? cc : ce;
+        return hu.E - (hdn.E + L * Sf + C * Math.abs(hu.hv - hdn.hv));
+      };
+      const wc = criticalWS(up, Q);
+      const flags = [];
+      let ws;
+      if (f(wc) > 0) { ws = wc; flags.push('critical'); }
+      else ws = bisect(f, wc, wc + 1);
+      if (ws === null) { ws = wc; flags.push('no-solution'); }
+      h = hydraulics(up, ws, Q);
+      h.flags.push(...flags);
+      results.push(pack(up, h, wc));
+    }
+    // Afflux is the rise above the level the same river would have without
+    // the bridge, so the bridge-free profile is solved alongside.
+    const noBridge = blk.some(b => b.kind === 'bridge') ? solve({ ...model, bridges: [] }, Q) : null;
+    const bridges = blk.filter(b => b.kind === 'bridge').map(b => bridgeReport(b.bridge, preps, results, Q, noBridge));
+    return { Q, sections: results, eddyZones: zones, bridges };
+  }
+
+  function pack(prep, h, wc) {
+    const bed = bedLevel(prep.raw);
+    return {
+      id: prep.id, x: prep.x, interpolated: prep.interpolated, bridge: prep.bridge ? prep.bridge.id : null,
+      ws: h.ws, egl: h.E, bed, depth: h.ws - bed, wsCritical: wc,
+      A: h.A, T: h.T, V: h.V, Fr: h.Fr, alpha: h.alpha, K: h.K,
+      sub: h.sub, flags: h.flags, eddies: prep.eddies.slice(), ground: prep.pts,
+    };
+  }
+
+  // Yarnell's pier equation as a check on the energy method at a bridge:
+  //   dy = 2K (K + 10w - 0.6)(a + 15a^4) V^2/2g,   w = V^2/(2g y)
+  // with V and y downstream of the bridge and a the share of the
+  // unobstructed area the piers take up. K: pier shape (1.25 square nose,
+  // 0.9 semicircular, 1.05 triangular 90°).
+  function yarnell(K, V, y, a) {
+    const hv = V * V / (2 * G), w = hv / y;
+    return 2 * K * (K + 10 * w - 0.6) * (a + 15 * Math.pow(a, 4)) * hv;
+  }
+
+  function bridgeReport(br, preps, results, Q, noBridge) {
+    const iDn = preps.findIndex(p => p.bridge === br);
+    const iUp = preps.length - 1 - [...preps].reverse().findIndex(p => p.bridge === br);
+    const below = results[iDn - 1], face = results[iDn], above = results[iUp + 1] || results[iUp];
+    const rep = { id: br.id, lowChord: br.lowChord, highChord: br.highChord,
+      wsDownstream: below ? below.ws : null, wsUpstream: above.ws,
+      afflux: noBridge && !noBridge.error ? above.ws - wsAt(noBridge, above.x) : null,
+      freeboard: br.lowChord - face.ws,
+      flow: results[iUp].ws > br.highChord ? 'overtopping' : results[iUp].ws > br.lowChord ? 'pressure' : 'low' };
+    if (below && (br.piers || []).length) {
+      const p = preps[iDn];
+      let open = p.raw;
+      open = applyBlock(open, -Infinity, br.openLeft, br.highChord);
+      open = applyBlock(open, br.openRight, Infinity, br.highChord);
+      const Afull = wetted(open, below.ws, open[0][0], open[open.length - 1][0]).A;
+      const Apier = Afull - wetted(p.pts, below.ws, p.pts[0][0], p.pts[p.pts.length - 1][0]).A;
+      const a = Afull > 0 ? Apier / Afull : 0;
+      rep.yarnell = { K: br.pierK || 1.25, alpha: a, rise: yarnell(br.pierK || 1.25, below.V, below.depth, a) };
+      rep.yarnell.wsUpstream = below.ws + rep.yarnell.rise;
+    }
+    return rep;
+  }
+
+  // Water level at any chainage, interpolated linearly between sections.
+  function wsAt(result, x) {
+    const s = result.sections;
+    if (!s.length || !isNum(x)) return null;
+    if (x <= s[0].x) return s[0].ws;
+    for (let i = 0; i < s.length - 1; i++) {
+      if (x <= s[i + 1].x) return s[i].ws + (s[i + 1].ws - s[i].ws) * (x - s[i].x) / (s[i + 1].x - s[i].x);
+    }
+    return s[s.length - 1].ws;
+  }
+
+  // Depth over each building's floor (negative = freeboard).
+  function buildings(result, list) {
+    return list.map(b => {
+      const ws = wsAt(result, b.x);
+      return { id: b.id, ws, floor: b.floor, depth: ws === null || !isNum(b.floor) ? null : ws - b.floor };
+    });
+  }
+
+  return { G, solve, prepare, hydraulics, criticalWS, normalWS, wetted, applyBlock, clip,
+    interpolateSection, yarnell, wsAt, buildings, eddySpan, eddyLength };
+})();
+if (typeof module !== 'undefined') module.exports = RFL;
+</script>
+</body>
+</html>

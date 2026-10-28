@@ -1,0 +1,11 @@
+{
+  "name": "river-flood-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "River Flood Lab: a single-file browser teaching tool for river flow, water level, obstructions and bridges.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/engine.test.mjs"
+  }
+}
