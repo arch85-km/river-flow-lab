@@ -5,8 +5,32 @@ obstructions and bridges interact, for architecture and urban design
 students. The first site is a reach of the River Sheaf at Heeley,
 Sheffield.
 
-**Status: in development.** The hydraulic engine is in place and tested;
-the interface, the site data and the 3D view follow.
+**Status: in development.** The engine and the interface work on a
+template reach or on sections you type in. The River Sheaf site data and
+the 3D view follow.
+
+## Using it
+
+Open `index.html` in a browser; it needs no installation, account or
+network. It starts on a template reach (an idealised channel with
+floodplains, not a survey) with one example bridge.
+
+- **Flow:** drag the slider or type a flow; add a climate allowance in
+  per cent.
+- **Design elements:** add obstructions, bridges (soffit, deck, opening,
+  piers), flood walls along a bank, and buildings with a floor level.
+  Every result is compared with the same river without them.
+- **Eddies:** mark the dead-water zones beside and behind obstructions and
+  bridges, with the expansion and contraction ratios you choose.
+- **Cross-section editor:** type ground points, banks and Manning's n for
+  each section; widen the channel, add a berm, or change roughness.
+- **Views:** plan, cross-section, long profile, and water level against
+  flow at the chosen section.
+- **Exports:** CSV, section PNG, and a project file to save and reopen.
+  Every export carries the caution and the settings that produced it.
+
+The only thing it stores in the browser is the colour theme
+(`riverfloodlab.theme.v1`).
 
 **Teaching model — not a flood risk assessment.** Do not use its figures
 for planning, insurance or construction decisions.
@@ -38,7 +62,8 @@ Manual, ch. 2 and 5):
 npm test
 ```
 
-The checks compare the engine with closed-form results (Manning normal
+`tests/engine.test.mjs` (27 checks) and `tests/ui.test.mjs` (57 checks,
+headless Chromium; every off-origin request is refused). The engine checks compare the engine with closed-form results (Manning normal
 depth, critical depth) and with an independent RK4 integration of the
 gradually varied flow equation. Agreement shows the engine is consistent
 with open-channel theory; it is not validation against measured levels.
