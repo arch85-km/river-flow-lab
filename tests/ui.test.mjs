@@ -29,7 +29,8 @@ function check(name, ok, detail = '') {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ' — ' + detail : ''}`);
 }
 
-const browser = await chromium.launch();
+// WebGL through SwiftShader, so the 3D view renders without a GPU.
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 async function openPage(size, scheme = 'light') {
   const ctx = await browser.newContext({ viewport: size, colorScheme: scheme, acceptDownloads: true });
   const page = await ctx.newPage();
@@ -56,6 +57,8 @@ for (const scheme of ['light', 'dark']) {
     const { page, ctx, errors, offOrigin } = await openPage(size, scheme);
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     check(`${scheme} ${size.width}×${size.height}: no horizontal overflow`, over === 0, `${over}px`);
+    const v3 = await page.evaluate(() => window.RFL_UI.view3d);
+    check(`${scheme} ${size.width}: 3D view running`, v3.ok && v3.meshes > 5, JSON.stringify(v3));
     const svgs = await page.evaluate(() => [...document.querySelectorAll('.rf-chart svg')].filter(s => s.getBoundingClientRect().width > 100).length);
     check(`${scheme} ${size.width}: four charts drawn`, svgs === 4, `${svgs}`);
     check(`${scheme} ${size.width}: no console errors`, errors.length === 0, errors.join(' | '));
@@ -166,6 +169,25 @@ for (const scheme of ['light', 'dark']) {
   check('new reach clears design elements', (await page.evaluate(() => window.RFL_UI.state.obstructions.length + window.RFL_UI.state.bridges.length)) === 0);
   await page.setInputFiles('#rf-file', await sv.path()); await page.waitForFunction(() => window.RFL_UI.state.obstructions.length === 1);
   check('project reopens', true);
+
+  // 3D view
+  const shot = await page.locator('#rf-3d').screenshot();
+  check('3D canvas is not blank', shot.length > 20000, `${shot.length} bytes`);
+  const m0 = (await page.evaluate(() => window.RFL_UI.view3d)).meshes;
+  await page.click('.rf-tabs [data-tab=obstructions]'); await page.click('#rf-add'); await settle(page);
+  const m1 = (await page.evaluate(() => window.RFL_UI.view3d)).meshes;
+  check('adding an obstruction adds solids to the 3D view', m1 > m0, `${m0} → ${m1} objects`);
+  await page.selectOption('#rf-vex', '10'); await settle(page);
+  check('vertical exaggeration applies', (await page.evaluate(() => window.RFL_UI.view3d)).vex === 10);
+  const [p3] = await Promise.all([page.waitForEvent('download'), page.click('#rf-3d-png')]);
+  const b3 = readFileSync(await p3.path());
+  check('3D PNG exports', b3.length > 20000 && b3[1] === 0x50, `${b3.length} bytes`);
+  await page.click('#rf-3d-reset');
+  const g0 = (await page.evaluate(() => window.RFL_UI.view3d)).geometries;
+  for (let i = 0; i < 30; i++) await page.evaluate(i => { window.RFL_UI.state.flow.Q = 10 + i; window.RFL_UI.run(); }, i);
+  await settle(page);
+  const g1 = (await page.evaluate(() => window.RFL_UI.view3d)).geometries;
+  check('30 rebuilds of the 3D view leak no geometry', g1 <= g0, `${g0} → ${g1} geometries held`);
 
   // theme switch
   await page.click('#rf-theme'); await page.click('#rf-theme');

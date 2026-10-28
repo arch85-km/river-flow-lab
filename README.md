@@ -6,8 +6,8 @@ students. The first site is a reach of the River Sheaf at Heeley,
 Sheffield.
 
 **Status: in development.** The engine and the interface work on a
-template reach or on sections you type in. The River Sheaf site data and
-the 3D view follow.
+template reach or on sections you type in, with a 3D view. The River
+Sheaf site data follows.
 
 ## Using it
 
@@ -24,9 +24,10 @@ floodplains, not a survey) with one example bridge.
   bridges, with the expansion and contraction ratios you choose.
 - **Cross-section editor:** type ground points, banks and Manning's n for
   each section; widen the channel, add a berm, or change roughness.
-- **Views:** plan, cross-section, long profile, and water level against
-  flow at the chosen section.
-- **Exports:** CSV, section PNG, and a project file to save and reopen.
+- **Views:** a 3D view (terrain, water coloured by depth, eddy zones and
+  the design elements, with vertical exaggeration), plan, cross-section,
+  long profile, and water level against flow at the chosen section.
+- **Exports:** CSV, section PNG, 3D PNG, and a project file to save and reopen.
   Every export carries the caution and the settings that produced it.
 
 The only thing it stores in the browser is the colour theme
@@ -56,14 +57,31 @@ Manual, ch. 2 and 5):
   inside them is not computed.
 - Levees and ineffective areas carry no flow until overtopped.
 
+## three.js
+
+The 3D view uses three.js (MIT), bundled into `index.html` so the page
+needs no network. To update it, change the pinned version in
+`package.json`, then:
+
+```bash
+npm install
+```
+
+```bash
+node tools/build-three.mjs
+```
+
+The licence notice is in `NOTICE`.
+
 ## Checks
 
 ```bash
 npm test
 ```
 
-`tests/engine.test.mjs` (27 checks) and `tests/ui.test.mjs` (57 checks,
-headless Chromium; every off-origin request is refused). The engine checks compare the engine with closed-form results (Manning normal
+`tests/engine.test.mjs` (27 checks) and `tests/ui.test.mjs` (70 checks,
+headless Chromium with WebGL through SwiftShader; every off-origin
+request is refused). The engine checks compare the engine with closed-form results (Manning normal
 depth, critical depth) and with an independent RK4 integration of the
 gradually varied flow equation. Agreement shows the engine is consistent
 with open-channel theory; it is not validation against measured levels.

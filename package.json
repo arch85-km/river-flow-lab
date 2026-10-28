@@ -9,5 +9,9 @@
     "test": "node tests/engine.test.mjs && node tests/ui.test.mjs",
     "test:engine": "node tests/engine.test.mjs",
     "test:ui": "node tests/ui.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "three": "0.186.1"
   }
 }
