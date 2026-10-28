@@ -131,6 +131,16 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
 .rf-foot b{color:var(--rf-ink);font-weight:600}
 .rf-foot .rf-grow{flex:1;overflow:hidden;text-overflow:ellipsis}
 .rf-drawers{display:none}
+.rf-map{overflow:hidden;cursor:grab;touch-action:none;background:#e5e3df;user-select:none}
+.rf-map.rf-drawing{cursor:crosshair}
+.rf-map-tiles{position:absolute;inset:0}
+.rf-tile-img{position:absolute;left:0;top:0;width:256px;height:256px;pointer-events:none;user-select:none}
+.rf-map-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.rf-map-credit{position:absolute;right:0;bottom:0;background:#ffffffd9;color:#333;font-size:11px;padding:1px 6px;border-top-left-radius:4px}
+.rf-map-note{position:absolute;left:50%;top:58px;transform:translateX(-50%);max-width:min(460px,calc(100% - 24px));background:var(--rf-panel);border:1px solid var(--rf-line);border-radius:7px;padding:5px 10px;font-size:12px;z-index:4}
+.rf-map-search{display:flex;gap:4px;align-items:center}
+.rf-map-search input{width:200px;max-width:44vw;border:1px solid var(--rf-line);border-radius:5px;padding:2px 6px;background:var(--rf-panel-2)}
+.rf-left input.rf-select{width:100%}
 
 /* phones and narrow windows: the view on top, controls or results beneath */
 @media (max-width:900px){
@@ -219,13 +229,33 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
       </div>
     </details>
 
-    <details class="rf-sec">
+    <details class="rf-sec" id="rf-river-sec">
       <summary><span class="rf-eyebrow">River</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
       <div class="rf-body">
         <div class="rf-kv"><span class="rf-lab">Active river</span><span id="rf-river-name"></span></div>
         <div class="rf-kv"><span class="rf-lab">Sections</span><span id="rf-river-n"></span></div>
         <div class="rf-kv"><span class="rf-lab">Length</span><span id="rf-river-len"></span></div>
+        <p class="rf-hint">Draw the river's course on the map, from upstream to downstream. Sections are cut square to your line; their levels come from the template shape until surveyed levels are entered.</p>
+        <div class="rf-grid2">
+          <button class="rf-btn rf-primary" type="button" id="rf-map-draw" aria-pressed="false">Draw the river</button>
+          <button class="rf-btn rf-sq" type="button" id="rf-map-build" disabled>Build reach from line</button>
+          <button class="rf-btn rf-sq rf-small" type="button" id="rf-map-undo" disabled>Undo point</button>
+          <button class="rf-btn rf-sq rf-small" type="button" id="rf-map-clear">Clear line</button>
+        </div>
+        <div class="rf-field"><label for="rf-map-spacing">Section spacing, m</label><input class="rf-num rf-mono" type="number" id="rf-map-spacing" min="5" max="100" step="1" value="15"></div>
+        <p class="rf-hint" id="rf-map-msg" role="status"></p>
         <button class="rf-btn rf-sq" type="button" id="rf-new2">New template reach…</button>
+        <details>
+          <summary class="rf-lab" style="cursor:pointer">Map tile service</summary>
+          <div class="rf-body" style="padding:8px 0 0">
+            <p class="rf-hint">OpenStreetMap tiles are used unless you set your own service. Its credit line is required and is shown on the map.</p>
+            <label class="rf-hint" for="rf-tiles-url">Address with {z}, {x}, {y}</label><input class="rf-select" type="url" id="rf-tiles-url" placeholder="https://…/{z}/{x}/{y}.png">
+            <label class="rf-hint" for="rf-tiles-credit">Credit line</label><input class="rf-select" type="text" id="rf-tiles-credit" placeholder="© provider">
+            <div class="rf-field"><label for="rf-tiles-max">Maximum zoom</label><input class="rf-num rf-mono" type="number" id="rf-tiles-max" min="1" max="22" value="19"></div>
+            <div class="rf-grid2"><button class="rf-btn rf-sq rf-small" type="button" id="rf-tiles-save">Use this service</button><button class="rf-btn rf-sq rf-small" type="button" id="rf-tiles-reset">Use OpenStreetMap</button></div>
+            <p class="rf-hint" id="rf-tiles-msg" role="status"></p>
+          </div>
+        </details>
         <details>
           <summary class="rf-lab" style="cursor:pointer">Edit a cross-section</summary>
           <div class="rf-body" style="padding:8px 0 0">
@@ -254,6 +284,7 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
   <main class="rf-stage" aria-label="View">
     <div class="rf-views" role="group" aria-label="View">
       <button type="button" data-view="3d" aria-pressed="true">3D</button>
+      <button type="button" data-view="map" aria-pressed="false">Map</button>
       <button type="button" data-view="plan" aria-pressed="false">Plan</button>
       <button type="button" data-view="section" aria-pressed="false">Section</button>
       <button type="button" data-view="profile" aria-pressed="false">Profile</button>
@@ -261,8 +292,17 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
     <div class="rf-stage-tools">
       <label class="rf-glass" data-for="3d">Exaggeration <select class="rf-select" id="rf-vex" style="padding:1px 4px"><option value="1">1×</option><option value="2">2×</option><option value="3" selected>3×</option><option value="5">5×</option><option value="10">10×</option></select></label>
       <button class="rf-btn" type="button" id="rf-3d-reset" data-for="3d">Reset view</button>
+      <span class="rf-glass rf-map-search" data-for="map"><input type="search" id="rf-map-q" placeholder="Place or 53.3626, -1.4721" aria-label="Find a place or type coordinates"><button class="rf-btn rf-small" type="button" id="rf-map-go">Go</button></span>
+      <button class="rf-btn rf-sq" type="button" id="rf-map-out" data-for="map" aria-label="Zoom out">−</button>
+      <button class="rf-btn rf-sq" type="button" id="rf-map-in" data-for="map" aria-label="Zoom in">+</button>
     </div>
     <div class="rf-view rf-3d" id="rf-3d" data-view="3d" role="img" aria-label="3D view of the reach: terrain, water coloured by depth, eddy zones and design elements. Drag to turn, right-drag to move, scroll or pinch to zoom."></div>
+    <div class="rf-view rf-map" id="rf-map" data-view="map" hidden role="application" aria-label="Map: drag to move, scroll to zoom; while drawing, click along the river from upstream to downstream">
+      <div class="rf-map-tiles" id="rf-map-tiles"></div>
+      <svg class="rf-map-svg" id="rf-map-svg" aria-hidden="true"></svg>
+      <div class="rf-map-note" id="rf-map-note" hidden></div>
+      <div class="rf-map-credit" id="rf-map-credit"></div>
+    </div>
     <div class="rf-view" id="rf-plan" data-view="plan" data-fill hidden></div>
     <div class="rf-view" id="rf-xs" data-view="section" data-fill hidden></div>
     <div class="rf-view" id="rf-lp" data-view="profile" data-fill hidden></div>
@@ -5028,6 +5068,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       bridges: [{ id: 'B1', label: 'Example bridge', x: 150, length: 8, openLeft: 18, openRight: 33.2, lowChord: 2.7, highChord: 3.5, piers: '25.6:1', pierK: 0.9 }],
       walls: [],
       buildings: [],
+      geo: null,
     };
   }
 
@@ -5067,6 +5108,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
   let pending = false;
   function schedule() { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; run(); }); }
   function run() {
+    if (S.geo) bendLengths();
     const Q = flowQ();
     RES = RFL.solve(model(true), Q);
     BASE = hasDesign() && !RES.error ? RFL.solve(model(false), Q) : null;
@@ -5075,11 +5117,12 @@ if (typeof module !== 'undefined') module.exports = RFL;
   }
   // Only the view on screen is drawn; switching views draws the new one.
   function renderActive() {
-    if (view === '3d') build3D(); else if (view === 'plan') renderPlan(); else if (view === 'section') renderSection(); else renderProfile();
+    if (view === '3d') build3D(); else if (view === 'map') { centreOnReach(); renderMap(); } else if (view === 'plan') renderPlan(); else if (view === 'section') renderSection(); else renderProfile();
     renderLegend(); renderCaption();
   }
   function setView(v) {
     view = v;
+    if (v === 'map') $('rf-river-sec').open = true;
     document.querySelectorAll('.rf-views [data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
     document.querySelectorAll('.rf-stage .rf-view').forEach(d => { d.hidden = d.dataset.view !== v; });
     document.querySelectorAll('.rf-stage-tools [data-for]').forEach(d => { d.hidden = d.dataset.for !== v; });
@@ -5364,6 +5407,365 @@ if (typeof module !== 'undefined') module.exports = RFL;
     $('rf-rc-note').textContent = `At ${cur.id} (${cur.x.toFixed(1)} m). The curve bends where the water spills out of the channel: the same extra flow then raises the level less.` + (bpts.length ? ' Dashed: without design elements.' : '');
   }
 
+  // ---------- the river's course on the ground ----------
+  // S.geo holds a drawn centreline (latitude, longitude; downstream end
+  // first) and the offset of that line within each section. Positions are
+  // worked in local metres east and north of the downstream end, which is
+  // accurate to well under a metre over a few kilometres.
+  const M_LAT = 110540;
+  const geoCache = new WeakMap();
+  function geoFrame(g) {
+    let f = geoCache.get(g);
+    if (f) return f;
+    const [lat0, lon0] = g.line[0], kx = 111320 * Math.cos(lat0 * Math.PI / 180);
+    const pts = g.line.map(([la, lo]) => [(lo - lon0) * kx, (la - lat0) * M_LAT]);
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    f = { lat0, lon0, kx, pts, cum, length: cum[cum.length - 1] };
+    geoCache.set(g, f);
+    return f;
+  }
+  function pointAlong(f, s) {
+    s = Math.max(0, Math.min(f.length, s));
+    let i = 1; while (i < f.cum.length - 1 && f.cum[i] < s) i++;
+    const t = (s - f.cum[i - 1]) / ((f.cum[i] - f.cum[i - 1]) || 1);
+    return [f.pts[i - 1][0] + (f.pts[i][0] - f.pts[i - 1][0]) * t, f.pts[i - 1][1] + (f.pts[i][1] - f.pts[i - 1][1]) * t];
+  }
+  // Direction of flow at chainage s, smoothed over a few metres so a
+  // section at a drawn vertex sits square to the bend, not to one leg.
+  function flowDir(f, s) {
+    const h = Math.min(8, f.length / 4);
+    const a = pointAlong(f, s + h), b = pointAlong(f, s - h);
+    const dx = b[0] - a[0], dy = b[1] - a[1], n = Math.hypot(dx, dy) || 1;
+    return [dx / n, dy / n];
+  }
+  // Ground position (metres east, north) of offset y at chainage x.
+  function groundXY(x, y) {
+    const f = geoFrame(S.geo), c = pointAlong(f, x), d = flowDir(f, x);
+    const left = [-d[1], d[0]], k = S.geo.yc - y;
+    return [c[0] + left[0] * k, c[1] + left[1] * k];
+  }
+  function xyToLatLon(e, n) { const f = geoFrame(S.geo); return [f.lat0 + n / M_LAT, f.lon0 + e / f.kx]; }
+
+  // Sections square to a drawn line, at a spacing, with the template's
+  // shape and roughness. The levels are idealised until surveyed or LIDAR
+  // levels replace them.
+  // Clicked points make straight legs with sharp corners that a river does
+  // not have; two rounds of corner cutting (Chaikin 1974) round them off
+  // while keeping the ends where they were drawn.
+  function smoothLine(line) {
+    let pts = line;
+    for (let k = 0; k < 2 && pts.length > 2; k++) {
+      const out = [pts[0]];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [a, b] = [pts[i], pts[i + 1]];
+        out.push([0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]], [0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]]);
+      }
+      out.push(pts[pts.length - 1]);
+      pts = out;
+    }
+    return pts;
+  }
+  function reachFromLine(line, spacing) {
+    const down = smoothLine(line).reverse();           // drawn upstream → downstream; stored downstream first
+    const g = { line: down, yc: 0 };
+    const f = geoFrame(g);
+    if (f.length < 2 * spacing) return { error: `The line is ${f.length.toFixed(0)} m long: draw at least ${(2 * spacing).toFixed(0)} m for sections every ${spacing} m.` };
+    const p = { ...TEMPLATE, length: f.length, spacing };
+    const xs = []; for (let x = 0; x <= f.length + 1e-6; x += spacing) xs.push(+x.toFixed(2));
+    if (f.length - xs[xs.length - 1] > spacing / 3) xs.push(+f.length.toFixed(2));
+    const proto = templateSections({ ...p, length: 0 })[0];
+    g.yc = (proto.banks.left + proto.banks.right) / 2;
+    const sections = xs.map((x, i) => {
+      const z = x * p.slope;
+      return { ...proto, id: `XS${String(i + 1).padStart(2, '0')}`, x, pts: proto.pts.map(([y, zz]) => [y, +(zz + z).toFixed(3)]), banks: { ...proto.banks }, n: { ...proto.n } };
+    });
+    return { g, sections };
+  }
+  // On a bend the overbanks travel different distances from the channel;
+  // each gets its own reach length (discharge-weighted in the engine).
+  function bendLengths() {
+    if (!S.geo) return;
+    const secs = S.sections;
+    for (let i = 1; i < secs.length; i++) {
+      const a = secs[i - 1], b = secs[i];
+      const mid = (s, side) => side === 'l' ? (s.pts[0][0] + s.banks.left) / 2 : (s.banks.right + s.pts[s.pts.length - 1][0]) / 2;
+      const d = side => { const p = groundXY(a.x, mid(a, side)), q = groundXY(b.x, mid(b, side)); return Math.hypot(q[0] - p[0], q[1] - p[1]); };
+      b.lengths = { lob: +d('l').toFixed(2), ch: +(b.x - a.x).toFixed(2), rob: +d('r').toFixed(2) };
+    }
+    secs[0].lengths = undefined;
+  }
+  // Neighbouring sections that cross each other on a tight bend.
+  function crossingSections() {
+    if (!S.geo) return [];
+    const out = [], secs = S.sections;
+    const seg = s => [groundXY(s.x, s.pts[0][0]), groundXY(s.x, s.pts[s.pts.length - 1][0])];
+    const cross = ([p, q], [r, t]) => {
+      const d = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+      return d(p, q, r) * d(p, q, t) < 0 && d(r, t, p) * d(r, t, q) < 0;
+    };
+    for (let i = 1; i < secs.length; i++) if (cross(seg(secs[i - 1]), seg(secs[i]))) out.push(`${secs[i - 1].id}/${secs[i].id}`);
+    return out;
+  }
+
+  // ---------- Map view ----------
+  // OpenStreetMap tiles under the drawn river. Only the tiles on screen are
+  // requested (at most 6 × 6), never prefetched, and only while this view is
+  // open; the OSMF tile policy forbids bulk downloads. A custom tile service
+  // can replace them; it must carry its own credit line.
+  const BASEMAP_KEY = 'riverfloodlab.basemap.custom.v1';
+  const OSM_TILES = { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', credit: '© OpenStreetMap contributors', maxZoom: 19,
+    hint: 'Map tiles did not load. Check the connection; if other sites load, the tile server may be refusing requests from this address.' };
+  const SITE0 = { lat: 53.3626, lon: -1.4721, z: 17 };   // River Sheaf at Heeley, Sheffield
+  const MAP = { lat: SITE0.lat, lon: SITE0.lon, z: SITE0.z, drawing: false, draft: [], tiles: new Map(), failed: 0, loaded: 0, ink: 'dark', lastSearch: 0, centred: false };
+  function tileSource() {
+    try { const c = JSON.parse(localStorage.getItem(BASEMAP_KEY) || 'null'); if (c && c.url && c.credit) return { ...c, hint: 'The custom tile service did not answer. Check its address, and that it sends CORS headers; a service without them refuses every tile.' }; } catch { /* storage unavailable */ }
+    return OSM_TILES;
+  }
+  function validateTileService(url, credit, maxZoom) {
+    if (!/^https:\/\//i.test(url)) return 'The address must start with https://.';
+    if (!['{z}', '{x}', '{y}'].every(k => url.includes(k))) return 'The address must contain {z}, {x} and {y}.';
+    if (!credit.trim()) return 'A credit line is required: nearly every tile provider’s terms require one on the map.';
+    if (!(maxZoom >= 1 && maxZoom <= 22)) return 'Maximum zoom must be between 1 and 22.';
+    return null;
+  }
+  const TILE = 256;
+  const worldPx = (lat, lon, z) => {
+    const n = TILE * Math.pow(2, z), r = Math.max(-85.05, Math.min(85.05, lat)) * Math.PI / 180;
+    return [(lon + 180) / 360 * n, (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n];
+  };
+  const fromWorldPx = (x, y, z) => {
+    const n = TILE * Math.pow(2, z);
+    return [Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI, x / n * 360 - 180];
+  };
+  function mapSize() { const h = $('rf-map'); return [h.clientWidth || 640, h.clientHeight || 400]; }
+  function toScreen(lat, lon) {
+    const [W, H] = mapSize(), c = worldPx(MAP.lat, MAP.lon, MAP.z), p = worldPx(lat, lon, MAP.z);
+    return [p[0] - c[0] + W / 2, p[1] - c[1] + H / 2];
+  }
+  function fromScreen(x, y) {
+    const [W, H] = mapSize(), c = worldPx(MAP.lat, MAP.lon, MAP.z);
+    return fromWorldPx(c[0] + x - W / 2, c[1] + y - H / 2, MAP.z);
+  }
+  function drawMapTiles() {
+    const host = $('rf-map-tiles'), src = tileSource();
+    const [W, H] = mapSize(), c = worldPx(MAP.lat, MAP.lon, MAP.z), n = Math.pow(2, MAP.z);
+    const x0 = Math.floor((c[0] - W / 2) / TILE), x1 = Math.floor((c[0] + W / 2) / TILE);
+    const y0 = Math.max(0, Math.floor((c[1] - H / 2) / TILE)), y1 = Math.min(n - 1, Math.floor((c[1] + H / 2) / TILE));
+    const want = new Set();
+    for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+      if (want.size >= 36) break;                       // 6 × 6 at most
+      const key = `${src.url}|${MAP.z}/${tx}/${ty}`; want.add(key);
+      let img = MAP.tiles.get(key);
+      if (!img) {
+        img = new Image(); img.crossOrigin = 'anonymous'; img.alt = ''; img.draggable = false;
+        img.width = TILE; img.height = TILE; img.className = 'rf-tile-img';
+        img.onload = () => { MAP.loaded++; measureInk(); renderMapNote(); };
+        img.onerror = () => { MAP.failed++; renderMapNote(); };
+        const wx = ((tx % n) + n) % n;
+        img.src = src.url.replace('{z}', MAP.z).replace('{x}', wx).replace('{y}', ty);
+        MAP.tiles.set(key, img); host.appendChild(img);
+      }
+      img.style.transform = `translate(${Math.round(tx * TILE - c[0] + W / 2)}px, ${Math.round(ty * TILE - c[1] + H / 2)}px)`;
+    }
+    for (const [key, img] of MAP.tiles) if (!want.has(key)) { img.remove(); MAP.tiles.delete(key); }
+    $('rf-map-credit').textContent = src.credit + (MAP.searched ? ' · Search: Nominatim, © OpenStreetMap contributors' : '');
+  }
+  // Measure the basemap rather than assume it: dark ink over a light map,
+  // light ink over a dark one. Tiles without CORS cannot be read; then the
+  // casing alone keeps the lines legible.
+  let inkTimer = null;
+  function measureInk() {
+    clearTimeout(inkTimer);
+    inkTimer = setTimeout(() => {
+      try {
+        const cv = document.createElement('canvas'); cv.width = cv.height = 8;
+        const g = cv.getContext('2d'); let sum = 0, k = 0;
+        for (const img of MAP.tiles.values()) {
+          if (!img.complete || !img.naturalWidth) continue;
+          g.drawImage(img, 0, 0, 8, 8);
+          const d = g.getImageData(0, 0, 8, 8).data;
+          for (let i = 0; i < d.length; i += 4) { sum += (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255; k++; }
+        }
+        if (k) { const ink = sum / k < 0.45 ? 'light' : 'dark'; if (ink !== MAP.ink) { MAP.ink = ink; renderOverlay(); } }
+      } catch { /* tiles without CORS: keep the default ink */ }
+    }, 120);
+  }
+  function renderMapNote() {
+    const note = $('rf-map-note');
+    if (MAP.failed && !MAP.loaded) { note.hidden = false; note.textContent = tileSource().hint; }
+    else if (MAP.drawing) { note.hidden = false; note.textContent = MAP.draft.length < 2 ? 'Click along the river from upstream to downstream, in the direction of flow.' : `${MAP.draft.length} points, ${draftLength().toFixed(0)} m. Keep clicking, then Build reach from line.`; }
+    else note.hidden = true;
+  }
+  function draftLength() {
+    let L = 0;
+    for (let i = 1; i < MAP.draft.length; i++) {
+      const [a, b] = [MAP.draft[i - 1], MAP.draft[i]], kx = 111320 * Math.cos(a[0] * Math.PI / 180);
+      L += Math.hypot((b[1] - a[1]) * kx, (b[0] - a[0]) * M_LAT);
+    }
+    return L;
+  }
+  function renderOverlay() {
+    const host = $('rf-map-svg');
+    const [W, H] = mapSize();
+    host.setAttribute('viewBox', `0 0 ${W} ${H}`); host.textContent = '';
+    const ink = MAP.ink === 'light' ? '#ffffff' : '#14202c', halo = MAP.ink === 'light' ? '#14202c' : '#ffffff';
+    const line = (pts, color, w, extra = {}) => {
+      const d = pts.map(p => p.join(',')).join(' ');
+      el('polyline', { points: d, fill: 'none', stroke: halo, 'stroke-width': w + 3, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: 0.85 }, host);
+      return el('polyline', { points: d, fill: 'none', stroke: color, 'stroke-width': w, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', ...extra }, host);
+    };
+    if (S.geo && RES && !RES.error) {
+      const scr = (x, y) => toScreen(...xyToLatLon(...groundXY(x, y)));
+      // water across each section, the full section width faint beneath it
+      for (const s of RES.sections) {
+        const a = s.raw[0][0], b = s.raw[s.raw.length - 1][0];
+        const sel = s.id === viewId;
+        line([scr(s.x, a), scr(s.x, b)], sel ? C.accent : ink, sel ? 2.5 : 1, { opacity: sel ? 1 : 0.55 });
+        for (const [p, q] of wetIntervals(s.raw, s.ws)) el('polyline', { points: [scr(s.x, p), scr(s.x, q)].map(v => v.join(',')).join(' '), stroke: '#1f6fc4', 'stroke-width': 5, 'stroke-linecap': 'round', opacity: 0.85 }, host);
+      }
+      const f = geoFrame(S.geo);
+      line(f.pts.map(([e, n]) => toScreen(...xyToLatLon(e, n))), C.accent, 2, { 'stroke-dasharray': '6 5' });
+      // design elements in plan
+      const poly = (pts, fill) => el('polygon', { points: pts.map(p => p.join(',')).join(' '), fill, stroke: halo, 'stroke-width': 1, opacity: 0.9 }, host);
+      for (const o of S.obstructions) poly([[o.x0, o.y0], [o.x1, o.y0], [o.x1, o.y1], [o.x0, o.y1]].map(([x, y]) => scr(x, y)), C.block);
+      for (const b of S.bridges) { const s0 = RES.sections[0]; poly([[b.x, s0.raw[0][0]], [b.x + b.length, s0.raw[0][0]], [b.x + b.length, s0.raw[s0.raw.length - 1][0]], [b.x, s0.raw[s0.raw.length - 1][0]]].map(([x, y]) => scr(x, y)), C.deck); }
+      for (const w of S.walls) line([scr(w.x0, w.y), scr(w.x1, w.y)], C.block, 3);
+      const bres = RFL.buildings(RES, S.buildings);
+      S.buildings.forEach((b, i) => poly([[b.x - b.d / 2, b.y - b.w / 2], [b.x + b.d / 2, b.y - b.w / 2], [b.x + b.d / 2, b.y + b.w / 2], [b.x - b.d / 2, b.y + b.w / 2]].map(([x, y]) => scr(x, y)), bres[i].depth > 0 ? C.bad : '#9aa3ad'));
+      // flow arrow at mid-reach
+      const mid = f.length / 2, c = toScreen(...xyToLatLon(...pointAlong(f, mid))), d = flowDir(f, mid);
+      const ang = Math.atan2(-d[1], d[0]) * 180 / Math.PI;
+      el('path', { d: 'M -9 -6 L 9 0 L -9 6 Z', fill: C.accent, stroke: halo, 'stroke-width': 1.5, transform: `translate(${c[0]},${c[1]}) rotate(${ang})` }, host);
+    }
+    if (MAP.draft.length) {
+      const pts = MAP.draft.map(p => toScreen(p[0], p[1]));
+      line(pts, '#e8590c', 3, { 'stroke-dasharray': '7 5' });
+      pts.forEach((p, i) => el('circle', { cx: p[0], cy: p[1], r: i === 0 ? 6 : 4, fill: i === 0 ? '#e8590c' : '#fff', stroke: '#e8590c', 'stroke-width': 2 }, host));
+    }
+  }
+  function renderMap() {
+    drawMapTiles(); renderOverlay(); renderMapNote();
+    $('rf-map-draw').setAttribute('aria-pressed', String(MAP.drawing));
+    $('rf-map-draw').textContent = MAP.drawing ? 'Stop drawing' : 'Draw the river';
+    $('rf-map').classList.toggle('rf-drawing', MAP.drawing);
+    $('rf-map-build').disabled = MAP.draft.length < 2;
+    $('rf-map-undo').disabled = !MAP.draft.length;
+  }
+  function centreOnReach() {
+    if (MAP.centred || !S.geo) return;
+    const f = geoFrame(S.geo), c = xyToLatLon(...pointAlong(f, f.length / 2));
+    MAP.lat = c[0]; MAP.lon = c[1]; MAP.centred = true;
+  }
+  function zoomMap(dz, sx, sy) {
+    const z = Math.max(3, Math.min(tileSource().maxZoom || 19, MAP.z + dz));
+    if (z === MAP.z) return;
+    const [W, H] = mapSize();
+    const ax = sx ?? W / 2, ay = sy ?? H / 2, at = fromScreen(ax, ay);
+    MAP.z = z;
+    const p = worldPx(at[0], at[1], z), c = [p[0] - ax + W / 2, p[1] - ay + H / 2];
+    [MAP.lat, MAP.lon] = fromWorldPx(c[0], c[1], z);
+    renderMap();
+  }
+  // Typed coordinates go straight to the map; only words go to Nominatim.
+  function parseCoords(q) {
+    const m = q.trim().match(/^(-?\d+(?:\.\d+)?)\s*°?\s*([NS])?\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*°?\s*([EW])?$/i);
+    if (!m) return null;
+    let lat = +m[1], lon = +m[3];
+    if (m[2] && /s/i.test(m[2])) lat = -Math.abs(lat);
+    if (m[4] && /w/i.test(m[4])) lon = -Math.abs(lon);
+    return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? [lat, lon] : null;
+  }
+  const fmtLatLon = (lat, lon) => `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(4)}°${lon >= 0 ? 'E' : 'W'}`;
+  async function searchPlace(q) {
+    const msg = $('rf-map-msg');
+    const c = parseCoords(q);
+    if (c) { [MAP.lat, MAP.lon] = c; MAP.z = Math.max(MAP.z, 16); msg.textContent = fmtLatLon(c[0], c[1]); renderMap(); return; }
+    if (!q.trim()) return;
+    const wait = MAP.lastSearch + 1100 - Date.now();       // Nominatim allows one request a second
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    MAP.lastSearch = Date.now();
+    msg.textContent = 'Searching…';
+    try {
+      const r = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' } });
+      const j = await r.json();
+      if (!j.length) { msg.textContent = `Nothing found for “${q}”.`; return; }
+      MAP.lat = +j[0].lat; MAP.lon = +j[0].lon; MAP.z = 16; MAP.searched = true;
+      msg.textContent = j[0].display_name.split(',').slice(0, 3).join(',');
+      renderMap();
+    } catch { msg.textContent = 'Search did not answer. Check the connection, or type coordinates (e.g. 53.3626, -1.4721).'; }
+  }
+  function buildFromDraft() {
+    const sp = parseFloat($('rf-map-spacing').value);
+    const msg = $('rf-map-msg');
+    if (!(sp >= 5 && sp <= 100)) { msg.textContent = 'Section spacing must be between 5 and 100 m.'; return; }
+    const r = reachFromLine(MAP.draft, sp);
+    if (r.error) { msg.textContent = r.error; return; }
+    const d = defaultState();
+    S = { ...d, name: 'Drawn river (template levels, not surveyed)', geo: r.g, sections: r.sections, bridges: [], flow: { ...S.flow }, eddy: { ...S.eddy } };
+    bendLengths();
+    MAP.draft = []; MAP.drawing = false; MAP.centred = true;
+    editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = '';
+    renderEditor(); renderElements(); run();
+    const crossing = crossingSections();
+    msg.textContent = `Built ${S.sections.length} sections over ${geoFrame(S.geo).length.toFixed(0)} m.` + (crossing.length ? ` Sections cross on the bend at ${crossing.join(', ')}: draw a gentler bend or use wider spacing.` : '');
+  }
+  function bindMap() {
+    const host = $('rf-map');
+    let drag = null;
+    host.addEventListener('pointerdown', e => { if (e.button !== 0) return; drag = { x: e.clientX, y: e.clientY, lat: MAP.lat, lon: MAP.lon, moved: false }; host.setPointerCapture(e.pointerId); });
+    host.addEventListener('pointermove', e => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+      drag.moved = true;
+      const p = worldPx(drag.lat, drag.lon, MAP.z);
+      [MAP.lat, MAP.lon] = fromWorldPx(p[0] - dx, p[1] - dy, MAP.z);
+      drawMapTiles(); renderOverlay();
+    });
+    host.addEventListener('pointerup', e => {
+      if (!drag) return;
+      const moved = drag.moved; drag = null;
+      if (moved) return;
+      const r = host.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+      if (MAP.drawing) { MAP.draft.push(fromScreen(px, py)); renderMap(); return; }
+      // a click near a section line chooses that section
+      if (!S.geo || !RES || RES.error) return;
+      let best = null, bd = 10;
+      for (const s of RES.sections) {
+        const a = toScreen(...xyToLatLon(...groundXY(s.x, s.raw[0][0]))), b = toScreen(...xyToLatLon(...groundXY(s.x, s.raw[s.raw.length - 1][0])));
+        const vx = b[0] - a[0], vy = b[1] - a[1], t = Math.max(0, Math.min(1, ((px - a[0]) * vx + (py - a[1]) * vy) / ((vx * vx + vy * vy) || 1)));
+        const d = Math.hypot(a[0] + t * vx - px, a[1] + t * vy - py);
+        if (d < bd) { bd = d; best = s.id; }
+      }
+      if (best) selectView(best);
+    });
+    host.addEventListener('wheel', e => { e.preventDefault(); const r = host.getBoundingClientRect(); zoomMap(e.deltaY < 0 ? 1 : -1, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+    $('rf-map-in').addEventListener('click', () => zoomMap(1));
+    $('rf-map-out').addEventListener('click', () => zoomMap(-1));
+    $('rf-map-go').addEventListener('click', () => searchPlace($('rf-map-q').value));
+    $('rf-map-q').addEventListener('keydown', e => { if (e.key === 'Enter') searchPlace($('rf-map-q').value); });
+    $('rf-map-draw').addEventListener('click', () => { MAP.drawing = !MAP.drawing; if (view !== 'map') setView('map'); renderMap(); });
+    $('rf-map-undo').addEventListener('click', () => { MAP.draft.pop(); renderMap(); });
+    $('rf-map-clear').addEventListener('click', () => { MAP.draft = []; renderMap(); });
+    $('rf-map-build').addEventListener('click', buildFromDraft);
+    $('rf-tiles-save').addEventListener('click', () => {
+      const url = $('rf-tiles-url').value.trim(), credit = $('rf-tiles-credit').value.trim(), maxZoom = parseInt($('rf-tiles-max').value, 10);
+      const err = validateTileService(url, credit, maxZoom);
+      $('rf-tiles-msg').textContent = err || 'Saved in this browser. Tiles from this service are used from now on.';
+      if (err) return;
+      try { localStorage.setItem(BASEMAP_KEY, JSON.stringify({ url, credit, maxZoom })); } catch { $('rf-tiles-msg').textContent = 'This browser will not store settings, so the service cannot be kept.'; return; }
+      MAP.failed = MAP.loaded = 0; if (view === 'map') renderMap();
+    });
+    $('rf-tiles-reset').addEventListener('click', () => {
+      try { localStorage.removeItem(BASEMAP_KEY); } catch { /* storage unavailable */ }
+      $('rf-tiles-msg').textContent = 'Back to OpenStreetMap tiles.';
+      MAP.failed = MAP.loaded = 0; if (view === 'map') renderMap();
+    });
+    try { const c = JSON.parse(localStorage.getItem(BASEMAP_KEY) || 'null'); if (c) { $('rf-tiles-url').value = c.url; $('rf-tiles-credit').value = c.credit; $('rf-tiles-max').value = c.maxZoom; } } catch { /* storage unavailable */ }
+    new ResizeObserver(() => { if (view === 'map') { drawMapTiles(); renderOverlay(); } }).observe(host);
+  }
+
   // ---------- 3D view ----------
   // Terrain from the sections, water at each section's computed level and
   // coloured by depth, eddy zones, and the design elements as solids.
@@ -5425,7 +5827,13 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const yAll = secs.flatMap(s => [s.raw[0][0], s.raw[s.raw.length - 1][0]]);
     const ymid = (Math.min(...yAll) + Math.max(...yAll)) / 2;
     const zref = Math.min(...secs.map(s => s.bed));
-    const P = (x, y, z) => [-(x - xmid), (z - zref) * vex, y - ymid];
+    let P = (x, y, z) => [-(x - xmid), (z - zref) * vex, y - ymid];
+    if (S.geo) {
+      // east is +X, north is −Z, so the reach sits as it does on the map
+      const xy = secs.flatMap(s => [groundXY(s.x, s.raw[0][0]), groundXY(s.x, s.raw[s.raw.length - 1][0])]);
+      const ce = (Math.min(...xy.map(p => p[0])) + Math.max(...xy.map(p => p[0]))) / 2, cn = (Math.min(...xy.map(p => p[1])) + Math.max(...xy.map(p => p[1]))) / 2;
+      P = (x, y, z) => { const [e, n] = groundXY(x, y); return [e - ce, (z - zref) * vex, -(n - cn)]; };
+    }
     V3.P = P;
     // a common set of fractional offsets across the sections
     let fr = [...new Set(secs.flatMap(s => { const a = s.raw[0][0], w = s.raw[s.raw.length - 1][0] - a; return s.raw.map(p => +((p[0] - a) / w).toFixed(4)); }))].sort((a, b) => a - b);
@@ -5456,6 +5864,9 @@ if (typeof module !== 'undefined') module.exports = RFL;
       return new T.Mesh(g, new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide, ...opts }));
     };
     V3.group.add(surface(tPos, tCol, {}));
+    { let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let k = 0; k < tPos.length; k += 3) { x0 = Math.min(x0, tPos[k]); x1 = Math.max(x1, tPos[k]); z0 = Math.min(z0, tPos[k + 2]); z1 = Math.max(z1, tPos[k + 2]); }
+      V3.bounds = { L: x1 - x0, W: z1 - z0, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2 }; }
     // solid sides down to a datum below the bed, so the reach reads as a site model
     const datum = zref - 1, sPos = [], sIdx = [];
     const wallStrip = top => {
@@ -5472,13 +5883,16 @@ if (typeof module !== 'undefined') module.exports = RFL;
     water.renderOrder = 1; V3.group.add(water);
     // design elements
     const box = (x0, x1, y0, y1, z0, z1, color, opacity = 1) => {
-      const a = P(Math.max(x0, x1), Math.min(y0, y1), Math.min(z0, z1)), b = P(Math.min(x0, x1), Math.max(y0, y1), Math.max(z0, z1));
-      const dx = Math.max(0.3, b[0] - a[0]), dy = Math.max(0.05, b[1] - a[1]), dz = Math.max(0.3, b[2] - a[2]);
-      const m = new T.Mesh(new T.BoxGeometry(dx, dy, dz), new T.MeshLambertMaterial({ color, transparent: opacity < 1, opacity }));
-      m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+      const xa = Math.min(x0, x1), xb = Math.max(x0, x1, xa + 0.3), ya = Math.min(y0, y1), yb = Math.max(y0, y1, ya + 0.3);
+      const za = Math.min(z0, z1), zb = Math.max(z0, z1, za + 0.05);
+      const c = [[xa, ya], [xb, ya], [xb, yb], [xa, yb]];
+      const v = [...c.map(([x, y]) => P(x, y, za)), ...c.map(([x, y]) => P(x, y, zb))];
+      const faces = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]];
+      const pos = faces.flatMap(([a, b, cc, d]) => [a, b, cc, a, cc, d].flatMap(k => v[k]));
+      const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+      const m = new T.Mesh(g, new T.MeshLambertMaterial({ color, transparent: opacity < 1, opacity, side: T.DoubleSide }));
       V3.group.add(m);
-      const e = new T.LineSegments(new T.EdgesGeometry(m.geometry), new T.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.35 }));
-      e.position.copy(m.position); V3.group.add(e);
+      V3.group.add(new T.LineSegments(new T.EdgesGeometry(g), new T.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.35 })));
       return m;
     };
     const nearest = x => secs.reduce((m, s) => Math.abs(s.x - x) < Math.abs(m.x - x) ? s : m);
@@ -5538,16 +5952,16 @@ if (typeof module !== 'undefined') module.exports = RFL;
   function fit3D() {
     if (!V3.ok || !RES || RES.error) return;
     const secs = RES.sections;
-    const L = secs[secs.length - 1].x - secs[0].x;
-    const W = Math.max(...secs.map(s => s.raw[s.raw.length - 1][0] - s.raw[0][0]));
+    const bb = V3.bounds || { L: secs[secs.length - 1].x - secs[0].x, W: 50, cx: 0, cz: 0 };
+    const L = Math.max(bb.L, 1), W = Math.max(bb.W, 1);
     const r = Math.max(L, W);
     // From the right bank, a little downstream, looking across the reach;
     // far enough back that its whole length fits the frame.
     const hfov = 2 * Math.atan(Math.tan(V3.camera.fov * Math.PI / 360) * V3.camera.aspect);
     const dist = 1.08 * (L / 2) / Math.tan(hfov / 2) + W / 2;
     const dir = [0.12, 0.42, 0.9], n = Math.hypot(...dir);
-    V3.controls.target.set(0, 0, 0);
-    V3.camera.position.set(dir[0] / n * dist, dir[1] / n * dist, dir[2] / n * dist);
+    V3.controls.target.set(bb.cx, 0, bb.cz);
+    V3.camera.position.set(bb.cx + dir[0] / n * dist, dir[1] / n * dist, bb.cz + dir[2] / n * dist);
     V3.camera.near = r / 500; V3.camera.far = r * 20; V3.camera.updateProjectionMatrix();
     V3.controls.update();
     V3.fitted = true;
@@ -5641,6 +6055,11 @@ if (typeof module !== 'undefined') module.exports = RFL;
   function renderLegend() {
     const host = $('rf-legend');
     const line = (c, t, dash) => `<div class="rf-legend-row"><i style="background:${c};${dash ? 'background:repeating-linear-gradient(90deg,' + c + ' 0 5px,transparent 5px 8px)' : ''}"></i>${t}</div>`;
+    if (view === 'map') {
+      host.innerHTML = line('#e8590c', 'River being drawn', true) + line('var(--rf-accent)', 'Drawn centreline', true) + line('#1f6fc4', 'Water across each section') + line('var(--rf-block)', 'Obstruction or flood wall') + line('var(--rf-deck)', 'Bridge') +
+        `<p class="rf-hint">Drag to move, scroll or use + and − to zoom. Click a section to choose it. Map tiles load only while this view is open.</p>`;
+      return;
+    }
     if (view === '3d' || view === 'plan') {
       host.innerHTML = `<div class="rf-kv"><span>Water depth</span><span class="rf-lab">m</span></div><div class="rf-ramp" style="${view === 'plan' ? 'background:var(--rf-water-fill)' : ''}"></div>` +
         (view === '3d' ? '<div class="rf-kv rf-lab rf-mono"><span>0</span><span>1.25</span><span>2.5+</span></div>' : '') +
@@ -5653,7 +6072,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
   }
   function renderCaption() {
     const s = viewSection();
-    $('rf-caption').textContent = s ? `${flowQ().toFixed(1)} m³/s · ${s.id} water ${f2(s.ws)} m, depth ${f2(s.depth)} m` : '';
+    $('rf-caption').textContent = view === 'map' ? '' : s ? `${flowQ().toFixed(1)} m³/s · ${s.id} water ${f2(s.ws)} m, depth ${f2(s.depth)} m` : '';
   }
   function renderRiver() {
     $('rf-river-name').textContent = S.name.replace(/ \(.*\)$/, '');
@@ -5689,6 +6108,8 @@ if (typeof module !== 'undefined') module.exports = RFL;
     });
     const crit = RES.sections.filter(s => s.flags.includes('critical'));
     if (crit.length) chips.push(chip(`Flow chokes (critical depth) at ${crit.map(s => s.id).join(', ')}: the level upstream is set there`, 'rf-warn'));
+    const crossing = crossingSections();
+    if (crossing.length) chips.push(chip(`Sections cross on a tight bend at ${crossing.join(', ')}: their water levels are not reliable. Draw a gentler bend or use wider spacing.`, 'rf-warn'));
     const walls = RES.sections.filter(s => s.flags.some(f => f.startsWith('wall-')));
     if (walls.length) chips.push(chip(`Water above the end of ${walls.map(s => s.id).join(', ')}: extend those sections`, 'rf-warn'));
     box.innerHTML = chips.join('');
@@ -5977,10 +6398,13 @@ if (typeof module !== 'undefined') module.exports = RFL;
   $('rf-3d-reset').addEventListener('click', fit3D);
 
   init3D();
+  bindMap();
   applyTheme(theme);
   renderEditor(); renderElements(); setView('3d'); run();
   // Hook for the browser checks.
-  window.RFL_UI = { get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, setView, get view() { return view; }, get view3d() { return { ok: V3.ok, meshes: V3.meshes, vex: V3.vex, geometries: V3.ok ? V3.renderer.info.memory.geometries : 0 }; } };
+  window.RFL_UI = { get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, setView, get view() { return view; },
+    // screen position (in the map) of the middle of a section, for the checks
+    screenOf: id => { const s = RES.sections.find(q => q.id === id); return toScreen(...xyToLatLon(...groundXY(s.x, (s.banks.left + s.banks.right) / 2))); }, get view3d() { return { ok: V3.ok, meshes: V3.meshes, vex: V3.vex, geometries: V3.ok ? V3.renderer.info.memory.geometries : 0, span: V3.bounds ? [Math.round(V3.bounds.L), Math.round(V3.bounds.W)] : null }; } };
 })();
 </script>
 </body>

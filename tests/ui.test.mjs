@@ -1,8 +1,9 @@
 // Browser checks for River Flood Lab, in headless Chromium.
 //
-// Serves the folder over http://127.0.0.1, refuses every off-origin request,
-// and drives the page: flow slider, design elements, section editor,
-// exports, themes, and layout at four window sizes.
+// Serves the folder over http://127.0.0.1 and refuses every off-origin
+// request, except map tiles and place search, which are answered from local
+// fixtures and counted. Drives the page: views, flow, design elements,
+// section editor, map drawing, exports, themes, and layout at four sizes.
 //
 // Usage: node tests/ui.test.mjs
 
@@ -22,6 +23,7 @@ const server = http.createServer((req, res) => {
 }).listen(0, '127.0.0.1');
 await new Promise(r => server.once('listening', r));
 const origin = `http://127.0.0.1:${server.address().port}`;
+const tilePng = readFileSync(new URL('./fixtures/tile.png', import.meta.url));
 
 let pass = 0, fail = 0;
 function check(name, ok, detail = '') {
@@ -34,19 +36,21 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
 async function openPage(size, scheme = 'light') {
   const ctx = await browser.newContext({ viewport: size, colorScheme: scheme, acceptDownloads: true });
   const page = await ctx.newPage();
-  const errors = [], offOrigin = [];
+  const errors = [], offOrigin = [], tiles = [], searches = [];
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   await page.route('**/*', route => {
     const u = route.request().url();
     if (u.startsWith(origin) || u.startsWith('data:') || u.startsWith('blob:')) return route.continue();
+    if (/^https:\/\/(tile\.openstreetmap\.org|tiles\.example\.org)\//.test(u)) { tiles.push(u); return route.fulfill({ status: 200, contentType: 'image/png', body: tilePng, headers: { 'access-control-allow-origin': '*' } }); }
+    if (u.startsWith('https://nominatim.openstreetmap.org/')) { searches.push({ u, t: Date.now() }); return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify([{ lat: '53.3811', lon: '-1.4701', display_name: 'Sheffield, South Yorkshire, England' }]) }); }
     offOrigin.push(u); return route.abort();
   });
   await page.goto(origin + '/');
   await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
   // the rating curve is drawn after a short pause so the slider stays responsive
   await page.waitForFunction(() => document.querySelector('#rf-rc svg polyline'));
-  return { page, ctx, errors, offOrigin };
+  return { page, ctx, errors, offOrigin, tiles, searches };
 }
 const ws = (page, x) => page.evaluate(x => { const r = window.RFL_UI.result; const s = r.sections; for (let i = 0; i < s.length - 1; i++) if (x <= s[i + 1].x) return s[i].ws + (s[i + 1].ws - s[i].ws) * (x - s[i].x) / (s[i + 1].x - s[i].x); return s[s.length - 1].ws; }, x);
 const settle = page => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
@@ -54,7 +58,7 @@ const settle = page => page.evaluate(() => new Promise(r => requestAnimationFram
 // ---- layout at four sizes, both themes ----
 for (const scheme of ['light', 'dark']) {
   for (const size of [{ width: 1440, height: 900 }, { width: 1280, height: 820 }, { width: 900, height: 700 }, { width: 390, height: 844 }]) {
-    const { page, ctx, errors, offOrigin } = await openPage(size, scheme);
+    const { page, ctx, errors, offOrigin, tiles } = await openPage(size, scheme);
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     check(`${scheme} ${size.width}×${size.height}: no horizontal overflow`, over === 0, `${over}px`);
     const v3 = await page.evaluate(() => window.RFL_UI.view3d);
@@ -69,6 +73,7 @@ for (const scheme of ['light', 'dark']) {
     check(`${scheme} ${size.width}: no overflow after switching views`, over2 === 0, `${over2}px`);
     check(`${scheme} ${size.width}: no console errors`, errors.length === 0, errors.join(' | '));
     check(`${scheme} ${size.width}: no off-origin requests`, offOrigin.length === 0, offOrigin.join(' '));
+    check(`${scheme} ${size.width}: no map tiles until the Map view opens`, tiles.length === 0, `${tiles.length}`);
     await ctx.close();
   }
 }
@@ -229,12 +234,104 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await ctx.close();
 }
 
+// ---- map: drawing the river's course ----
+{
+  const { page, ctx, errors, tiles, searches } = await openPage({ width: 1440, height: 900 });
+  await page.click('.rf-views [data-view="map"]'); await settle(page); await page.waitForTimeout(300);
+  check('map: tiles load when the Map view opens', tiles.length > 0, `${tiles.length} tiles`);
+  check('map: no more than 6 × 6 tiles on screen', tiles.length <= 36, `${tiles.length}`);
+  check('map: OpenStreetMap credit shown', /© OpenStreetMap contributors/.test(await page.textContent('#rf-map-credit')));
+  check('map: River section opens beside it', await page.locator('#rf-map-draw').isVisible());
+
+  // typed coordinates go straight to the map, never to the geocoder
+  await page.fill('#rf-map-q', '53.3626, -1.4721'); await page.click('#rf-map-go'); await settle(page);
+  check('map: typed coordinates are not sent to Nominatim', searches.length === 0);
+  check('map: typed coordinates are labelled', /53\.3626°N 1\.4721°W/.test(await page.textContent('#rf-map-msg')));
+  // words do go to Nominatim, at most one request a second
+  await page.fill('#rf-map-q', 'Sheffield'); await page.click('#rf-map-go');
+  await page.waitForFunction(() => /Sheffield/.test(document.getElementById('rf-map-msg').textContent));
+  await page.fill('#rf-map-q', 'Heeley'); await page.click('#rf-map-go');
+  await page.waitForFunction(() => /Sheffield/.test(document.getElementById('rf-map-msg').textContent) && document.getElementById('rf-map-msg').textContent !== 'Searching…');
+  await page.waitForTimeout(1300);
+  check('map: place search asks Nominatim', searches.length === 2, `${searches.length} requests`);
+  check('map: searches spaced at least 1.1 s apart', searches.length === 2 && searches[1].t - searches[0].t >= 1050, searches.length === 2 ? `${searches[1].t - searches[0].t} ms` : '');
+  check('map: search credit shown', /Nominatim/.test(await page.textContent('#rf-map-credit')));
+  await page.fill('#rf-map-q', '53.3626, -1.4721'); await page.click('#rf-map-go'); await settle(page);
+
+  // draw an S-bend and build a reach from it
+  await page.click('#rf-map-draw');
+  check('map: drawing mode says what to do', /upstream to downstream/.test(await page.textContent('#rf-map-note')));
+  const box = await page.locator('#rf-map').boundingBox();
+  const clicks = [[0.18, 0.25], [0.35, 0.32], [0.48, 0.55], [0.6, 0.7], [0.78, 0.72], [0.9, 0.6]];
+  for (const [fx, fy] of clicks) await page.mouse.click(box.x + fx * box.width, box.y + fy * box.height);
+  check('map: each click adds a point', (await page.locator('#rf-map-svg circle').count()) === clicks.length);
+  await page.click('#rf-map-undo');
+  check('map: undo removes the last point', (await page.locator('#rf-map-svg circle').count()) === clicks.length - 1);
+  await page.mouse.click(box.x + 0.9 * box.width, box.y + 0.6 * box.height);
+  await page.click('#rf-map-build'); await settle(page);
+  const built = await page.evaluate(() => { const S = window.RFL_UI.state; return { n: S.sections.length, geo: !!S.geo, name: S.name,
+    bends: S.sections.filter(s => s.lengths && Math.abs(s.lengths.lob - s.lengths.rob) > 1).length, design: S.bridges.length + S.obstructions.length }; });
+  check('map: a reach is built from the line', built.geo && built.n > 20, JSON.stringify(built));
+  check('map: drawn reach is labelled as template levels', /template levels, not surveyed/.test(built.name));
+  check('map: overbanks on a bend get their own reach lengths', built.bends > 5, `${built.bends} sections`);
+  check('map: smoothing keeps the sections from crossing', !/cross/.test(await page.textContent('#rf-map-msg')), await page.textContent('#rf-map-msg'));
+  check('map: section lines drawn on the map', (await page.locator('#rf-map-svg polyline').count()) > built.n);
+  check('map: drawing mode ends after building', (await page.getAttribute('#rf-map-draw', 'aria-pressed')) === 'false');
+  // a click near a section line chooses it
+  const target = await page.evaluate(() => { const r = window.RFL_UI.result; return r.sections[5].id; });
+  await page.evaluate(id => window.RFL_UI.setView('map'), target);
+  const pt = await page.evaluate(id => window.RFL_UI.screenOf(id), target);
+  await page.mouse.click(box.x + pt[0], box.y + pt[1]); await settle(page);
+  check('map: clicking a section chooses it', (await page.inputValue('#rf-view-sec')) === target, `${await page.inputValue('#rf-view-sec')} vs ${target}`);
+  await page.click('.rf-views [data-view="3d"]'); await settle(page);
+  const v3m = await page.evaluate(() => window.RFL_UI.view3d);
+  // a straight 51 m-wide reach spans about 51 m across; the drawn S-bend spans far more
+  check('map: 3D view follows the drawn river', v3m.ok && v3m.span && Math.min(...v3m.span) > 150, JSON.stringify(v3m));
+  await page.click('[data-add=bridges]'); await settle(page);
+  check('map: design elements work on a drawn river', (await page.textContent('#rf-status')).includes('soffit'));
+
+  // a drawn river survives save and reopen
+  const [sv] = await Promise.all([page.waitForEvent('download'), menu(page, 'rf-save')]);
+  await menu(page, 'rf-new'); await page.click('#rf-dlg-ok'); await settle(page);
+  check('map: a new template reach clears the drawn river', (await page.evaluate(() => window.RFL_UI.state.geo)) === null);
+  await page.setInputFiles('#rf-file', await sv.path()); await page.waitForFunction(() => !!window.RFL_UI.state.geo);
+  check('map: a drawn river reopens from its project file', true);
+
+  // custom tile service: validated, and its credit is required
+  await page.click('.rf-views [data-view="map"]'); await settle(page);
+  await page.evaluate(() => document.querySelectorAll('#rf-river-sec details').forEach(d => { d.open = true; }));
+  const tryService = async (url, credit) => { await page.fill('#rf-tiles-url', url); await page.fill('#rf-tiles-credit', credit); await page.click('#rf-tiles-save'); return page.textContent('#rf-tiles-msg'); };
+  check('tiles: refuses http', /https/.test(await tryService('http://tiles.example.org/{z}/{x}/{y}.png', '© Example')));
+  check('tiles: refuses an address without {x}', /\{z\}, \{x\} and \{y\}/.test(await tryService('https://tiles.example.org/{z}/{y}.png', '© Example')));
+  check('tiles: refuses a service without a credit line', /credit line is required/.test(await tryService('https://tiles.example.org/{z}/{x}/{y}.png', '')));
+  const before = tiles.length;
+  check('tiles: accepts a valid service', /Saved/.test(await tryService('https://tiles.example.org/{z}/{x}/{y}.png', '© Example Tiles')));
+  await settle(page); await page.waitForTimeout(200);
+  check('tiles: the custom service is used', tiles.slice(before).some(u => u.startsWith('https://tiles.example.org/')));
+  check('tiles: its credit is shown', /© Example Tiles/.test(await page.textContent('#rf-map-credit')));
+  await page.click('#rf-tiles-reset'); await settle(page);
+  check('tiles: reset returns to OpenStreetMap', /© OpenStreetMap contributors/.test(await page.textContent('#rf-map-credit')));
+  check('map: no console errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// ---- map: tiles that fail say why ----
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 } });
+  const page = await ctx.newPage();
+  await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
+  await page.goto(origin + '/'); await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
+  await page.click('.rf-views [data-view="map"]'); await page.waitForTimeout(500);
+  check('map: failed tiles show the failure hint', /did not load/.test(await page.textContent('#rf-map-note')));
+  await ctx.close();
+}
+
 // ---- phone: the view on top, controls or results beneath ----
 {
   const { page, ctx, errors } = await openPage({ width: 390, height: 844 });
   const stageH = await page.evaluate(() => document.querySelector('.rf-stage').getBoundingClientRect().height);
   check('phone: the view takes the top of the screen', stageH > 400, `${Math.round(stageH)} px`);
-  for (const v of ['3d', 'plan', 'section', 'profile']) check(`phone: ${v} button visible`, await page.locator(`.rf-views [data-view="${v}"]`).isVisible());
+  for (const v of ['3d', 'map', 'plan', 'section', 'profile']) check(`phone: ${v} button visible`, await page.locator(`.rf-views [data-view="${v}"]`).isVisible());
   check('phone: controls shown first', await page.locator('.rf-left').isVisible() && await page.locator('.rf-right').isHidden());
   await page.click('.rf-drawers [data-drawer=results]');
   check('phone: Results swaps in the results panel', await page.locator('.rf-right').isVisible() && await page.locator('.rf-left').isHidden());

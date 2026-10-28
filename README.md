@@ -25,7 +25,14 @@ idealised channel with floodplains, not a survey) with one example bridge.
   off.
 - **River** (left): the active reach, a new template reach, and the
   cross-section editor.
-- **Views** (middle): 3D, Plan, Section and Profile, one at a time.
+- **Map** (middle): find a place (or type coordinates), press *Draw the
+  river* in the River section, and click along the river from upstream to
+  downstream. *Build reach from line* cuts sections square to the line at
+  the spacing you set; the line's corners are rounded first, and on a bend
+  each overbank gets its own reach length. The levels come from the
+  template shape until surveyed levels are entered, and the reach says so.
+- **Views** (middle): 3D, Map, Plan, Section and Profile, one at a time.
+  On a drawn river the 3D view follows its course.
 - **Results** (right): the legend for the view, tiles for the chosen
   section, the effect of the design (afflux, soffit clearance, floor levels,
   choking), water level against flow, and every section in a table.
@@ -34,8 +41,17 @@ idealised channel with floodplains, not a survey) with one example bridge.
 
 On a phone the view sits on top, with Controls and Results beneath.
 
-The only thing it stores in the browser is the colour theme
-(`riverfloodlab.theme.v1`).
+## What it stores and what it contacts
+
+- **Browser storage:** the colour theme (`riverfloodlab.theme.v1`) and, if
+  you set one, a custom map tile service (`riverfloodlab.basemap.custom.v1`).
+- **OpenStreetMap tiles** (`tile.openstreetmap.org`): the map area on
+  screen, only while the Map view is open; at most 6 × 6 tiles, never
+  prefetched. A custom tile service replaces them if you set one.
+- **Nominatim** (`nominatim.openstreetmap.org`): the search text, only when
+  you search for a place by name; typed coordinates are never sent. At most
+  one request a second.
+- Nothing else. Files you open are read in the browser and never uploaded.
 
 **Teaching model — not a flood risk assessment.** Do not use its figures
 for planning, insurance or construction decisions.
@@ -83,10 +99,13 @@ The licence notice is in `NOTICE`.
 npm test
 ```
 
-`tests/engine.test.mjs` (27 checks) and `tests/ui.test.mjs` (119 checks,
+`tests/engine.test.mjs` (27 checks) and `tests/ui.test.mjs` (160 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
-request is refused). The engine checks compare the engine with closed-form results (Manning normal
-depth, critical depth) and with an independent RK4 integration of the
+request is refused, except map tiles and place search, which are answered
+from local fixtures in `tests/fixtures/`).
+
+The engine checks compare the engine with closed-form results (Manning
+normal depth, critical depth) and with an independent RK4 integration of the
 gradually varied flow equation. Agreement shows the engine is consistent
 with open-channel theory; it is not validation against measured levels.
 
