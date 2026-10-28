@@ -1,0 +1,12 @@
+{
+  "version": 0.6,
+  "generator": "River Flood Lab test fixture — synthetic, not OpenStreetMap data",
+  "elements": [
+    { "type": "way", "id": 101, "tags": { "waterway": "river", "name": "River Sheaf" },
+      "geometry": [ { "lat": 53.3596, "lon": -1.4752 }, { "lat": 53.3610, "lon": -1.4740 }, { "lat": 53.3626, "lon": -1.4721 } ] },
+    { "type": "way", "id": 102, "tags": { "waterway": "river", "name": "River Sheaf", "tunnel": "culvert" },
+      "geometry": [ { "lat": 53.3626, "lon": -1.4721 }, { "lat": 53.3640, "lon": -1.4712 }, { "lat": 53.3656, "lon": -1.4706 } ] },
+    { "type": "way", "id": 201, "tags": { "waterway": "stream", "name": "Meers Brook" },
+      "geometry": [ { "lat": 53.3622, "lon": -1.4672 }, { "lat": 53.3624, "lon": -1.4698 }, { "lat": 53.3626, "lon": -1.4721 } ] }
+  ]
+}

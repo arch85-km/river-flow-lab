@@ -24,6 +24,7 @@ const server = http.createServer((req, res) => {
 await new Promise(r => server.once('listening', r));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const tilePng = readFileSync(new URL('./fixtures/tile.png', import.meta.url));
+const waterways = readFileSync(new URL('./fixtures/overpass-waterways.json', import.meta.url), 'utf8');
 
 let pass = 0, fail = 0;
 function check(name, ok, detail = '') {
@@ -312,6 +313,96 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await page.click('#rf-tiles-reset'); await settle(page);
   check('tiles: reset returns to OpenStreetMap', /© OpenStreetMap contributors/.test(await page.textContent('#rf-map-credit')));
   check('map: no console errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// ---- rivers from OpenStreetMap (Overpass answered from a synthetic fixture) ----
+{
+  const { page, ctx, errors, offOrigin } = await openPage({ width: 1440, height: 900 });
+  const asked = [];
+  const answer = (status, body) => route => { asked.push(new URL(route.request().url()).host + ' ' + status); return route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body }); };
+  // first server busy, the second answers: the retry rule
+  await page.route('https://overpass-api.de/**', answer(504, 'busy'));
+  await page.route('https://overpass.private.coffee/**', answer(200, waterways));
+  await page.click('.rf-views [data-view="map"]'); await settle(page);
+  await page.click('#rf-map-osm');
+  await page.waitForFunction(() => window.RFL_UI.rivers, null, { timeout: 20000 });
+  check('rivers: the proxy is tried first, then the servers directly', asked.length === 2 && asked[0] === 'overpass-api.de 504' && asked[1] === 'overpass.private.coffee 200', asked.join(', '));
+  const rivers = await page.evaluate(() => window.RFL_UI.rivers);
+  check('rivers: the two ways of the River Sheaf are joined end to start', rivers[0].name === 'River Sheaf' && rivers[0].points === 5, JSON.stringify(rivers[0]));
+  check('rivers: a culverted part is noted', rivers[0].culvert === true);
+  check('rivers: the stream is listed too', rivers.some(r => r.name === 'Meers Brook' && r.kind === 'stream'));
+  check('rivers: the panel names what was found', /River Sheaf \(river\), Meers Brook \(stream\)/.test(await page.textContent('#rf-map-msg')));
+  check('rivers: OpenStreetMap credited under ODbL on the map', /Rivers © OpenStreetMap contributors, ODbL/.test(await page.textContent('#rf-map-credit')));
+  // choose the Sheaf, then click the reach's ends in the downstream-first order
+  const box = await page.locator('#rf-map').boundingBox();
+  const at = async f => { const p = await page.evaluate(f => window.RFL_UI.chainScreen(0, f), f); await page.mouse.click(box.x + p[0], box.y + p[1]); };
+  await at(0.5);
+  check('rivers: clicking a river chooses it', /River Sheaf \(river\), \d+ m in view/.test(await page.textContent('#rf-map-msg')));
+  await at(0.7); await at(0.3);
+  check('rivers: the part between the two clicks becomes the line', /taken from OpenStreetMap, upstream end first/.test(await page.textContent('#rf-map-msg')));
+  await page.fill('#rf-map-spacing', '10');
+  await page.click('#rf-map-build'); await settle(page);
+  const g = await page.evaluate(() => { const S = window.RFL_UI.state; return { name: S.name, osm: S.geo && S.geo.osm, first: S.geo.line[0], last: S.geo.line[S.geo.line.length - 1], n: S.sections.length }; });
+  check('rivers: the reach is named after the river and its source', /^River Sheaf \(line from OpenStreetMap; template levels, not surveyed\)$/.test(g.name), g.name);
+  // the Sheaf flows north in the fixture: chainage 0 (downstream) must be the northern end, whatever order the ends were clicked
+  check('rivers: OpenStreetMap\'s direction of flow sets which end is downstream', g.first[0] > g.last[0], `downstream ${g.first[0].toFixed(4)}°N, upstream ${g.last[0].toFixed(4)}°N`);
+  check('rivers: sections are cut along it', g.n > 15, `${g.n} sections`);
+  const cul = await page.evaluate(() => window.RFL_UI.state.geo.culverts);
+  check('rivers: the culverted part of the reach is located by chainage', cul.length === 1 && cul[0][0] === 0 && cul[0][1] > 50, JSON.stringify(cul));
+  check('rivers: a culvert in the reach is reported, with what to do', /in a culvert at 0–\d+ m.*bridge with its soffit at the culvert roof/.test(await page.textContent('#rf-status')));
+  const csvText = (await download(page, 'rf-csv')).toString('utf8');
+  check('rivers: every export credits the river line under ODbL', /River line © OpenStreetMap contributors, ODbL/.test(csvText));
+  const png = await download(page, 'rf-png');
+  check('rivers: the Map view exports as PNG, with the credit row', png.length > 20000 && png[1] === 0x50, `${png.length} bytes`);
+
+  // a runtime-error answer is a busy server, not an empty map
+  asked.length = 0;
+  await page.unroute('https://overpass-api.de/**'); await page.unroute('https://overpass.private.coffee/**');
+  await page.route('https://overpass-api.de/**', answer(200, JSON.stringify({ elements: [], remark: 'runtime error: Query timed out in "query" at line 1 after 26 seconds.' })));
+  await page.route('https://overpass.private.coffee/**', answer(200, waterways));
+  await page.evaluate(() => window.RFL_UI.setView('map'));
+  await page.click('#rf-map-osm');
+  await page.waitForFunction(() => window.RFL_UI.rivers, null, { timeout: 20000 });
+  check('rivers: a "runtime error" answer is retried on the other server', asked.length === 2 && asked[1] === 'overpass.private.coffee 200', asked.join(', '));
+
+  // this site's proxy answering: the public servers are not asked at all
+  asked.length = 0;
+  await page.route(origin + '/overpass-proxy.php?**', route => { asked.push('proxy'); return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'X-Overpass-Cache': 'hit' }, body: waterways }); });
+  const fresh = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const p2 = await fresh.newPage();
+  const direct = [];
+  await p2.route('**/*', route => {
+    const u = route.request().url();
+    if (u.startsWith(origin + '/overpass-proxy.php')) { direct.push('proxy'); return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'X-Overpass-Cache': 'hit' }, body: waterways }); }
+    if (u.startsWith(origin)) return route.continue();
+    if (/tile\.openstreetmap\.org/.test(u)) return route.fulfill({ status: 200, contentType: 'image/png', body: tilePng });
+    direct.push(new URL(u).host); return route.abort();
+  });
+  await p2.goto(origin + '/'); await p2.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
+  await p2.click('.rf-views [data-view="map"]'); await p2.click('#rf-map-osm');
+  await p2.waitForFunction(() => window.RFL_UI.rivers, null, { timeout: 20000 });
+  check('rivers: with this site\'s proxy installed, only the proxy is asked', direct.length === 1 && direct[0] === 'proxy', direct.join(', '));
+  await fresh.close();
+
+  // too large a view: asked to zoom in, nothing requested
+  asked.length = 0;
+  for (let i = 0; i < 3; i++) await page.click('#rf-map-out');
+  await page.click('#rf-map-osm'); await settle(page);
+  check('rivers: a view over 3 km asks to zoom in and requests nothing', /Zoom in/.test(await page.textContent('#rf-map-msg')) && asked.length === 0, await page.textContent('#rf-map-msg'));
+
+  // all servers refuse: the message says so, and drawing by hand still works
+  for (let i = 0; i < 3; i++) await page.click('#rf-map-in');
+  await page.unroute('https://overpass-api.de/**'); await page.unroute('https://overpass.private.coffee/**');
+  await page.route('https://overpass-api.de/**', answer(400, 'bad'));
+  await page.route('https://overpass.private.coffee/**', answer(400, 'bad'));
+  await page.click('#rf-map-osm');
+  await page.waitForFunction(() => /Could not fetch/.test(document.getElementById('rf-map-msg').textContent), null, { timeout: 20000 });
+  check('rivers: two refusals end in a message that offers drawing by hand', /draw the river by hand/.test(await page.textContent('#rf-map-msg')));
+  check('rivers: the old rivers are cleared when a load starts', (await page.evaluate(() => window.RFL_UI.rivers)) === null);
+  // the 404, 504 and 400s are the failures this block simulates
+  const real = errors.filter(e => !/Failed to load resource/.test(e));
+  check('rivers: no console errors beyond the simulated failures', real.length === 0, real.join(' | '));
   await ctx.close();
 }
 

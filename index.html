@@ -236,6 +236,8 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
         <div class="rf-kv"><span class="rf-lab">Sections</span><span id="rf-river-n"></span></div>
         <div class="rf-kv"><span class="rf-lab">Length</span><span id="rf-river-len"></span></div>
         <p class="rf-hint">Draw the river's course on the map, from upstream to downstream. Sections are cut square to your line; their levels come from the template shape until surveyed levels are entered.</p>
+        <button class="rf-btn rf-sq" type="button" id="rf-map-osm">Find rivers here (OpenStreetMap)</button>
+        <p class="rf-hint">Loads the rivers and streams in the map view (up to 3 km across). Click one, then click where your reach starts and ends; OpenStreetMap's direction of flow sets which end is upstream. Or draw the line yourself:</p>
         <div class="rf-grid2">
           <button class="rf-btn rf-primary" type="button" id="rf-map-draw" aria-pressed="false">Draw the river</button>
           <button class="rf-btn rf-sq" type="button" id="rf-map-build" disabled>Build reach from line</button>
@@ -5517,7 +5519,8 @@ if (typeof module !== 'undefined') module.exports = RFL;
   const OSM_TILES = { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', credit: '© OpenStreetMap contributors', maxZoom: 19,
     hint: 'Map tiles did not load. Check the connection; if other sites load, the tile server may be refusing requests from this address.' };
   const SITE0 = { lat: 53.3626, lon: -1.4721, z: 17 };   // River Sheaf at Heeley, Sheffield
-  const MAP = { lat: SITE0.lat, lon: SITE0.lon, z: SITE0.z, drawing: false, draft: [], tiles: new Map(), failed: 0, loaded: 0, ink: 'dark', lastSearch: 0, centred: false };
+  const MAP = { lat: SITE0.lat, lon: SITE0.lon, z: SITE0.z, drawing: false, draft: [], tiles: new Map(), failed: 0, loaded: 0, ink: 'dark', lastSearch: 0, centred: false,
+    rivers: null, mode: null, pick: null, trim: [], fromOsm: null };
   function tileSource() {
     try { const c = JSON.parse(localStorage.getItem(BASEMAP_KEY) || 'null'); if (c && c.url && c.credit) return { ...c, hint: 'The custom tile service did not answer. Check its address, and that it sends CORS headers; a service without them refuses every tile.' }; } catch { /* storage unavailable */ }
     return OSM_TILES;
@@ -5569,7 +5572,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       img.style.transform = `translate(${Math.round(tx * TILE - c[0] + W / 2)}px, ${Math.round(ty * TILE - c[1] + H / 2)}px)`;
     }
     for (const [key, img] of MAP.tiles) if (!want.has(key)) { img.remove(); MAP.tiles.delete(key); }
-    $('rf-map-credit').textContent = src.credit + (MAP.searched ? ' · Search: Nominatim, © OpenStreetMap contributors' : '');
+    $('rf-map-credit').textContent = src.credit + (MAP.searched ? ' · Search: Nominatim, © OpenStreetMap contributors' : '') + (MAP.rivers || (S.geo && S.geo.osm) ? ' · Rivers © OpenStreetMap contributors, ODbL' : '');
   }
   // Measure the basemap rather than assume it: dark ink over a light map,
   // light ink over a dark one. Tiles without CORS cannot be read; then the
@@ -5594,6 +5597,8 @@ if (typeof module !== 'undefined') module.exports = RFL;
   function renderMapNote() {
     const note = $('rf-map-note');
     if (MAP.failed && !MAP.loaded) { note.hidden = false; note.textContent = tileSource().hint; }
+    else if (MAP.mode === 'pick') { note.hidden = false; note.textContent = 'Click the river you want.'; }
+    else if (MAP.mode === 'trim') { note.hidden = false; note.textContent = MAP.trim.length ? 'Now click where the reach ends.' : 'Click where your reach starts along the river.'; }
     else if (MAP.drawing) { note.hidden = false; note.textContent = MAP.draft.length < 2 ? 'Click along the river from upstream to downstream, in the direction of flow.' : `${MAP.draft.length} points, ${draftLength().toFixed(0)} m. Keep clicking, then Build reach from line.`; }
     else note.hidden = true;
   }
@@ -5637,6 +5642,14 @@ if (typeof module !== 'undefined') module.exports = RFL;
       const mid = f.length / 2, c = toScreen(...xyToLatLon(...pointAlong(f, mid))), d = flowDir(f, mid);
       const ang = Math.atan2(-d[1], d[0]) * 180 / Math.PI;
       el('path', { d: 'M -9 -6 L 9 0 L -9 6 Z', fill: C.accent, stroke: halo, 'stroke-width': 1.5, transform: `translate(${c[0]},${c[1]}) rotate(${ang})` }, host);
+    }
+    if (MAP.rivers) {
+      for (const w of MAP.rivers.ways) line(w.pts.map(p => toScreen(p[0], p[1])), '#0f9fb5', 2, w.culvert ? { 'stroke-dasharray': '4 4' } : {});
+      if (MAP.pick !== null) {
+        const c = MAP.rivers.chains[MAP.pick];
+        line(c.pts.map(p => toScreen(p[0], p[1])), '#0f9fb5', 5, { opacity: 0.9 });
+        for (const t of MAP.trim) { const q = chainPart(c, 0, t), pt = toScreen(...q[q.length - 1]); el('circle', { cx: pt[0], cy: pt[1], r: 6, fill: '#0f9fb5', stroke: '#fff', 'stroke-width': 2 }, host); }
+      }
     }
     if (MAP.draft.length) {
       const pts = MAP.draft.map(p => toScreen(p[0], p[1]));
@@ -5702,7 +5715,10 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const r = reachFromLine(MAP.draft, sp);
     if (r.error) { msg.textContent = r.error; return; }
     const d = defaultState();
-    S = { ...d, name: 'Drawn river (template levels, not surveyed)', geo: r.g, sections: r.sections, bridges: [], flow: { ...S.flow }, eddy: { ...S.eddy } };
+    const osm = MAP.fromOsm;
+    if (osm) { r.g.osm = true; r.g.river = osm.name; r.g.culverts = osm.culverts; }
+    S = { ...d, name: osm ? `${osm.name} (line from OpenStreetMap; template levels, not surveyed)` : 'Drawn river (template levels, not surveyed)', geo: r.g, sections: r.sections, bridges: [], flow: { ...S.flow }, eddy: { ...S.eddy } };
+    MAP.fromOsm = null; MAP.pick = null;
     bendLengths();
     MAP.draft = []; MAP.drawing = false; MAP.centred = true;
     editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = '';
@@ -5728,7 +5744,8 @@ if (typeof module !== 'undefined') module.exports = RFL;
       const moved = drag.moved; drag = null;
       if (moved) return;
       const r = host.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
-      if (MAP.drawing) { MAP.draft.push(fromScreen(px, py)); renderMap(); return; }
+      if (MAP.mode && MAP.rivers && riverClick(px, py)) return;
+      if (MAP.drawing) { MAP.draft.push(fromScreen(px, py)); MAP.fromOsm = null; renderMap(); return; }
       // a click near a section line chooses that section
       if (!S.geo || !RES || RES.error) return;
       let best = null, bd = 10;
@@ -5745,9 +5762,10 @@ if (typeof module !== 'undefined') module.exports = RFL;
     $('rf-map-out').addEventListener('click', () => zoomMap(-1));
     $('rf-map-go').addEventListener('click', () => searchPlace($('rf-map-q').value));
     $('rf-map-q').addEventListener('keydown', e => { if (e.key === 'Enter') searchPlace($('rf-map-q').value); });
-    $('rf-map-draw').addEventListener('click', () => { MAP.drawing = !MAP.drawing; if (view !== 'map') setView('map'); renderMap(); });
-    $('rf-map-undo').addEventListener('click', () => { MAP.draft.pop(); renderMap(); });
-    $('rf-map-clear').addEventListener('click', () => { MAP.draft = []; renderMap(); });
+    $('rf-map-draw').addEventListener('click', () => { MAP.drawing = !MAP.drawing; MAP.mode = null; if (view !== 'map') setView('map'); renderMap(); });
+    $('rf-map-undo').addEventListener('click', () => { MAP.draft.pop(); MAP.fromOsm = null; renderMap(); });
+    $('rf-map-clear').addEventListener('click', () => { MAP.draft = []; MAP.fromOsm = null; renderMap(); });
+    $('rf-map-osm').addEventListener('click', () => { if (view !== 'map') setView('map'); findRivers(); });
     $('rf-map-build').addEventListener('click', buildFromDraft);
     $('rf-tiles-save').addEventListener('click', () => {
       const url = $('rf-tiles-url').value.trim(), credit = $('rf-tiles-credit').value.trim(), maxZoom = parseInt($('rf-tiles-max').value, 10);
@@ -5764,6 +5782,218 @@ if (typeof module !== 'undefined') module.exports = RFL;
     });
     try { const c = JSON.parse(localStorage.getItem(BASEMAP_KEY) || 'null'); if (c) { $('rf-tiles-url').value = c.url; $('rf-tiles-credit').value = c.credit; $('rf-tiles-max').value = c.maxZoom; } } catch { /* storage unavailable */ }
     new ResizeObserver(() => { if (view === 'map') { drawMapTiles(); renderOverlay(); } }).observe(host);
+  }
+
+  // ---------- rivers from OpenStreetMap ----------
+  // The waterways in the map view, from Overpass: this site's own proxy
+  // first (server/overpass-proxy.php, beside the page or at the top of the
+  // site), then the public servers directly, as Solar Lab loads buildings.
+  // OpenStreetMap draws a waterway in the direction of flow, so the order of
+  // its points says which end is upstream. Data © OpenStreetMap contributors,
+  // ODbL.
+  const OsmRivers = (() => {
+    const ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+    const PROXY = 'overpass-proxy.php';
+    const web = /^https?:$/.test(location.protocol);
+    const PROXIES = web ? [...new Set([new URL(PROXY, location.href).href, new URL('/' + PROXY, location.href).href])] : [];
+    const proxyMissing = new Set();
+    const BUSY = new Set([429, 502, 503, 504]);
+    const WAITS = [0, 1000, 5000, 10000];
+    const MAX_SIDE = 3000;
+    // A newer load retires an older one: its request is aborted, and its
+    // answer is dropped if it still arrives.
+    let generation = 0, inflight = null;
+    function cancel() { generation++; if (inflight) inflight.abort(); inflight = null; }
+    async function load(bbox, onRetry) {
+      cancel();
+      const mine = generation;
+      const query = '[out:json][timeout:25];way["waterway"~"^(river|stream|canal|drain|ditch)$"](' + bbox + '); out geom;';
+      let json = null, lastMsg = '', busy = false, source = '';
+      for (const proxy of PROXIES.filter(u => !proxyMissing.has(u))) {
+        const ctl = new AbortController(); inflight = ctl;
+        let timedOut = false, down = false;
+        const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, 100000);
+        try {
+          const res = await fetch(proxy + '?bbox=' + bbox, { signal: ctl.signal });
+          if (res.ok) {
+            const body = await res.json();
+            if (body && Array.isArray(body.elements)) { json = body; source = res.headers.get('X-Overpass-Cache') || 'proxy'; }
+            else proxyMissing.add(proxy);
+          } else if (BUSY.has(res.status)) { lastMsg = 'this site\'s river cache: ' + res.status; down = true; }
+          else proxyMissing.add(proxy);                  // 404, 403, 500: not installed there
+        } catch {
+          if (mine !== generation) return null;
+          if (timedOut) { lastMsg = 'this site\'s river cache: no answer in 100 s'; down = true; } else proxyMissing.add(proxy);
+        } finally { clearTimeout(timer); if (inflight === ctl) inflight = null; }
+        if (mine !== generation) return null;
+        if (json) break;
+        if (down) { if (onRetry) onRetry('This site\'s river cache could not reach Overpass. Asking the servers directly…'); break; }
+      }
+      // Busy is 429, 502-504, a request that never arrives (a busy server often
+      // answers without a CORS header) and a 200 whose remark is a runtime
+      // error. Anything else drops that server and asks the other.
+      const refused = new Set();
+      for (let attempt = 0; attempt < WAITS.length && !json; attempt++) {
+        const live = ENDPOINTS.filter(e => !refused.has(e));
+        if (!live.length) break;
+        const endpoint = live[attempt % live.length];
+        if (attempt) {
+          if (onRetry) onRetry(`The Overpass server ${busy ? 'is busy' : 'refused the request'} (${lastMsg}). Trying ${new URL(endpoint).host}, ${attempt + 1} of ${WAITS.length}…`);
+          await new Promise(r => setTimeout(r, WAITS[attempt]));
+          if (mine !== generation) return null;
+        }
+        const ctl = new AbortController(); inflight = ctl;
+        let timedOut = false;
+        const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, 45000);
+        try {
+          const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: ctl.signal });
+          if (!res.ok) { lastMsg = 'Overpass replied ' + res.status; busy = BUSY.has(res.status); if (!busy) refused.add(endpoint); continue; }
+          const body = await res.json();
+          if (body && typeof body.remark === 'string' && /runtime error/i.test(body.remark)) { lastMsg = body.remark.replace(/\s+/g, ' ').trim().slice(0, 90); busy = true; continue; }
+          json = body; source = new URL(endpoint).host;
+        } catch (err) {
+          if (mine !== generation) return null;
+          lastMsg = timedOut ? 'no answer in 45 s' : err.message; busy = true;
+        } finally { clearTimeout(timer); if (inflight === ctl) inflight = null; }
+      }
+      if (mine !== generation) return null;
+      if (!json) throw new Error(`Could not fetch the rivers from OpenStreetMap (${lastMsg})` +
+        (busy ? `, after ${WAITS.length} tries on two servers. The public Overpass servers are busy rather than missing the data, so it is worth trying again in a minute` : '') +
+        '. You can still draw the river by hand.');
+      return { json, source };
+    }
+    return { load, cancel, MAX_SIDE };
+  })();
+
+  // Join the ways of each named waterway end to start, in OpenStreetMap's
+  // order, into whole rivers. Unnamed ways stay on their own.
+  function chainsFrom(elements) {
+    const ways = (elements || []).filter(e => e.type === 'way' && Array.isArray(e.geometry)).map(e => ({
+      id: e.id, name: (e.tags && e.tags.name) || '', kind: (e.tags && e.tags.waterway) || 'waterway',
+      culvert: !!(e.tags && (e.tags.tunnel === 'culvert' || e.tags.tunnel === 'yes' || e.tags.covered === 'yes')),
+      pts: e.geometry.filter(p => p && isNum(p.lat) && isNum(p.lon)).map(p => [p.lat, p.lon]),
+    })).filter(w => w.pts.length > 1);
+    const key = p => p[0].toFixed(7) + ',' + p[1].toFixed(7);
+    const groups = new Map();
+    for (const w of ways) { const g = w.name ? 'n:' + w.name : 'w:' + w.id; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(w); }
+    const chains = [];
+    for (const list of groups.values()) {
+      const left = list.slice();
+      while (left.length) {
+        const first = left.shift();
+        const c = { name: first.name, kind: first.kind, culvert: first.culvert, pts: first.pts.slice(), parts: [first] };
+        let grew = true;
+        while (grew) {
+          grew = false;
+          for (let i = 0; i < left.length; i++) {
+            const w = left[i];
+            if (key(w.pts[0]) === key(c.pts[c.pts.length - 1])) { c.pts.push(...w.pts.slice(1)); c.parts.push(w); }
+            else if (key(w.pts[w.pts.length - 1]) === key(c.pts[0])) { c.pts.unshift(...w.pts.slice(0, -1)); c.parts.unshift(w); }
+            else continue;
+            c.culvert = c.culvert || w.culvert; left.splice(i, 1); grew = true; break;
+          }
+        }
+        chains.push(c);
+      }
+    }
+    const len = pts => { let L = 0; for (let i = 1; i < pts.length; i++) { const kx = 111320 * Math.cos(pts[i][0] * Math.PI / 180); L += Math.hypot((pts[i][1] - pts[i - 1][1]) * kx, (pts[i][0] - pts[i - 1][0]) * M_LAT); } return L; };
+    chains.forEach(c => {
+      c.length = len(c.pts);
+      // where along the chain each culverted part lies, in metres from its first point
+      let at = 0; c.culverts = [];
+      for (const w of c.parts) { const L = len(w.pts); if (w.culvert) c.culverts.push([at, at + L]); at += L; }
+      delete c.parts;
+    });
+    return { ways, chains: chains.sort((a, b) => (b.kind === 'river') - (a.kind === 'river') || b.length - a.length) };
+  }
+  const chainLabel = c => `${c.name || 'Unnamed ' + c.kind}${c.name ? ` (${c.kind})` : ''}`;
+  // Position along a chain (metres from its first point) nearest a map point.
+  function snapToChain(c, lat, lon) {
+    const kx = 111320 * Math.cos(c.pts[0][0] * Math.PI / 180);
+    const xy = p => [(p[1] - c.pts[0][1]) * kx, (p[0] - c.pts[0][0]) * M_LAT];
+    const q = xy([lat, lon]);
+    let best = { d: Infinity, s: 0 }, cum = 0;
+    for (let i = 1; i < c.pts.length; i++) {
+      const a = xy(c.pts[i - 1]), b = xy(c.pts[i]), vx = b[0] - a[0], vy = b[1] - a[1], L = Math.hypot(vx, vy) || 1e-9;
+      const t = Math.max(0, Math.min(1, ((q[0] - a[0]) * vx + (q[1] - a[1]) * vy) / (L * L)));
+      const d = Math.hypot(a[0] + t * vx - q[0], a[1] + t * vy - q[1]);
+      if (d < best.d) best = { d, s: cum + t * L };
+      cum += L;
+    }
+    return best.s;
+  }
+  // The part of a chain between two positions, upstream end first.
+  function chainPart(c, s0, s1) {
+    const [a, b] = s0 < s1 ? [s0, s1] : [s1, s0];
+    const kx = 111320 * Math.cos(c.pts[0][0] * Math.PI / 180);
+    const out = []; let cum = 0;
+    const at = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    for (let i = 1; i < c.pts.length; i++) {
+      const p = c.pts[i - 1], q = c.pts[i];
+      const L = Math.hypot((q[1] - p[1]) * kx, (q[0] - p[0]) * M_LAT) || 1e-9;
+      if (cum + L >= a && cum <= b) {
+        if (!out.length) out.push(at(p, q, Math.max(0, (a - cum) / L)));
+        if (cum + L <= b) out.push(q); else { out.push(at(p, q, (b - cum) / L)); break; }
+      }
+      cum += L;
+    }
+    return out;
+  }
+  async function findRivers() {
+    const msg = $('rf-map-msg');
+    const [W, H] = mapSize(), nw = fromScreen(0, 0), se = fromScreen(W, H);
+    const s = Math.min(nw[0], se[0]), n = Math.max(nw[0], se[0]), w = Math.min(nw[1], se[1]), e = Math.max(nw[1], se[1]);
+    const ns = (n - s) * M_LAT, ew = (e - w) * 111320 * Math.cos((s + n) / 2 * Math.PI / 180);
+    if (Math.max(ns, ew) > OsmRivers.MAX_SIDE) { msg.textContent = `Zoom in: the map shows ${(Math.max(ns, ew) / 1000).toFixed(1)} km across, and rivers load for up to ${OsmRivers.MAX_SIDE / 1000} km.`; return; }
+    // the old rivers go when a load starts, so nothing from elsewhere lingers
+    MAP.rivers = null; MAP.mode = null; MAP.pick = null; MAP.trim = []; renderMap();
+    msg.textContent = 'Asking OpenStreetMap for the rivers in view…';
+    const bbox = [s, w, n, e].map(v => v.toFixed(6)).join(',');
+    try {
+      const r = await OsmRivers.load(bbox, m => { msg.textContent = m; });
+      if (!r) return;                                         // superseded by a newer load
+      const found = chainsFrom(r.json.elements);
+      if (!found.chains.length) { msg.textContent = 'OpenStreetMap has no rivers or streams mapped in view. Move the map, or draw the river by hand.'; return; }
+      MAP.rivers = found; MAP.mode = 'pick'; MAP.drawing = false;
+      msg.textContent = `${found.chains.length} waterway${found.chains.length > 1 ? 's' : ''} in view: ${found.chains.slice(0, 4).map(chainLabel).join(', ')}${found.chains.length > 4 ? '…' : ''}. Click the one you want.`;
+      renderMap();
+    } catch (err) { msg.textContent = err.message; renderMap(); }
+  }
+  // Clicks while choosing a river: the river first, then where the reach
+  // starts and ends along it.
+  function riverClick(px, py) {
+    const ll = fromScreen(px, py);
+    if (MAP.mode === 'pick') {
+      let best = null, bd = 14;
+      MAP.rivers.chains.forEach((c, i) => {
+        const pts = c.pts.map(p => toScreen(p[0], p[1]));
+        for (let k = 1; k < pts.length; k++) {
+          const [a, b] = [pts[k - 1], pts[k]], vx = b[0] - a[0], vy = b[1] - a[1];
+          const t = Math.max(0, Math.min(1, ((px - a[0]) * vx + (py - a[1]) * vy) / ((vx * vx + vy * vy) || 1)));
+          const d = Math.hypot(a[0] + t * vx - px, a[1] + t * vy - py);
+          if (d < bd) { bd = d; best = i; }
+        }
+      });
+      if (best === null) return true;
+      MAP.pick = best; MAP.mode = 'trim'; MAP.trim = [];
+      $('rf-map-msg').textContent = `${chainLabel(MAP.rivers.chains[best])}, ${MAP.rivers.chains[best].length.toFixed(0)} m in view. Click where your reach starts, then where it ends.`;
+      renderMap(); return true;
+    }
+    if (MAP.mode === 'trim') {
+      const c = MAP.rivers.chains[MAP.pick];
+      MAP.trim.push(snapToChain(c, ll[0], ll[1]));
+      if (MAP.trim.length === 2) {
+        MAP.draft = chainPart(c, MAP.trim[0], MAP.trim[1]);
+        const [a, b] = MAP.trim[0] < MAP.trim[1] ? MAP.trim : [MAP.trim[1], MAP.trim[0]];
+        // chain positions run downstream; chainage runs upstream from the reach's downstream end
+        const culverts = c.culverts.map(([p, q]) => [Math.max(p, a), Math.min(q, b)]).filter(([p, q]) => q - p > 1).map(([p, q]) => [+(b - q).toFixed(1), +(b - p).toFixed(1)]);
+        MAP.fromOsm = { name: c.name || chainLabel(c), culverts };
+        MAP.mode = null; MAP.trim = [];
+        $('rf-map-msg').textContent = `${chainLabel(c)}: ${draftLength().toFixed(0)} m taken from OpenStreetMap, upstream end first. Press Build reach from line.`;
+      }
+      renderMap(); return true;
+    }
+    return false;
   }
 
   // ---------- 3D view ----------
@@ -5970,14 +6200,15 @@ if (typeof module !== 'undefined') module.exports = RFL;
   function png3D() {
     if (!V3.ok) return;
     render3D();
-    const src = V3.renderer.domElement, W = src.width, H = src.height, k = W / $('rf-3d').clientWidth, foot = 70 * k;
+    const src = V3.renderer.domElement, W = src.width, H = src.height, k = W / $('rf-3d').clientWidth, foot = 86 * k;
     const c = document.createElement('canvas'); c.width = W; c.height = H + foot;
     const g = c.getContext('2d');
     g.fillStyle = C.panel; g.fillRect(0, 0, W, H + foot); g.drawImage(src, 0, 0);
     g.scale(k, k);
     g.fillStyle = C.ink; g.font = '600 12px system-ui, sans-serif'; g.fillText(`${APP} — ${S.name} — 3D view, vertical exaggeration ${V3.vex}×`, 12, H / k + 18);
-    g.font = '11px system-ui, sans-serif'; g.fillStyle = C.muted; g.fillText(settingsLine().slice(0, 140), 12, H / k + 36);
+    g.font = '11px system-ui, sans-serif'; g.fillStyle = C.muted; g.fillText(settingsLine().replace('; ' + RIVER_CREDIT, '').slice(0, 140), 12, H / k + 36);
     g.fillStyle = C.warn; g.fillText(CAUTION, 12, H / k + 54);
+    if (creditLine()) { g.fillStyle = C.muted; g.fillText(creditLine(), 12, H / k + 72); }
     c.toBlob(b => download('river-flood-lab-3d.png', b), 'image/png');
   }
 
@@ -6056,7 +6287,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const host = $('rf-legend');
     const line = (c, t, dash) => `<div class="rf-legend-row"><i style="background:${c};${dash ? 'background:repeating-linear-gradient(90deg,' + c + ' 0 5px,transparent 5px 8px)' : ''}"></i>${t}</div>`;
     if (view === 'map') {
-      host.innerHTML = line('#e8590c', 'River being drawn', true) + line('var(--rf-accent)', 'Drawn centreline', true) + line('#1f6fc4', 'Water across each section') + line('var(--rf-block)', 'Obstruction or flood wall') + line('var(--rf-deck)', 'Bridge') +
+      host.innerHTML = line('#0f9fb5', 'OpenStreetMap waterway (dashed: culvert)') + line('#e8590c', 'River being drawn', true) + line('var(--rf-accent)', 'Drawn centreline', true) + line('#1f6fc4', 'Water across each section') + line('var(--rf-block)', 'Obstruction or flood wall') + line('var(--rf-deck)', 'Bridge') +
         `<p class="rf-hint">Drag to move, scroll or use + and − to zoom. Click a section to choose it. Map tiles load only while this view is open.</p>`;
       return;
     }
@@ -6108,6 +6339,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     });
     const crit = RES.sections.filter(s => s.flags.includes('critical'));
     if (crit.length) chips.push(chip(`Flow chokes (critical depth) at ${crit.map(s => s.id).join(', ')}: the level upstream is set there`, 'rf-warn'));
+    if (S.geo && S.geo.culverts && S.geo.culverts.length) chips.push(chip(`OpenStreetMap maps this river in a culvert at ${S.geo.culverts.map(([p, q]) => `${p.toFixed(0)}–${q.toFixed(0)} m`).join(', ')}. The template treats it as open channel: model the culvert as a bridge with its soffit at the culvert roof, or enter surveyed sections.`, 'rf-warn'));
     const crossing = crossingSections();
     if (crossing.length) chips.push(chip(`Sections cross on a tight bend at ${crossing.join(', ')}: their water levels are not reliable. Draw a gentler bend or use wider spacing.`, 'rf-warn'));
     const walls = RES.sections.filter(s => s.flags.some(f => f.startsWith('wall-')));
@@ -6236,8 +6468,10 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
+  const RIVER_CREDIT = 'River line © OpenStreetMap contributors, ODbL';
+  const creditLine = () => S.geo && S.geo.osm ? RIVER_CREDIT : '';
   function settingsLine() {
-    return `Flow ${flowQ().toFixed(2)} m3/s (set ${S.flow.Q} m3/s, climate allowance ${S.flow.allowance}%); downstream boundary ${S.boundary.type === 'ws' ? 'fixed level ' + S.boundary.ws + ' m' : 'normal depth, slope ' + S.boundary.slope}; eddy zones ${S.eddy.on ? `on (ER ${S.eddy.er}, CR ${S.eddy.cr})` : 'off'}; steady 1D standard step (${APP} ${VERSION})`;
+    return `Flow ${flowQ().toFixed(2)} m3/s (set ${S.flow.Q} m3/s, climate allowance ${S.flow.allowance}%); downstream boundary ${S.boundary.type === 'ws' ? 'fixed level ' + S.boundary.ws + ' m' : 'normal depth, slope ' + S.boundary.slope}; eddy zones ${S.eddy.on ? `on (ER ${S.eddy.er}, CR ${S.eddy.cr})` : 'off'}; steady 1D standard step (${APP} ${VERSION})` + (creditLine() ? '; ' + creditLine() : '');
   }
   function csv() {
     if (!RES || RES.error) return;
@@ -6256,8 +6490,41 @@ if (typeof module !== 'undefined') module.exports = RFL;
     }
     download('river-flood-lab.csv', new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
   }
+  // The map as it is on screen: the loaded tiles, then the overlay. A tile
+  // service without CORS headers taints the canvas; the export then keeps
+  // the overlay on a plain ground and says why.
+  function pngMap() {
+    const [W, H] = mapSize(), k = 2, foot = 86;
+    const svg = $('rf-map-svg').cloneNode(true);
+    svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const img = new Image();
+    img.onload = () => {
+      const draw = withTiles => {
+        const c = document.createElement('canvas'); c.width = W * k; c.height = (H + foot) * k;
+        const g = c.getContext('2d'); g.scale(k, k);
+        g.fillStyle = '#e5e3df'; g.fillRect(0, 0, W, H);
+        if (withTiles) for (const t of MAP.tiles.values()) {
+          if (!t.complete || !t.naturalWidth) continue;
+          const m = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(t.style.transform);
+          if (m) g.drawImage(t, +m[1], +m[2], TILE, TILE);
+        }
+        g.drawImage(img, 0, 0, W, H);
+        g.fillStyle = C.panel; g.fillRect(0, H, W, foot);
+        g.fillStyle = C.ink; g.font = '600 12px system-ui, sans-serif'; g.fillText(`${APP} — ${S.name} — map`, 12, H + 18);
+        g.font = '11px system-ui, sans-serif'; g.fillStyle = C.muted;
+        g.fillText((withTiles ? 'Map ' + tileSource().credit : 'Map tiles left out: the tile service does not allow copying') + (creditLine() ? ' · ' + creditLine() : ''), 12, H + 36);
+        g.fillStyle = C.warn; g.fillText(CAUTION, 12, H + 54);
+        return c;
+      };
+      let c = draw(true);
+      try { c.toBlob(b => download('river-flood-lab-map.png', b), 'image/png'); }
+      catch { c = draw(false); c.toBlob(b => download('river-flood-lab-map.png', b), 'image/png'); }
+    };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+  }
   function png() {
     if (view === '3d') return png3D();
+    if (view === 'map') return pngMap();
     const host = $({ plan: 'rf-plan', section: 'rf-xs', profile: 'rf-lp' }[view]);
     const svg = host.querySelector('svg'); if (!svg) return;
     const W = +svg.viewBox.baseVal.width, H = +svg.viewBox.baseVal.height;
@@ -6265,13 +6532,14 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const data = new XMLSerializer().serializeToString(copy);
     const img = new Image();
     img.onload = () => {
-      const k = 2, foot = 70;
+      const k = 2, foot = 86;
       const c = document.createElement('canvas'); c.width = W * k; c.height = (H + foot) * k;
       const g = c.getContext('2d'); g.scale(k, k);
       g.fillStyle = C.panel; g.fillRect(0, 0, W, H + foot); g.drawImage(img, 0, 0, W, H);
       g.fillStyle = C.ink; g.font = '600 12px system-ui, sans-serif'; g.fillText(`${APP} — ${S.name} — ${view}`, 12, H + 18);
-      g.font = '11px system-ui, sans-serif'; g.fillStyle = C.muted; g.fillText(settingsLine().slice(0, 140), 12, H + 36);
+      g.font = '11px system-ui, sans-serif'; g.fillStyle = C.muted; g.fillText(settingsLine().replace('; ' + RIVER_CREDIT, '').slice(0, 140), 12, H + 36);
       g.fillStyle = C.warn; g.fillText(CAUTION, 12, H + 54);
+      if (creditLine()) { g.fillStyle = C.muted; g.fillText(creditLine(), 12, H + 72); }
       c.toBlob(b => download(`river-flood-lab-${view}.png`, b), 'image/png');
     };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(data);
@@ -6404,6 +6672,8 @@ if (typeof module !== 'undefined') module.exports = RFL;
   // Hook for the browser checks.
   window.RFL_UI = { get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, setView, get view() { return view; },
     // screen position (in the map) of the middle of a section, for the checks
+    get rivers() { return MAP.rivers ? MAP.rivers.chains.map(c => ({ name: c.name, kind: c.kind, length: Math.round(c.length), points: c.pts.length, culvert: c.culvert })) : null; },
+    chainScreen: (i, f) => { const c = MAP.rivers.chains[i]; const q = chainPart(c, 0, c.length * f); return toScreen(...q[q.length - 1]); },
     screenOf: id => { const s = RES.sections.find(q => q.id === id); return toScreen(...xyToLatLon(...groundXY(s.x, (s.banks.left + s.banks.right) / 2))); }, get view3d() { return { ok: V3.ok, meshes: V3.meshes, vex: V3.vex, geometries: V3.ok ? V3.renderer.info.memory.geometries : 0, span: V3.bounds ? [Math.round(V3.bounds.L), Math.round(V3.bounds.W)] : null }; } };
 })();
 </script>

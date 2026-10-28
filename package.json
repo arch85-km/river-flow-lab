@@ -6,8 +6,9 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "node tests/engine.test.mjs && node tests/ui.test.mjs",
+    "test": "node tests/engine.test.mjs && node tests/overpass-proxy.mjs && node tests/ui.test.mjs",
     "test:engine": "node tests/engine.test.mjs",
+    "test:proxy": "node tests/overpass-proxy.mjs",
     "test:ui": "node tests/ui.test.mjs"
   },
   "devDependencies": {

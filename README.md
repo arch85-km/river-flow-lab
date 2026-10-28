@@ -31,6 +31,13 @@ idealised channel with floodplains, not a survey) with one example bridge.
   the spacing you set; the line's corners are rounded first, and on a bend
   each overbank gets its own reach length. The levels come from the
   template shape until surveyed levels are entered, and the reach says so.
+- **Rivers from OpenStreetMap:** in the Map view, *Find rivers here* loads
+  the rivers and streams in view (up to 3 km across). Click one, then click
+  where your reach starts and ends. OpenStreetMap draws waterways in the
+  direction of flow, so that sets which end is upstream whatever order you
+  click in. The reach is named after the river and credited to OpenStreetMap
+  (ODbL) on screen and in every export. Where the river runs in a culvert,
+  the app says at which chainages, and suggests modelling it as a bridge.
 - **Views** (middle): 3D, Map, Plan, Section and Profile, one at a time.
   On a drawn river the 3D view follows its course.
 - **Results** (right): the legend for the view, tiles for the chosen
@@ -51,7 +58,21 @@ On a phone the view sits on top, with Controls and Results beneath.
 - **Nominatim** (`nominatim.openstreetmap.org`): the search text, only when
   you search for a place by name; typed coordinates are never sent. At most
   one request a second.
+- **Overpass** (this site's `overpass-proxy.php` if installed, otherwise
+  `overpass-api.de` and `overpass.private.coffee`): the map area in view,
+  only when you press *Find rivers here*.
 - Nothing else. Files you open are read in the browser and never uploaded.
+
+## Deploying the rivers proxy
+
+`server/overpass-proxy.php` is optional. Uploaded beside `index.html` (or at
+the top of the site, where the host will not run PHP in subfolders), it lets
+the page ask its own site for the rivers: a network that blocks the Overpass
+servers no longer matters, each answer is kept for 30 days, and a class
+loading together costs one request. It accepts only a box from a page on the
+same site, writes the query itself, and needs no key. Ported from Solar
+Analysis Lab's buildings proxy; `tests/overpass-proxy.mjs` checks it under
+`php -S` against a stand-in Overpass.
 
 **Teaching model — not a flood risk assessment.** Do not use its figures
 for planning, insurance or construction decisions.
@@ -99,10 +120,12 @@ The licence notice is in `NOTICE`.
 npm test
 ```
 
-`tests/engine.test.mjs` (27 checks) and `tests/ui.test.mjs` (160 checks,
+`tests/engine.test.mjs` (27 checks), `tests/overpass-proxy.mjs` (19 checks;
+skipped where PHP is not installed) and `tests/ui.test.mjs` (181 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
-request is refused, except map tiles and place search, which are answered
-from local fixtures in `tests/fixtures/`).
+request is refused, except map tiles, place search and Overpass, which are
+answered from local fixtures in `tests/fixtures/`; the Overpass fixture is
+synthetic, not OpenStreetMap data).
 
 The engine checks compare the engine with closed-form results (Manning
 normal depth, critical depth) and with an independent RK4 integration of the
