@@ -59,8 +59,14 @@ for (const scheme of ['light', 'dark']) {
     check(`${scheme} ${size.width}×${size.height}: no horizontal overflow`, over === 0, `${over}px`);
     const v3 = await page.evaluate(() => window.RFL_UI.view3d);
     check(`${scheme} ${size.width}: 3D view running`, v3.ok && v3.meshes > 5, JSON.stringify(v3));
-    const svgs = await page.evaluate(() => [...document.querySelectorAll('.rf-chart svg')].filter(s => s.getBoundingClientRect().width > 100).length);
-    check(`${scheme} ${size.width}: four charts drawn`, svgs === 4, `${svgs}`);
+    for (const v of ['plan', 'section', 'profile']) {
+      await page.evaluate(v => window.RFL_UI.setView(v), v);
+      const ok = await page.evaluate(v => { const h = document.querySelector(`.rf-view[data-view=${v}]`); const svg = h && h.querySelector('svg'); return !!svg && !h.hidden && svg.getBoundingClientRect().width > 250 && svg.querySelectorAll('polyline,polygon').length > 0; }, v);
+      check(`${scheme} ${size.width}: ${v} view drawn`, ok);
+    }
+    await page.evaluate(() => window.RFL_UI.setView('3d'));
+    const over2 = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    check(`${scheme} ${size.width}: no overflow after switching views`, over2 === 0, `${over2}px`);
     check(`${scheme} ${size.width}: no console errors`, errors.length === 0, errors.join(' | '));
     check(`${scheme} ${size.width}: no off-origin requests`, offOrigin.length === 0, offOrigin.join(' '));
     await ctx.close();
@@ -74,7 +80,7 @@ for (const scheme of ['light', 'dark']) {
     const lum = c => { const m = c.match(/[\d.]+/g).map(Number); const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]); };
     const bgOf = e => { while (e) { const b = getComputedStyle(e).backgroundColor; if (b && !/rgba\(.*, 0\)$/.test(b) && b !== 'transparent') return b; e = e.parentElement; } return 'rgb(255,255,255)'; };
     let worst = { r: 99 };
-    for (const e of document.querySelectorAll('h1,h2,p,label,button,td,th,.rf-chip,.rf-caution,option')) {
+    for (const e of document.querySelectorAll('h1,p,label,button,td,th,summary,.rf-note,.rf-pill,.rf-eyebrow,.rf-tile b,.rf-foot span')) {
       if (!e.textContent.trim() || !e.getClientRects().length) continue;
       const a = lum(getComputedStyle(e).color), b = lum(bgOf(e));
       const r = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
@@ -87,19 +93,42 @@ for (const scheme of ['light', 'dark']) {
 }
 
 // ---- interactions ----
+const menu = async (page, id) => { await page.click('#rf-file-btn'); await page.click('#' + id); };
+const download = async (page, id) => { const [dl] = await Promise.all([page.waitForEvent('download'), menu(page, id)]); return readFileSync(await dl.path()); };
+const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.sections; for (let i = 0; i < s.length - 1; i++) if (x <= s[i + 1].x) return s[i].ws + (s[i + 1].ws - s[i].ws) * (x - s[i].x) / (s[i + 1].x - s[i].x); return s[s.length - 1].ws; }, x);
 {
   const { page, ctx, errors } = await openPage({ width: 1440, height: 900 });
+  // open every folded section, as a student exploring would
+  await page.evaluate(() => document.querySelectorAll('details.rf-sec, .rf-body details').forEach(d => { d.open = true; }));
   const st = await page.evaluate(() => ({ n: window.RFL_UI.state.sections.length, br: window.RFL_UI.state.bridges.length }));
   check('template reach loads with sections and the example bridge', st.n === 21 && st.br === 1, JSON.stringify(st));
 
-  // flow slider raises the water
+  // view buttons
+  for (const v of ['plan', 'section', 'profile', '3d']) {
+    await page.click(`.rf-views [data-view="${v}"]`); await settle(page);
+    check(`${v} button shows the ${v} view`, (await page.evaluate(() => window.RFL_UI.view)) === v && await page.locator(`.rf-view[data-view="${v}"]`).isVisible());
+  }
+
+  // flow
   const w0 = await ws(page, 150);
-  await page.fill('#rf-q', '40'); await page.press('#rf-q', 'Enter'); await page.locator('#rf-q').blur(); await settle(page);
+  await page.fill('#rf-q', '40'); await page.locator('#rf-q').blur(); await settle(page);
   const w1 = await ws(page, 150);
   check('more flow raises the water', w1 > w0 + 0.1, `${w0.toFixed(3)} → ${w1.toFixed(3)} m`);
   await page.locator('#rf-q-range').fill('900'); await settle(page);
   const q = await page.evaluate(() => window.RFL_UI.state.flow.Q);
   check('slider sets the flow', q > 40, `${q} m³/s`);
+  check('flow pill follows the flow', (await page.textContent('#rf-pill-flow')).includes(q.toFixed(1)));
+
+  // bankfull preset puts the water at the lower bank of the chosen section
+  await page.selectOption('#rf-view-sec', 'XS11'); await settle(page);
+  await page.click('[data-preset=bankfull]'); await settle(page);
+  const bf = await page.evaluate(() => { const S = window.RFL_UI.state, r = window.RFL_UI.result, sec = S.sections.find(s => s.id === 'XS11');
+    const g = y => { const p = sec.pts; for (let i = 0; i < p.length - 1; i++) if (y >= p[i][0] && y <= p[i + 1][0]) return p[i][1] + (p[i + 1][1] - p[i][1]) * (y - p[i][0]) / ((p[i + 1][0] - p[i][0]) || 1); };
+    const bank = Math.min(g(sec.banks.left), g(sec.banks.right));
+    const base = window.RFL_UI.base || r; const s = base.sections.find(q => q.id === 'XS11'); return { ws: s.ws, bank }; });
+  check('bankfull preset fills to the lower bank (without design)', Math.abs(bf.ws - bf.bank) < 0.01, `water ${bf.ws.toFixed(3)} m, bank ${bf.bank.toFixed(3)} m`);
+  await page.click('[data-preset=low]'); await settle(page);
+  check('low preset is a quarter of bankfull', /bankfull/.test(await page.textContent('#rf-q-out')));
   await page.fill('#rf-q', '20'); await page.locator('#rf-q').blur(); await settle(page);
 
   // climate allowance
@@ -110,36 +139,39 @@ for (const scheme of ['light', 'dark']) {
   check('flow readout includes the allowance', (await page.textContent('#rf-q-out')).includes('+30%'));
   await page.fill('#rf-allow', '0'); await page.locator('#rf-allow').blur(); await settle(page);
 
-  // bridge status names what it judged
+  // results panel
   const status = await page.textContent('#rf-status');
-  check('bridge status states the soffit clearance or pressure flow', /soffit/.test(status), status.slice(0, 120));
+  check('bridge note states the soffit clearance or pressure flow', /soffit/.test(status), status.slice(0, 120));
   check('afflux and Yarnell shown', /afflux/.test(status) && /Yarnell/.test(status));
+  check('tiles show the chosen section', /Water level/i.test(await page.textContent('#rf-tiles')) && /XS11/.test(await page.textContent('#rf-at-head')));
+  check('state pill names its verdict', /subcritical|chokes|Pressure|deck/.test(await page.textContent('#rf-pill-state')));
 
-  // add an obstruction from the panel
-  const before = await ws(page, 220);
-  await page.click('.rf-tabs [data-tab=obstructions]');
-  await page.selectOption('#rf-sec-pick', { label: 'XS15 · 210.0 m' });
-  await page.click('#rf-add'); await settle(page);
-  const item = page.locator('.rf-item').first();
-  await item.locator('[data-k=y1]').fill('30'); await item.locator('[data-k=y1]').blur(); await settle(page);
-  const after = await ws(page, 240);
-  const beforeUp = before; // water at 220 before, compare upstream of the block
-  check('obstruction raises the water upstream', after > (await page.evaluate(() => { const b = window.RFL_UI.base; const s = b.sections; const x = 240; for (let i = 0; i < s.length - 1; i++) if (x <= s[i + 1].x) return s[i].ws + (s[i + 1].ws - s[i].ws) * (x - s[i].x) / (s[i + 1].x - s[i].x); })), `${after.toFixed(3)} m with it`);
+  // add an obstruction at the chosen section
+  await page.selectOption('#rf-view-sec', 'XS15'); await settle(page);
+  await page.click('[data-add=obstructions]'); await settle(page);
+  const el = page.locator('details.rf-el[data-k=obstructions]').first();
+  check('new element opens for editing', await el.evaluate(d => d.open));
+  await el.locator('[data-f=y1]').fill('30'); await el.locator('[data-f=y1]').blur(); await settle(page);
+  const after = await ws(page, 240), without = await baseAt(page, 240);
+  check('obstruction raises the water upstream', after > without, `${after.toFixed(3)} m with it, ${without.toFixed(3)} m without`);
+  await page.click('.rf-views [data-view="plan"]'); await settle(page);
   const eddies = await page.locator('#rf-plan polygon').count();
   check('eddy zones drawn in plan', eddies >= 2, `${eddies} polygons`);
   check('table shows change against no design', (await page.textContent('#rf-table')).includes('Change, m'));
-
-  // eddy toggle
-  await page.click('.rf-tabs [data-tab=eddy]');
   await page.uncheck('#rf-eddy-on'); await settle(page);
   check('turning eddy zones off removes them', (await page.locator('#rf-plan polygon').count()) === 0);
   await page.check('#rf-eddy-on'); await settle(page);
 
   // wall and building
-  await page.click('.rf-tabs [data-tab=walls]'); await page.click('#rf-add'); await settle(page);
-  await page.click('.rf-tabs [data-tab=buildings]'); await page.click('#rf-add'); await settle(page);
+  await page.click('[data-add=walls]'); await settle(page);
+  await page.click('[data-add=buildings]'); await settle(page);
   const s2 = await page.textContent('#rf-status');
-  check('building gets a floor-level verdict', /Building 1: (floor|.* of water over the floor)/.test(s2), s2.match(/Building 1[^]*?(?=Building|$)/)?.[0]?.slice(0, 80));
+  check('building gets a floor-level verdict', /Building 1: (floor|.* of water over the floor)/.test(s2));
+  check('element list holds all four', (await page.locator('details.rf-el').count()) === 4);
+  await page.locator('details.rf-el[data-k=walls] > summary').click();
+  await page.locator('details.rf-el[data-k=walls] [data-del]').click(); await settle(page);
+  check('remove deletes the element', (await page.evaluate(() => window.RFL_UI.state.walls.length)) === 0);
+  await page.click('[data-add=walls]'); await settle(page);
 
   // section editor validates
   await page.fill('#rf-sec-pts', '0 5\n10 x\n20 5');
@@ -149,39 +181,40 @@ for (const scheme of ['light', 'dark']) {
   await page.click('#rf-sec-apply');
   check('editor refuses offsets out of order', /left to right/.test(await page.textContent('#rf-sec-msg')));
 
-  // CSV export carries the caution and settings
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#rf-csv')]);
-  const text = readFileSync(await dl.path(), 'utf8');
+  // exports from the File menu
+  const text = (await download(page, 'rf-csv')).toString('utf8');
   check('CSV carries the caution', text.includes('not a flood risk assessment'));
   check('CSV carries the settings', /Flow [\d.]+ m3\/s/.test(text) && /eddy zones on/.test(text));
   check('CSV lists bridges and buildings', /\nbridge,/.test(text) && /\nbuilding,/.test(text));
+  for (const v of ['plan', 'section', 'profile']) {
+    await page.click(`.rf-views [data-view="${v}"]`); await settle(page);
+    const buf = await download(page, 'rf-png');
+    check(`${v} view exports as PNG`, buf.length > 5000 && buf[1] === 0x50, `${buf.length} bytes`);
+  }
+  await page.click('.rf-views [data-view="3d"]'); await settle(page);
+  const b3 = await download(page, 'rf-png');
+  check('3D view exports as PNG', b3.length > 20000 && b3[1] === 0x50, `${b3.length} bytes`);
+  check('File menu closes after a choice', await page.locator('#rf-file-menu').isHidden());
 
-  // PNG export
-  const [png] = await Promise.all([page.waitForEvent('download'), page.click('#rf-png')]);
-  const buf = readFileSync(await png.path());
-  check('section PNG exports', buf.length > 5000 && buf[1] === 0x50, `${buf.length} bytes`);
-
-  // save and reopen
-  const [sv] = await Promise.all([page.waitForEvent('download'), page.click('#rf-save')]);
+  // save, new, reopen
+  const [sv] = await Promise.all([page.waitForEvent('download'), menu(page, 'rf-save')]);
   const saved = JSON.parse(readFileSync(await sv.path(), 'utf8'));
   check('project saves design elements', saved.state.obstructions.length === 1 && saved.state.walls.length === 1 && saved.state.buildings.length === 1);
-  await page.click('#rf-new'); await page.click('#rf-dlg-ok'); await settle(page);
+  await menu(page, 'rf-new'); await page.click('#rf-dlg-ok'); await settle(page);
   check('new reach clears design elements', (await page.evaluate(() => window.RFL_UI.state.obstructions.length + window.RFL_UI.state.bridges.length)) === 0);
+  check('element list empties', (await page.locator('details.rf-el').count()) === 0);
   await page.setInputFiles('#rf-file', await sv.path()); await page.waitForFunction(() => window.RFL_UI.state.obstructions.length === 1);
-  check('project reopens', true);
+  check('project reopens with its elements listed', (await page.locator('details.rf-el').count()) === 4);
 
   // 3D view
   const shot = await page.locator('#rf-3d').screenshot();
   check('3D canvas is not blank', shot.length > 20000, `${shot.length} bytes`);
   const m0 = (await page.evaluate(() => window.RFL_UI.view3d)).meshes;
-  await page.click('.rf-tabs [data-tab=obstructions]'); await page.click('#rf-add'); await settle(page);
+  await page.click('[data-add=obstructions]'); await settle(page);
   const m1 = (await page.evaluate(() => window.RFL_UI.view3d)).meshes;
   check('adding an obstruction adds solids to the 3D view', m1 > m0, `${m0} → ${m1} objects`);
   await page.selectOption('#rf-vex', '10'); await settle(page);
   check('vertical exaggeration applies', (await page.evaluate(() => window.RFL_UI.view3d)).vex === 10);
-  const [p3] = await Promise.all([page.waitForEvent('download'), page.click('#rf-3d-png')]);
-  const b3 = readFileSync(await p3.path());
-  check('3D PNG exports', b3.length > 20000 && b3[1] === 0x50, `${b3.length} bytes`);
   await page.click('#rf-3d-reset');
   const g0 = (await page.evaluate(() => window.RFL_UI.view3d)).geometries;
   for (let i = 0; i < 30; i++) await page.evaluate(i => { window.RFL_UI.state.flow.Q = 10 + i; window.RFL_UI.run(); }, i);
@@ -193,6 +226,21 @@ for (const scheme of ['light', 'dark']) {
   await page.click('#rf-theme'); await page.click('#rf-theme');
   check('theme switches to dark', (await page.evaluate(() => document.documentElement.dataset.theme)) === 'dark');
   check('no console errors during interaction', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// ---- phone: the view on top, controls or results beneath ----
+{
+  const { page, ctx, errors } = await openPage({ width: 390, height: 844 });
+  const stageH = await page.evaluate(() => document.querySelector('.rf-stage').getBoundingClientRect().height);
+  check('phone: the view takes the top of the screen', stageH > 400, `${Math.round(stageH)} px`);
+  for (const v of ['3d', 'plan', 'section', 'profile']) check(`phone: ${v} button visible`, await page.locator(`.rf-views [data-view="${v}"]`).isVisible());
+  check('phone: controls shown first', await page.locator('.rf-left').isVisible() && await page.locator('.rf-right').isHidden());
+  await page.click('.rf-drawers [data-drawer=results]');
+  check('phone: Results swaps in the results panel', await page.locator('.rf-right').isVisible() && await page.locator('.rf-left').isHidden());
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  check('phone: no overflow with results open', over === 0, `${over}px`);
+  check('phone: no console errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
 

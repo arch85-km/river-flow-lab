@@ -6,200 +6,307 @@
 <title>River Flood Lab</title>
 <meta name="description" content="River Flood Lab: a browser teaching tool for how river flow, water level, obstructions and bridges interact. Not a flood risk assessment.">
 <style>
+/* Layout and look follow Urban Wind Lab: a top bar, controls on the left,
+   one large view in the middle, results on the right, a one-line footer. */
 :root{
-  --rf-bg:#f6f7f8;--rf-panel:#fff;--rf-ink:#1f2328;--rf-muted:#5b636d;--rf-line:#d5d9de;--rf-accent:#1f5fa8;--rf-accent-ink:#fff;
-  --rf-warn:#8a4b00;--rf-warn-bg:#fff4e0;--rf-bad:#a3161a;--rf-bad-bg:#fde8e8;--rf-good:#1d6b34;--rf-good-bg:#e5f4e9;
-  --rf-ground:#7b6a52;--rf-ground-fill:#ddd2c1;--rf-water:#2f7fd1;--rf-water-fill:#a9cdf2;--rf-egl:#b3261e;--rf-base:#8a9099;
-  --rf-eddy:#6a3fb5;--rf-deck:#4a4f57;--rf-block:#8c5a2b;--rf-building:#2b2f36;--rf-grid:#e6e9ec;
   color-scheme:light;
+  --rf-bg:#e9edf2;--rf-stage:#dfe6ed;--rf-panel:#fff;--rf-panel-2:#f2f5f9;--rf-raise:#dde5ed;
+  --rf-line:#ccd6e0;--rf-line-soft:#e6ecf2;--rf-ink:#14202c;--rf-muted:#4d6275;--rf-faint:#5d6f83;
+  --rf-accent:#0a6ebd;--rf-accent-ink:#fff;--rf-warn:#9a5a00;--rf-warn-bg:#fdf3e0;--rf-bad:#c02434;--rf-bad-bg:#fdeaec;--rf-good:#147a48;--rf-good-bg:#e4f6ec;
+  --rf-ground:#7b6a52;--rf-ground-fill:#ddd2c1;--rf-water:#1f6fc4;--rf-water-fill:#a9cdf2;--rf-egl:#b3261e;--rf-base:#7d8794;
+  --rf-eddy:#6a3fb5;--rf-deck:#4a4f57;--rf-block:#8c5a2b;--rf-building:#2b2f36;--rf-grid:#e6ecf2;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --rf-bg:#121417;--rf-panel:#1b1e22;--rf-ink:#e7e9ec;--rf-muted:#a3aab3;--rf-line:#343a41;--rf-accent:#7fb2ee;--rf-accent-ink:#0d1726;
-  --rf-warn:#ffcf8a;--rf-warn-bg:#3a2a12;--rf-bad:#ffb3b0;--rf-bad-bg:#43191a;--rf-good:#9fe0b0;--rf-good-bg:#16351f;
-  --rf-ground:#c2ae90;--rf-ground-fill:#4a4234;--rf-water:#7fb8f2;--rf-water-fill:#1f4a75;--rf-egl:#ff8a80;--rf-base:#9aa1aa;
-  --rf-eddy:#c4a6ff;--rf-deck:#b9bec6;--rf-block:#d9a06a;--rf-building:#e7e9ec;--rf-grid:#262b31;color-scheme:dark}}
+  color-scheme:dark;
+  --rf-bg:#080c12;--rf-stage:#0a0f16;--rf-panel:#101821;--rf-panel-2:#16202b;--rf-raise:#1d2a37;
+  --rf-line:#24323f;--rf-line-soft:#1a242f;--rf-ink:#e8eef6;--rf-muted:#93a6ba;--rf-faint:#8799ae;
+  --rf-accent:#37b6ff;--rf-accent-ink:#04121d;--rf-warn:#ffb340;--rf-warn-bg:#2d2310;--rf-bad:#ff7a86;--rf-bad-bg:#3a1418;--rf-good:#39d98a;--rf-good-bg:#0f2c1e;
+  --rf-ground:#c2ae90;--rf-ground-fill:#3d3529;--rf-water:#6fb6f5;--rf-water-fill:#1d4670;--rf-egl:#ff8a80;--rf-base:#93a1b0;
+  --rf-eddy:#c4a6ff;--rf-deck:#b9bec6;--rf-block:#d9a06a;--rf-building:#e8eef6;--rf-grid:#1a242f}}
 :root[data-theme="dark"]{
-  --rf-bg:#121417;--rf-panel:#1b1e22;--rf-ink:#e7e9ec;--rf-muted:#a3aab3;--rf-line:#343a41;--rf-accent:#7fb2ee;--rf-accent-ink:#0d1726;
-  --rf-warn:#ffcf8a;--rf-warn-bg:#3a2a12;--rf-bad:#ffb3b0;--rf-bad-bg:#43191a;--rf-good:#9fe0b0;--rf-good-bg:#16351f;
-  --rf-ground:#c2ae90;--rf-ground-fill:#4a4234;--rf-water:#7fb8f2;--rf-water-fill:#1f4a75;--rf-egl:#ff8a80;--rf-base:#9aa1aa;
-  --rf-eddy:#c4a6ff;--rf-deck:#b9bec6;--rf-block:#d9a06a;--rf-building:#e7e9ec;--rf-grid:#262b31;color-scheme:dark}
+  color-scheme:dark;
+  --rf-bg:#080c12;--rf-stage:#0a0f16;--rf-panel:#101821;--rf-panel-2:#16202b;--rf-raise:#1d2a37;
+  --rf-line:#24323f;--rf-line-soft:#1a242f;--rf-ink:#e8eef6;--rf-muted:#93a6ba;--rf-faint:#8799ae;
+  --rf-accent:#37b6ff;--rf-accent-ink:#04121d;--rf-warn:#ffb340;--rf-warn-bg:#2d2310;--rf-bad:#ff7a86;--rf-bad-bg:#3a1418;--rf-good:#39d98a;--rf-good-bg:#0f2c1e;
+  --rf-ground:#c2ae90;--rf-ground-fill:#3d3529;--rf-water:#6fb6f5;--rf-water-fill:#1d4670;--rf-egl:#ff8a80;--rf-base:#93a1b0;
+  --rf-eddy:#c4a6ff;--rf-deck:#b9bec6;--rf-block:#d9a06a;--rf-building:#e8eef6;--rf-grid:#1a242f}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-html,body{margin:0;background:var(--rf-bg);color:var(--rf-ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+html,body{margin:0;height:100%;background:var(--rf-bg);color:var(--rf-ink);font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--rf-accent);outline-offset:2px}
-.rf-top{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem 1rem;padding:.6rem 16px;background:var(--rf-panel);border-bottom:1px solid var(--rf-line)}
-.rf-top h1{font-size:1.15rem;font-weight:650;margin:0}
-.rf-caution{font-size:.82rem;color:var(--rf-warn);background:var(--rf-warn-bg);padding:.15rem .55rem;border-radius:4px}
-.rf-top .rf-actions{margin-left:auto;display:flex;flex-wrap:wrap;gap:.35rem}
-.rf-btn{border:1px solid var(--rf-line);background:var(--rf-panel);border-radius:6px;padding:.3rem .65rem;cursor:pointer}
+.rf-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.rf-eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--rf-muted);font-weight:650}
+
+/* shell */
+#rf-root{display:grid;height:100vh;grid-template-columns:300px minmax(0,1fr) 300px;grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"top top top" "left stage right" "foot foot foot"}
+.rf-top{grid-area:top;display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--rf-panel);border-bottom:1px solid var(--rf-line);min-width:0}
+.rf-logo{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#1f6fc4,#37b6ff);display:grid;place-items:center;flex:none}
+.rf-brand{min-width:0}
+.rf-brand h1{margin:0;font-size:15px;font-weight:650;white-space:nowrap}
+.rf-brand .rf-eyebrow{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.rf-top-actions{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.rf-pill{border:1px solid var(--rf-line);border-radius:999px;padding:3px 10px;font-size:12px;white-space:nowrap;background:var(--rf-panel)}
+.rf-pill.rf-good{background:var(--rf-good-bg);color:var(--rf-good);border-color:transparent}
+.rf-pill.rf-warn{background:var(--rf-warn-bg);color:var(--rf-warn);border-color:transparent}
+.rf-pill.rf-bad{background:var(--rf-bad-bg);color:var(--rf-bad);border-color:transparent}
+.rf-btn{border:1px solid var(--rf-line);background:var(--rf-panel);border-radius:999px;padding:4px 12px;cursor:pointer;white-space:nowrap}
 .rf-btn:hover{border-color:var(--rf-accent)}
-.rf-btn.rf-primary{background:var(--rf-accent);color:var(--rf-accent-ink);border-color:var(--rf-accent)}
-.rf-btn.rf-small{padding:.1rem .45rem;font-size:.85rem}
-.rf-layout{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:16px;padding:16px;max-width:1600px;margin:0 auto}
-@media (max-width:980px){.rf-layout{grid-template-columns:minmax(0,1fr)}}
-.rf-side,.rf-main{display:flex;flex-direction:column;gap:16px;min-width:0}
-.rf-card{background:var(--rf-panel);border:1px solid var(--rf-line);border-radius:8px;padding:12px 14px;min-width:0}
-.rf-card h2{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--rf-muted);margin:0 0 .5rem;font-weight:650}
-.rf-card h3{font-size:.9rem;margin:.8rem 0 .3rem}
-.rf-row{display:flex;flex-wrap:wrap;gap:.4rem .6rem;align-items:center;margin:.35rem 0}
-.rf-row label{display:flex;flex-direction:column;font-size:.8rem;color:var(--rf-muted);gap:.1rem}
-.rf-row input[type=number],.rf-row select,.rf-row input[type=text]{width:6.2rem;min-width:0;padding:.2rem .35rem;border:1px solid var(--rf-line);border-radius:4px;background:var(--rf-bg)}
-.rf-row input[type=text]{width:12rem}
-.rf-row select{width:auto;max-width:100%}
-.rf-flow{display:flex;align-items:center;gap:.6rem}
-.rf-flow input[type=range]{flex:1;min-width:0;accent-color:var(--rf-accent)}
-.rf-big{font-size:1.5rem;font-weight:650}
-.rf-note{font-size:.82rem;color:var(--rf-muted);margin:.3rem 0}
-textarea.rf-pts{width:100%;min-height:9rem;font:13px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--rf-line);border-radius:4px;background:var(--rf-bg);padding:.35rem}
-.rf-tabs{display:flex;flex-wrap:wrap;gap:.25rem;border-bottom:1px solid var(--rf-line);margin-bottom:.5rem}
-.rf-tabs button{border:0;background:none;padding:.35rem .6rem;border-bottom:2px solid transparent;cursor:pointer;color:var(--rf-muted)}
-.rf-tabs button[aria-selected=true]{color:var(--rf-ink);border-bottom-color:var(--rf-accent)}
-.rf-item{border:1px solid var(--rf-line);border-radius:6px;padding:.4rem .5rem;margin:.4rem 0}
-.rf-item-head{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:.88rem}
-.rf-charts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
-@media (max-width:1200px){.rf-charts{grid-template-columns:minmax(0,1fr)}}
+.rf-btn.rf-primary{background:var(--rf-accent);color:var(--rf-accent-ink);border-color:var(--rf-accent);border-radius:6px}
+.rf-btn.rf-sq{border-radius:6px}
+.rf-btn.rf-small{padding:2px 9px;font-size:12px}
+.rf-menu{position:relative}
+.rf-menu-list{position:absolute;right:0;top:calc(100% + 4px);background:var(--rf-panel);border:1px solid var(--rf-line);border-radius:8px;box-shadow:0 8px 24px #0003;padding:4px;z-index:30;min-width:190px}
+.rf-menu-list button{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 10px;border-radius:5px;cursor:pointer}
+.rf-menu-list button:hover{background:var(--rf-panel-2)}
+
+.rf-left{grid-area:left}.rf-right{grid-area:right}
+.rf-left,.rf-right{background:var(--rf-panel);overflow-y:auto;min-height:0}
+.rf-left{border-right:1px solid var(--rf-line)}.rf-right{border-left:1px solid var(--rf-line)}
+details.rf-sec{border-bottom:1px solid var(--rf-line)}
+details.rf-sec>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer}
+details.rf-sec>summary::-webkit-details-marker{display:none}
+.rf-chev{transition:transform .15s;color:var(--rf-muted)}
+details[open]>summary .rf-chev{transform:rotate(180deg)}
+.rf-body{padding:0 14px 14px;display:flex;flex-direction:column;gap:9px}
+.rf-field{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rf-field label,.rf-lab{color:var(--rf-muted)}
+.rf-num{width:84px;padding:4px 8px;border:1px solid var(--rf-line);border-radius:6px;background:var(--rf-panel-2);text-align:right}
+.rf-select{padding:4px 8px;border:1px solid var(--rf-line);border-radius:6px;background:var(--rf-panel-2);max-width:100%}
+input[type=range]{width:100%;accent-color:var(--rf-accent);margin:0}
+.rf-hint{font-size:12px;color:var(--rf-muted);margin:0}
+.rf-seg{display:flex;border:1px solid var(--rf-line);border-radius:7px;overflow:hidden;background:var(--rf-panel-2)}
+.rf-seg button{flex:1;border:0;background:none;padding:6px 4px;cursor:pointer;color:var(--rf-muted);white-space:nowrap}
+.rf-seg button[aria-pressed=true]{background:var(--rf-panel);color:var(--rf-ink);box-shadow:inset 0 0 0 1px var(--rf-line)}
+.rf-grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.rf-kv{display:flex;justify-content:space-between;gap:8px}
+.rf-kv span:last-child{font-variant-numeric:tabular-nums}
+details.rf-el{border:1px solid var(--rf-line);border-radius:7px;background:var(--rf-panel-2)}
+details.rf-el>summary{list-style:none;display:flex;justify-content:space-between;align-items:center;padding:6px 9px;cursor:pointer}
+details.rf-el>summary::-webkit-details-marker{display:none}
+.rf-el-body{padding:2px 9px 9px;display:grid;grid-template-columns:1fr 1fr;gap:6px 8px}
+.rf-el-body label{display:flex;flex-direction:column;font-size:11.5px;color:var(--rf-muted);gap:2px}
+.rf-el-body input,.rf-el-body select{width:100%;padding:3px 6px;border:1px solid var(--rf-line);border-radius:5px;background:var(--rf-panel)}
+.rf-el-body .rf-wide2{grid-column:1/-1}
+.rf-tag{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--rf-muted);margin-right:6px}
+textarea.rf-pts{width:100%;min-height:8rem;font:12px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--rf-line);border-radius:6px;background:var(--rf-panel-2);padding:6px}
+
+/* stage */
+.rf-stage{grid-area:stage;position:relative;background:var(--rf-stage);min-width:0;min-height:0;overflow:hidden}
+.rf-view{position:absolute;inset:0}
+.rf-view svg{width:100%;height:100%;display:block}
+.rf-3d canvas{display:block;width:100%;height:100%;touch-action:none}
+.rf-3d-msg{padding:4rem 1.5rem;color:var(--rf-muted);text-align:center}
+.rf-views{position:absolute;left:12px;top:12px;display:flex;gap:6px;z-index:5;flex-wrap:wrap}
+.rf-views button{border:1px solid var(--rf-line);background:var(--rf-panel);border-radius:7px;padding:5px 12px;cursor:pointer}
+.rf-views button[aria-pressed=true]{border-color:var(--rf-accent);color:var(--rf-accent);box-shadow:inset 0 0 0 1px var(--rf-accent)}
+.rf-stage-tools{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.rf-glass{background:var(--rf-panel);border:1px solid var(--rf-line);border-radius:7px;padding:4px 8px}
+.rf-caption{position:absolute;right:12px;bottom:10px;z-index:5;text-align:right;font-size:12px;color:var(--rf-muted);pointer-events:none}
+
+/* results */
+.rf-tiles{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.rf-tile{border:1px solid var(--rf-line);border-radius:7px;padding:7px 9px;background:var(--rf-panel-2)}
+.rf-tile .rf-eyebrow{display:block;margin-bottom:2px}
+.rf-tile b{font-size:17px;font-weight:650;font-variant-numeric:tabular-nums}
+.rf-tile small{color:var(--rf-muted);margin-left:2px}
+.rf-ramp{height:12px;border-radius:3px;background:linear-gradient(90deg,#7db9ee,#16539c)}
+.rf-legend-row{display:flex;align-items:center;gap:8px;color:var(--rf-muted);font-size:12px}
+.rf-legend-row i{width:18px;height:3px;display:inline-block;border-radius:2px}
+.rf-notes{display:flex;flex-direction:column;gap:5px}
+.rf-note{font-size:12px;padding:5px 8px;border-radius:6px;background:var(--rf-panel-2);border:1px solid var(--rf-line)}
+.rf-note.rf-good{background:var(--rf-good-bg);color:var(--rf-good);border-color:transparent}
+.rf-note.rf-warn{background:var(--rf-warn-bg);color:var(--rf-warn);border-color:transparent}
+.rf-note.rf-bad{background:var(--rf-bad-bg);color:var(--rf-bad);border-color:transparent}
 .rf-chart svg{width:100%;height:auto;display:block}
-.rf-wide{grid-column:1/-1}
-.rf-3d{position:relative;width:100%;aspect-ratio:16/8;min-height:260px;border-radius:6px;overflow:hidden;background:var(--rf-bg);touch-action:none}
-.rf-3d canvas{display:block;width:100%;height:100%}
-.rf-3d-msg{padding:1rem;color:var(--rf-muted)}
-.rf-chart-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.4rem}
-.rf-legend{display:flex;flex-wrap:wrap;gap:.2rem .8rem;font-size:.78rem;color:var(--rf-muted);margin-top:.3rem}
-.rf-legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:.3rem}
-.rf-chips{display:flex;flex-wrap:wrap;gap:.35rem}
-.rf-chip{font-size:.82rem;padding:.12rem .5rem;border-radius:999px;background:var(--rf-bg);border:1px solid var(--rf-line)}
-.rf-chip.rf-good{background:var(--rf-good-bg);color:var(--rf-good);border-color:transparent}
-.rf-chip.rf-warn{background:var(--rf-warn-bg);color:var(--rf-warn);border-color:transparent}
-.rf-chip.rf-bad{background:var(--rf-bad-bg);color:var(--rf-bad);border-color:transparent}
 .rf-tablewrap{overflow-x:auto;max-width:100%}
-table.rf-table{border-collapse:collapse;font-size:.82rem;width:100%;font-variant-numeric:tabular-nums}
-.rf-table th,.rf-table td{padding:.25rem .45rem;border-bottom:1px solid var(--rf-line);text-align:right;white-space:nowrap}
+table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant-numeric:tabular-nums}
+.rf-table th,.rf-table td{padding:3px 5px;border-bottom:1px solid var(--rf-line);text-align:right;white-space:nowrap}
 .rf-table th:first-child,.rf-table td:first-child{text-align:left}
 .rf-table tr.rf-sel td{background:var(--rf-water-fill)}
 .rf-table tbody tr{cursor:pointer}
 .rf-err{color:var(--rf-bad);font-weight:600}
-.rf-foot{padding:0 16px 24px;max-width:1600px;margin:0 auto;font-size:.82rem;color:var(--rf-muted)}
-.rf-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+.rf-foot{grid-area:foot;display:flex;gap:14px;align-items:center;padding:6px 14px;border-top:1px solid var(--rf-line);background:var(--rf-panel-2);font-size:11.5px;color:var(--rf-muted);min-width:0;overflow:hidden;white-space:nowrap}
+.rf-foot b{color:var(--rf-ink);font-weight:600}
+.rf-foot .rf-grow{flex:1;overflow:hidden;text-overflow:ellipsis}
+.rf-drawers{display:none}
+
+/* phones and narrow windows: the view on top, controls or results beneath */
+@media (max-width:900px){
+  #rf-root{height:auto;min-height:100vh;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 58vh auto auto auto;grid-template-areas:"top" "stage" "drawers" "panel" "foot"}
+  .rf-left,.rf-right{grid-area:panel;border:0;overflow:visible}
+  #rf-root[data-drawer=controls] .rf-right,#rf-root[data-drawer=results] .rf-left{display:none}
+  .rf-drawers{grid-area:drawers;display:flex;gap:6px;padding:8px 12px;background:var(--rf-panel);border-bottom:1px solid var(--rf-line)}
+  .rf-drawers button{flex:1}
+  .rf-foot{white-space:normal;flex-wrap:wrap}
+  .rf-brand .rf-eyebrow{display:none}
+  .rf-hide-narrow{display:none}
+  .rf-stage-tools{top:auto;bottom:32px;left:12px;right:auto;justify-content:flex-start}
+  .rf-caption{font-size:11px}
+}
 </style>
 </head>
 <body>
-<header class="rf-top">
-  <h1>River Flood Lab</h1>
-  <span class="rf-caution" id="rf-caution-top"></span>
-  <div class="rf-actions">
-    <button class="rf-btn" id="rf-new" type="button">New reach…</button>
-    <button class="rf-btn" id="rf-open" type="button">Open</button>
-    <button class="rf-btn" id="rf-save" type="button">Save</button>
-    <button class="rf-btn" id="rf-csv" type="button">CSV</button>
-    <button class="rf-btn" id="rf-png" type="button">Section PNG</button>
-    <button class="rf-btn" id="rf-theme" type="button" aria-label="Switch colour theme">Theme</button>
-    <input type="file" id="rf-file" accept=".json,application/json" hidden>
-  </div>
-</header>
+<div id="rf-root" data-drawer="controls">
+  <header class="rf-top">
+    <div class="rf-logo" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M2 8c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M2 13c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M2 18c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/></svg></div>
+    <div class="rf-brand"><h1>River Flood Lab</h1><span class="rf-eyebrow">River flow and flooding · 1D standard step</span></div>
+    <div class="rf-top-actions">
+      <button class="rf-btn" id="rf-theme" type="button" aria-label="Switch colour theme">Theme</button>
+      <div class="rf-menu">
+        <button class="rf-btn" id="rf-file-btn" type="button" aria-haspopup="true" aria-expanded="false">File ▾</button>
+        <div class="rf-menu-list" id="rf-file-menu" hidden role="menu">
+          <button type="button" role="menuitem" id="rf-png">Export view as PNG</button>
+          <button type="button" role="menuitem" id="rf-csv">Export results as CSV</button>
+          <button type="button" role="menuitem" id="rf-save">Save project</button>
+          <button type="button" role="menuitem" id="rf-open">Open project…</button>
+          <button type="button" role="menuitem" id="rf-new">New template reach…</button>
+        </div>
+      </div>
+      <input type="file" id="rf-file" accept=".json,application/json" hidden>
+      <span class="rf-pill rf-hide-narrow" id="rf-pill-flow"></span>
+      <span class="rf-pill" id="rf-pill-state"></span>
+    </div>
+  </header>
 
-<div class="rf-layout">
-  <aside class="rf-side">
-    <section class="rf-card" aria-labelledby="rf-h-flow">
-      <h2 id="rf-h-flow">Flow</h2>
-      <div class="rf-flow">
-        <input type="range" id="rf-q-range" min="0" max="1000" step="1" aria-label="Flow">
-        <span class="rf-big" id="rf-q-out" aria-live="polite"></span>
+  <aside class="rf-left" aria-label="Controls">
+    <details class="rf-sec" open>
+      <summary><span class="rf-eyebrow">Flow</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
+      <div class="rf-body">
+        <div class="rf-field"><label for="rf-q">River flow, m³/s</label><input class="rf-num rf-mono" type="number" id="rf-q" min="0.01" step="0.1"></div>
+        <input type="range" id="rf-q-range" min="0" max="1000" step="1" aria-label="River flow">
+        <p class="rf-hint" id="rf-q-out" aria-live="polite"></p>
+        <div class="rf-seg" role="group" aria-label="Flow presets">
+          <button type="button" data-preset="low" aria-pressed="false">Low</button>
+          <button type="button" data-preset="bankfull" aria-pressed="false">Bankfull</button>
+          <button type="button" data-preset="flood" aria-pressed="false">Twice bankfull</button>
+        </div>
+        <div class="rf-field"><label for="rf-allow">Climate allowance, %</label><input class="rf-num rf-mono" type="number" id="rf-allow" min="0" max="200" step="1"></div>
+        <p class="rf-hint">Raises the flow you set. Use the Environment Agency peak river flow allowance for your catchment and epoch.</p>
+        <details>
+          <summary class="rf-lab" style="cursor:pointer">Downstream boundary and slider range</summary>
+          <div class="rf-body" style="padding:8px 0 0">
+            <div class="rf-field"><label for="rf-bnd">Boundary</label><select class="rf-select" id="rf-bnd"><option value="normal">Normal depth</option><option value="ws">Fixed water level</option></select></div>
+            <div class="rf-field" id="rf-bnd-s-l"><label for="rf-bnd-s">Slope</label><input class="rf-num rf-mono" type="number" id="rf-bnd-s" step="0.0001" min="0.00001"></div>
+            <div class="rf-field" id="rf-bnd-ws-l"><label for="rf-bnd-ws">Level, m</label><input class="rf-num rf-mono" type="number" id="rf-bnd-ws" step="0.01"></div>
+            <div class="rf-field"><label for="rf-qmax">Slider maximum, m³/s</label><input class="rf-num rf-mono" type="number" id="rf-qmax" min="1" step="1"></div>
+          </div>
+        </details>
       </div>
-      <div class="rf-row">
-        <label>Flow, m³/s<input type="number" id="rf-q" min="0.01" step="0.1"></label>
-        <label>Slider max<input type="number" id="rf-qmax" min="1" step="1"></label>
-        <label>Climate allowance, %<input type="number" id="rf-allow" min="0" max="200" step="1"></label>
-      </div>
-      <p class="rf-note">The allowance raises the flow you set. Enter the Environment Agency peak river flow allowance for the catchment, epoch and category you are designing for.</p>
-      <div class="rf-row">
-        <label>Downstream boundary<select id="rf-bnd"><option value="normal">Normal depth</option><option value="ws">Fixed water level</option></select></label>
-        <label id="rf-bnd-s-l">Slope<input type="number" id="rf-bnd-s" step="0.0001" min="0.00001"></label>
-        <label id="rf-bnd-ws-l">Level, m<input type="number" id="rf-bnd-ws" step="0.01"></label>
-      </div>
-    </section>
+    </details>
 
-    <section class="rf-card" aria-labelledby="rf-h-design">
-      <h2 id="rf-h-design">Design elements</h2>
-      <div class="rf-tabs" role="tablist" aria-label="Design elements">
-        <button role="tab" type="button" data-tab="obstructions" aria-selected="true">Obstructions</button>
-        <button role="tab" type="button" data-tab="bridges" aria-selected="false">Bridges</button>
-        <button role="tab" type="button" data-tab="walls" aria-selected="false">Walls</button>
-        <button role="tab" type="button" data-tab="buildings" aria-selected="false">Buildings</button>
-        <button role="tab" type="button" data-tab="eddy" aria-selected="false">Eddies</button>
+    <details class="rf-sec" open>
+      <summary><span class="rf-eyebrow">Design</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
+      <div class="rf-body">
+        <p class="rf-hint">Add an element at the chosen section (<b id="rf-at"></b>), then open it to adjust. Every result is compared with the river without them.</p>
+        <div class="rf-grid2">
+          <button class="rf-btn rf-sq" type="button" data-add="obstructions">+ Obstruction</button>
+          <button class="rf-btn rf-sq" type="button" data-add="bridges">+ Bridge</button>
+          <button class="rf-btn rf-sq" type="button" data-add="walls">+ Flood wall</button>
+          <button class="rf-btn rf-sq" type="button" data-add="buildings">+ Building</button>
+        </div>
+        <div id="rf-elements" class="rf-notes"></div>
+        <details>
+          <summary class="rf-lab" style="cursor:pointer">Eddy zones</summary>
+          <div class="rf-body" style="padding:8px 0 0">
+            <label class="rf-field" style="justify-content:flex-start;gap:8px"><input type="checkbox" id="rf-eddy-on"> Mark eddy zones</label>
+            <div class="rf-field"><label for="rf-eddy-er">Expansion ratio 1:ER</label><input class="rf-num rf-mono" type="number" id="rf-eddy-er" min="0.5" max="6" step="0.5"></div>
+            <div class="rf-field"><label for="rf-eddy-cr">Contraction ratio 1:CR</label><input class="rf-num rf-mono" type="number" id="rf-eddy-cr" min="0.5" max="4" step="0.5"></div>
+            <p class="rf-hint">Beside and behind a blockage the flow separates and swirls. A 1D model cannot compute the swirl; it treats that water as carrying no flow, widening again at 1 across per ER along below the blockage and narrowing at 1 per CR above it (HEC-RAS Hydraulic Reference Manual, ch. 5).</p>
+          </div>
+        </details>
       </div>
-      <div id="rf-tabpanel" role="tabpanel"></div>
-    </section>
+    </details>
 
-    <section class="rf-card" aria-labelledby="rf-h-sec">
-      <h2 id="rf-h-sec">Cross-section editor</h2>
-      <div class="rf-row">
-        <label>Section<select id="rf-sec-pick"></select></label>
-        <button class="rf-btn rf-small" type="button" id="rf-sec-add">Add copy upstream</button>
-        <button class="rf-btn rf-small" type="button" id="rf-sec-del">Delete</button>
+    <details class="rf-sec">
+      <summary><span class="rf-eyebrow">River</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
+      <div class="rf-body">
+        <div class="rf-kv"><span class="rf-lab">Active river</span><span id="rf-river-name"></span></div>
+        <div class="rf-kv"><span class="rf-lab">Sections</span><span id="rf-river-n"></span></div>
+        <div class="rf-kv"><span class="rf-lab">Length</span><span id="rf-river-len"></span></div>
+        <button class="rf-btn rf-sq" type="button" id="rf-new2">New template reach…</button>
+        <details>
+          <summary class="rf-lab" style="cursor:pointer">Edit a cross-section</summary>
+          <div class="rf-body" style="padding:8px 0 0">
+            <div class="rf-field"><label for="rf-sec-pick">Section</label><select class="rf-select" id="rf-sec-pick"></select></div>
+            <div class="rf-grid2">
+              <button class="rf-btn rf-sq rf-small" type="button" id="rf-sec-add">Add copy upstream</button>
+              <button class="rf-btn rf-sq rf-small" type="button" id="rf-sec-del">Delete</button>
+            </div>
+            <div class="rf-field"><label for="rf-sec-x">Chainage, m</label><input class="rf-num rf-mono" type="number" id="rf-sec-x" step="0.1"></div>
+            <div class="rf-field"><label for="rf-sec-bl">Left bank, m</label><input class="rf-num rf-mono" type="number" id="rf-sec-bl" step="0.1"></div>
+            <div class="rf-field"><label for="rf-sec-br">Right bank, m</label><input class="rf-num rf-mono" type="number" id="rf-sec-br" step="0.1"></div>
+            <div class="rf-field"><label for="rf-sec-nl">n left overbank</label><input class="rf-num rf-mono" type="number" id="rf-sec-nl" step="0.005" min="0.01"></div>
+            <div class="rf-field"><label for="rf-sec-nc">n channel</label><input class="rf-num rf-mono" type="number" id="rf-sec-nc" step="0.005" min="0.01"></div>
+            <div class="rf-field"><label for="rf-sec-nr">n right overbank</label><input class="rf-num rf-mono" type="number" id="rf-sec-nr" step="0.005" min="0.01"></div>
+            <label class="rf-hint" for="rf-sec-pts">Ground points: offset and level in metres, one pair per line, left to right looking downstream.</label>
+            <textarea class="rf-pts" id="rf-sec-pts" spellcheck="false"></textarea>
+            <button class="rf-btn rf-primary" type="button" id="rf-sec-apply">Apply section</button>
+            <span class="rf-hint" id="rf-sec-msg" role="status"></span>
+            <p class="rf-hint">Chainage runs upstream from the downstream end. Reshape the channel here: widen it, add a berm, or change roughness.</p>
+          </div>
+        </details>
       </div>
-      <div class="rf-row">
-        <label>Chainage, m<input type="number" id="rf-sec-x" step="0.1"></label>
-        <label>Left bank, m<input type="number" id="rf-sec-bl" step="0.1"></label>
-        <label>Right bank, m<input type="number" id="rf-sec-br" step="0.1"></label>
-      </div>
-      <div class="rf-row">
-        <label>n left overbank<input type="number" id="rf-sec-nl" step="0.005" min="0.01"></label>
-        <label>n channel<input type="number" id="rf-sec-nc" step="0.005" min="0.01"></label>
-        <label>n right overbank<input type="number" id="rf-sec-nr" step="0.005" min="0.01"></label>
-      </div>
-      <label class="rf-note" for="rf-sec-pts">Ground points: offset and level in metres, one pair per line, left to right looking downstream.</label>
-      <textarea class="rf-pts" id="rf-sec-pts" spellcheck="false"></textarea>
-      <div class="rf-row">
-        <button class="rf-btn rf-primary" type="button" id="rf-sec-apply">Apply section</button>
-        <span class="rf-note" id="rf-sec-msg" role="status"></span>
-      </div>
-      <p class="rf-note">Chainage is measured upstream from the downstream end. Reshape the channel here: widen it, add a berm for a two-stage channel, or change roughness.</p>
-    </section>
+    </details>
   </aside>
 
-  <main class="rf-main">
-    <div class="rf-card" id="rf-status" aria-live="polite"></div>
-    <div class="rf-charts">
-      <section class="rf-card rf-chart rf-wide" aria-labelledby="rf-h-3d">
-        <div class="rf-chart-head"><h2 id="rf-h-3d">3D view</h2>
-          <div class="rf-row" style="margin:0">
-            <label style="flex-direction:row;align-items:center;gap:.35rem">Vertical exaggeration<select id="rf-vex"><option value="1">1×</option><option value="2">2×</option><option value="3" selected>3×</option><option value="5">5×</option><option value="10">10×</option></select></label>
-            <button class="rf-btn rf-small" type="button" id="rf-3d-reset">Reset view</button>
-            <button class="rf-btn rf-small" type="button" id="rf-3d-png">3D PNG</button>
-          </div>
-        </div>
-        <div class="rf-3d" id="rf-3d" role="img" aria-label="3D view of the reach: terrain, water coloured by depth, eddy zones and design elements. Drag to turn, scroll or pinch to zoom."></div>
-        <p class="rf-note" id="rf-3d-note">Drag to turn, right-drag to move, scroll or pinch to zoom. Water is coloured by depth; levels are exaggerated vertically. Buildings are drawn 3.5 m above their floor, as a placeholder height.</p>
-      </section>
-      <section class="rf-card rf-chart" aria-labelledby="rf-h-plan">
-        <div class="rf-chart-head"><h2 id="rf-h-plan">Plan — flow left to right</h2></div>
-        <div id="rf-plan"></div>
-        <div class="rf-legend"><span><i style="background:var(--rf-water)"></i>water</span><span><i style="background:var(--rf-eddy)"></i>eddy zone (separated flow, not computed)</span><span><i style="background:var(--rf-block)"></i>obstruction / wall</span><span><i style="background:var(--rf-deck)"></i>bridge</span></div>
-      </section>
-      <section class="rf-card rf-chart" aria-labelledby="rf-h-xs">
-        <div class="rf-chart-head"><h2 id="rf-h-xs">Cross-section</h2><select id="rf-view-sec" aria-label="Section to show"></select></div>
-        <div id="rf-xs"></div>
-        <div class="rf-legend"><span><i style="background:var(--rf-water)"></i>water level</span><span><i style="background:var(--rf-egl)"></i>energy line</span><span><i style="background:var(--rf-base)"></i>without design elements</span><span><i style="background:var(--rf-eddy)"></i>eddy zone</span></div>
-      </section>
-      <section class="rf-card rf-chart" aria-labelledby="rf-h-lp">
-        <div class="rf-chart-head"><h2 id="rf-h-lp">Long profile</h2></div>
-        <div id="rf-lp"></div>
-        <div class="rf-legend"><span><i style="background:var(--rf-ground)"></i>bed</span><span><i style="background:var(--rf-water)"></i>water level</span><span><i style="background:var(--rf-egl)"></i>energy line</span><span><i style="background:var(--rf-base)"></i>without design elements</span></div>
-      </section>
-      <section class="rf-card rf-chart" aria-labelledby="rf-h-rc">
-        <div class="rf-chart-head"><h2 id="rf-h-rc">Water level against flow</h2></div>
-        <div id="rf-rc"></div>
-        <p class="rf-note" id="rf-rc-note"></p>
-      </section>
+  <main class="rf-stage" aria-label="View">
+    <div class="rf-views" role="group" aria-label="View">
+      <button type="button" data-view="3d" aria-pressed="true">3D</button>
+      <button type="button" data-view="plan" aria-pressed="false">Plan</button>
+      <button type="button" data-view="section" aria-pressed="false">Section</button>
+      <button type="button" data-view="profile" aria-pressed="false">Profile</button>
     </div>
-    <section class="rf-card" aria-labelledby="rf-h-res">
-      <h2 id="rf-h-res">Results by section</h2>
-      <div class="rf-tablewrap" id="rf-table"></div>
-    </section>
+    <div class="rf-stage-tools">
+      <label class="rf-glass" data-for="3d">Exaggeration <select class="rf-select" id="rf-vex" style="padding:1px 4px"><option value="1">1×</option><option value="2">2×</option><option value="3" selected>3×</option><option value="5">5×</option><option value="10">10×</option></select></label>
+      <button class="rf-btn" type="button" id="rf-3d-reset" data-for="3d">Reset view</button>
+    </div>
+    <div class="rf-view rf-3d" id="rf-3d" data-view="3d" role="img" aria-label="3D view of the reach: terrain, water coloured by depth, eddy zones and design elements. Drag to turn, right-drag to move, scroll or pinch to zoom."></div>
+    <div class="rf-view" id="rf-plan" data-view="plan" data-fill hidden></div>
+    <div class="rf-view" id="rf-xs" data-view="section" data-fill hidden></div>
+    <div class="rf-view" id="rf-lp" data-view="profile" data-fill hidden></div>
+    <div class="rf-caption" id="rf-caption"></div>
   </main>
+
+  <div class="rf-drawers" role="group" aria-label="Panels">
+    <button class="rf-btn rf-sq" type="button" data-drawer="controls" aria-pressed="true">Controls</button>
+    <button class="rf-btn rf-sq" type="button" data-drawer="results" aria-pressed="false">Results</button>
+  </div>
+
+  <aside class="rf-right" aria-label="Results">
+    <details class="rf-sec" open>
+      <summary><span class="rf-eyebrow">Legend</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
+      <div class="rf-body" id="rf-legend"></div>
+    </details>
+    <details class="rf-sec" open>
+      <summary><span class="rf-eyebrow" id="rf-at-head">At section</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
+      <div class="rf-body">
+        <div class="rf-field"><label for="rf-view-sec">Section</label><select class="rf-select" id="rf-view-sec"></select></div>
+        <div class="rf-tiles" id="rf-tiles"></div>
+      </div>
+    </details>
+    <details class="rf-sec" open>
+      <summary><span class="rf-eyebrow">Effect of the design</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
+      <div class="rf-body"><div class="rf-notes" id="rf-status" aria-live="polite"></div></div>
+    </details>
+    <details class="rf-sec" open>
+      <summary><span class="rf-eyebrow">Water level against flow</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
+      <div class="rf-body"><div class="rf-chart" id="rf-rc"></div><p class="rf-hint" id="rf-rc-note"></p></div>
+    </details>
+    <details class="rf-sec">
+      <summary><span class="rf-eyebrow">All sections</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
+      <div class="rf-body"><div class="rf-tablewrap" id="rf-table"></div></div>
+    </details>
+  </aside>
+
+  <footer class="rf-foot">
+    <span>© Karam Al-Obaidi</span>
+    <span class="rf-grow"><b>Teaching tool.</b> <span id="rf-caution-foot"></span></span>
+    <span class="rf-hide-narrow">Steady 1D standard step · Manning · Yarnell check</span>
+  </footer>
 </div>
-<footer class="rf-foot" id="rf-foot"></footer>
+
 
 <!-- three:start -->
 <script id="rfl-three">
@@ -4925,7 +5032,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
   }
 
   let S = defaultState();
-  let viewId = null, editIdx = 0, tab = 'obstructions';
+  let viewId = null, editIdx = 0, view = '3d';
   let RES = null, BASE = null;
 
   // ---------- state → engine model ----------
@@ -4964,7 +5071,20 @@ if (typeof module !== 'undefined') module.exports = RFL;
     RES = RFL.solve(model(true), Q);
     BASE = hasDesign() && !RES.error ? RFL.solve(model(false), Q) : null;
     if (!RES.error && (!viewId || !RES.sections.some(s => s.id === viewId))) viewId = RES.sections[Math.floor(RES.sections.length / 2)].id;
-    renderFlow(); renderStatus(); renderViewPicker(); renderPlan(); renderSection(); renderProfile(); renderTable(); build3D(); scheduleRating();
+    renderFlow(); renderPills(); renderStatus(); renderViewPicker(); renderTiles(); renderRiver(); renderActive(); renderTable(); scheduleRating();
+  }
+  // Only the view on screen is drawn; switching views draws the new one.
+  function renderActive() {
+    if (view === '3d') build3D(); else if (view === 'plan') renderPlan(); else if (view === 'section') renderSection(); else renderProfile();
+    renderLegend(); renderCaption();
+  }
+  function setView(v) {
+    view = v;
+    document.querySelectorAll('.rf-views [data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+    document.querySelectorAll('.rf-stage .rf-view').forEach(d => { d.hidden = d.dataset.view !== v; });
+    document.querySelectorAll('.rf-stage-tools [data-for]').forEach(d => { d.hidden = d.dataset.for !== v; });
+    if (v === '3d') size3D();
+    renderActive();
   }
 
   // ---------- palette and SVG ----------
@@ -4983,10 +5103,14 @@ if (typeof module !== 'undefined') module.exports = RFL;
   }
   // Draw at the width the chart actually has, so labels keep their real size on a phone.
   function dims(host, W0, H0) {
+    if (host.hasAttribute('data-fill')) return [Math.max(300, Math.round(host.clientWidth || W0)), Math.max(240, Math.round(host.clientHeight || H0))];
     const w = Math.round(host.clientWidth || W0);
     const W = Math.max(300, Math.min(w, 960));
     return [W, Math.round(H0 * Math.min(1.1, Math.max(0.85, W / W0)))];
   }
+  // Margins for a chart that fills the stage: clear of the view buttons and the caption.
+  const stageTop = host => host.hasAttribute('data-fill') ? 62 : 0;
+  const stageBottom = host => host.hasAttribute('data-fill') ? 26 : 0;
   function svgRoot(host, W, H, label) {
     host.textContent = '';
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': label, 'font-family': 'system-ui, sans-serif', 'font-size': 11 }, host);
@@ -5045,7 +5169,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const secs = RES.sections;
     const xmin = secs[0].x, xmax = secs[secs.length - 1].x;
     const ymin = Math.min(...secs.map(s => s.raw[0][0])), ymax = Math.max(...secs.map(s => s.raw[s.raw.length - 1][0]));
-    const box = { l: 46, r: W - 10, t: 10, b: H - 38 };
+    const box = { l: 46, r: W - 10, t: 10 + stageTop(host), b: H - 38 - stageBottom(host) };
     box.sx = lin(xmax, xmin, box.l, box.r); box.sy = lin(ymin, ymax, box.t, box.b);
     axes(svg, box, [xmin, xmax], [ymin, ymax], 'Chainage, m (flow →)', 'Offset, m');
     const { sx, sy } = box;
@@ -5101,7 +5225,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
   // ---------- cross-section ----------
   function viewSection() { return RES && !RES.error ? RES.sections.find(s => s.id === viewId) : null; }
   function renderSection(target) {
-    const host = target || $('rf-xs'), [W, H] = target ? [640, 320] : dims(host, 640, 320);
+    const host = target || $('rf-xs'), [W, H] = dims(host, 640, 320);
     const svg = svgRoot(host, W, H, 'Cross-section with water level and energy line');
     const s = viewSection();
     if (!s) return svg;
@@ -5113,7 +5237,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     if (bridge) zhi = Math.max(zhi, bridge.highChord);
     zhi = Math.min(zhi, Math.max(s.egl, s.ws) + 3);
     zlo -= 0.2; zhi += 0.3;
-    const box = { l: 46, r: W - 10, t: 42, b: H - 38 };
+    const box = { l: 46, r: W - 10, t: 42 + stageTop(host), b: H - 38 - stageBottom(host) };
     box.sx = lin(ymin, ymax, box.l, box.r); box.sy = lin(zlo, zhi, box.b, box.t);
     const { sx, sy } = box;
     axes(svg, box, [ymin, ymax], [zlo, zhi], 'Offset, m (looking downstream)', 'Level, m');
@@ -5146,8 +5270,8 @@ if (typeof module !== 'undefined') module.exports = RFL;
     if (isNum(baseWs) && Math.abs(baseWs - s.ws) > 5e-4) el('line', { x1: box.l, x2: box.r, y1: sy(baseWs), y2: sy(baseWs), stroke: C.base, 'stroke-width': 1.4, 'stroke-dasharray': '6 4' }, g);
     el('line', { x1: box.l, x2: box.r, y1: sy(s.egl), y2: sy(s.egl), stroke: C.egl, 'stroke-width': 1.2, 'stroke-dasharray': '2 3' }, g);
     el('line', { x1: box.l, x2: box.r, y1: sy(s.ws), y2: sy(s.ws), stroke: C.water, 'stroke-width': 2 }, g);
-    el('text', { x: box.l, y: 15, fill: C.ink, 'font-weight': 600 }, svg).textContent = `${s.id} at ${s.x.toFixed(1)} m` + (isNum(baseWs) && Math.abs(baseWs - s.ws) > 5e-4 ? ` · ${sgn(s.ws - baseWs)} m vs without design` : '');
-    el('text', { x: box.l, y: 30, fill: C.muted }, svg).textContent = `water ${f2(s.ws)} m · depth ${f2(s.depth)} m · V ${f2(s.V)} m/s · Fr ${f2(s.Fr)}`;
+    el('text', { x: box.l, y: 15 + stageTop(host), fill: C.ink, 'font-weight': 600 }, svg).textContent = `${s.id} at ${s.x.toFixed(1)} m` + (isNum(baseWs) && Math.abs(baseWs - s.ws) > 5e-4 ? ` · ${sgn(s.ws - baseWs)} m vs without design` : '');
+    el('text', { x: box.l, y: 30 + stageTop(host), fill: C.muted }, svg).textContent = `water ${f2(s.ws)} m · depth ${f2(s.depth)} m · V ${f2(s.V)} m/s · Fr ${f2(s.Fr)}`;
     return svg;
   }
   function groundAtLocal(pts, y) {
@@ -5168,7 +5292,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const bres = RFL.buildings(RES, S.buildings);
     let zlo = Math.min(...secs.map(s => s.bed)) - 0.2;
     let zhi = Math.max(...secs.map(s => Math.max(s.egl, s.ws)), ...(BASE && !BASE.error ? BASE.sections.map(s => s.ws) : []), ...S.bridges.map(b => b.highChord), ...S.buildings.map(b => b.floor).filter(isNum)) + 0.3;
-    const box = { l: 46, r: W - 10, t: 12, b: H - 38 };
+    const box = { l: 46, r: W - 10, t: 12 + stageTop(host), b: H - 38 - stageBottom(host) };
     box.sx = lin(xmax, xmin, box.l, box.r); box.sy = lin(zlo, zhi, box.b, box.t);
     const { sx, sy } = box;
     axes(svg, box, [xmin, xmax], [zlo, zhi], 'Chainage, m (flow →)', 'Level, m');
@@ -5204,7 +5328,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     rcTimer = setTimeout(renderRating, 180);
   }
   function renderRating() {
-    const host = $('rf-rc'), [W, H] = dims(host, 640, 280);
+    const host = $('rf-rc'), [W, H] = dims(host, 300, 210);
     const s = viewSection();
     if (!s) { svgRoot(host, W, H, 'Water level against flow'); return; }
     const key = JSON.stringify([S, s.x]);
@@ -5221,7 +5345,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     markRating();
   }
   function markRating() {
-    const host = $('rf-rc'), [W, H] = dims(host, 640, 280);
+    const host = $('rf-rc'), [W, H] = dims(host, 300, 210);
     const { pts, bpts, Qmax, s } = host._rc || {};
     const svg = svgRoot(host, W, H, 'Water level against flow at the chosen section');
     if (!pts || !pts.length) return;
@@ -5450,18 +5574,100 @@ if (typeof module !== 'undefined') module.exports = RFL;
     $('rf-q').value = +S.flow.Q.toFixed(2);
     $('rf-qmax').value = S.flow.Qmax;
     $('rf-allow').value = S.flow.allowance;
-    $('rf-q-out').textContent = `${flowQ().toFixed(1)} m³/s` + (S.flow.allowance ? ` (incl. +${S.flow.allowance}%)` : '');
+    const bf = bankfull();
+    $('rf-q-out').textContent = `${flowQ().toFixed(1)} m³/s` + (S.flow.allowance ? ` with +${S.flow.allowance}%` : '') + (bf ? ` · bankfull ≈ ${bf.Q.toFixed(1)} m³/s at ${bf.id}` : '');
+    document.querySelectorAll('[data-preset]').forEach(b => b.setAttribute('aria-pressed', 'false'));
     $('rf-bnd').value = S.boundary.type;
     $('rf-bnd-s').value = S.boundary.slope; $('rf-bnd-ws').value = S.boundary.ws;
     $('rf-bnd-s-l').hidden = S.boundary.type !== 'normal'; $('rf-bnd-ws-l').hidden = S.boundary.type !== 'ws';
+    $('rf-eddy-on').checked = S.eddy.on; $('rf-eddy-er').value = S.eddy.er; $('rf-eddy-cr').value = S.eddy.cr;
   }
 
-  function chip(text, cls) { return `<span class="rf-chip ${cls || ''}">${esc(text)}</span>`; }
+  // Bankfull: the flow at which the river without design elements reaches
+  // the lower bank at the chosen section. Found by bisection, cached.
+  let bfCache = { key: '', val: null };
+  function bankfull() {
+    const sec = viewSection();
+    const raw = (sec && S.sections.find(q => Math.abs(q.x - sec.x) < 1e-6)) || S.sections[Math.floor(S.sections.length / 2)];
+    if (!raw) return null;
+    const key = JSON.stringify([S.sections, S.boundary, raw.x]);
+    if (key === bfCache.key) return bfCache.val;
+    const bank = Math.min(groundAtLocal(raw.pts, raw.banks.left), groundAtLocal(raw.pts, raw.banks.right));
+    const m = model(false);
+    const f = Q => { const r = RFL.solve(m, Q); return r.error ? NaN : RFL.wsAt(r, raw.x) - bank; };
+    let lo = 0.01, hi = 1, val = null;
+    for (let k = 0; k < 24 && f(hi) < 0; k++) hi *= 2;
+    if (f(hi) >= 0 && f(lo) < 0) {
+      for (let k = 0; k < 28; k++) { const mid = (lo + hi) / 2; if (f(mid) < 0) lo = mid; else hi = mid; }
+      val = { Q: (lo + hi) / 2, id: raw.id };
+    }
+    bfCache = { key, val };
+    return val;
+  }
+  function preset(kind) {
+    const bf = bankfull(); if (!bf) return;
+    S.flow.Q = +(bf.Q * { low: 0.25, bankfull: 1, flood: 2 }[kind]).toPrecision(3);
+    if (S.flow.Q > S.flow.Qmax) S.flow.Qmax = Math.ceil(S.flow.Q * 1.25);
+    run();
+    document.querySelectorAll('[data-preset]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.preset === kind)));
+  }
+
+  function renderPills() {
+    $('rf-pill-flow').textContent = `Flow ${flowQ().toFixed(1)} m³/s`;
+    const p = $('rf-pill-state');
+    let text = 'Steady · subcritical', cls = 'rf-good';
+    if (!RES || RES.error) { text = 'No result'; cls = 'rf-bad'; }
+    else {
+      const over = RES.bridges.find(b => b.flow === 'overtopping'), press = RES.bridges.find(b => b.flow === 'pressure');
+      const crit = RES.sections.find(s => s.flags.includes('critical'));
+      if (over) { text = `Over the deck at ${over.id}`; cls = 'rf-bad'; }
+      else if (press) { text = `Pressure flow at ${press.id}`; cls = 'rf-bad'; }
+      else if (crit) { text = `Flow chokes at ${crit.id}`; cls = 'rf-warn'; }
+    }
+    p.textContent = text; p.className = 'rf-pill ' + cls;
+  }
+
+  function tile(label, value, unit) { return `<div class="rf-tile"><span class="rf-eyebrow">${esc(label)}</span><b class="rf-mono">${esc(value)}</b><small>${esc(unit)}</small></div>`; }
+  function renderTiles() {
+    const s = viewSection(), host = $('rf-tiles');
+    if (!s) { host.textContent = ''; return; }
+    $('rf-at-head').textContent = `At section ${s.id} · ${s.x.toFixed(0)} m`;
+    $('rf-at').textContent = refSection().id;
+    const baseWs = BASE && !BASE.error ? RFL.wsAt(BASE, s.x) : null;
+    host.innerHTML = tile('Water level', f2(s.ws), 'm') + tile('Depth', f2(s.depth), 'm') + tile('Channel velocity', f2(s.sub.ch.V), 'm/s') + tile('Froude', f2(s.Fr), '') +
+      (isNum(baseWs) ? tile('Change by design', sgn(s.ws - baseWs), 'm') + tile('Without design', f2(baseWs), 'm') : '');
+  }
+
+  function renderLegend() {
+    const host = $('rf-legend');
+    const line = (c, t, dash) => `<div class="rf-legend-row"><i style="background:${c};${dash ? 'background:repeating-linear-gradient(90deg,' + c + ' 0 5px,transparent 5px 8px)' : ''}"></i>${t}</div>`;
+    if (view === '3d' || view === 'plan') {
+      host.innerHTML = `<div class="rf-kv"><span>Water depth</span><span class="rf-lab">m</span></div><div class="rf-ramp" style="${view === 'plan' ? 'background:var(--rf-water-fill)' : ''}"></div>` +
+        (view === '3d' ? '<div class="rf-kv rf-lab rf-mono"><span>0</span><span>1.25</span><span>2.5+</span></div>' : '') +
+        line('var(--rf-eddy)', 'Eddy zone (separated flow, not computed)') + line('var(--rf-block)', 'Obstruction or flood wall') + line('var(--rf-deck)', 'Bridge') + line('var(--rf-bad)', 'Building with water over its floor') +
+        `<p class="rf-hint">${view === '3d' ? 'Levels are exaggerated vertically. Buildings are drawn 3.5 m above their floor as a placeholder height.' : 'Flow runs left to right. Click a section line to choose it.'}</p>`;
+    } else {
+      host.innerHTML = line('var(--rf-water)', 'Water level') + line('var(--rf-egl)', 'Energy line', true) + line('var(--rf-base)', 'Without design elements', true) + line('var(--rf-ground)', 'Ground and bed') +
+        (view === 'section' ? line('var(--rf-eddy)', 'Eddy zone') + line('var(--rf-block)', 'Blocked area') : line('var(--rf-deck)', 'Bridge deck'));
+    }
+  }
+  function renderCaption() {
+    const s = viewSection();
+    $('rf-caption').textContent = s ? `${flowQ().toFixed(1)} m³/s · ${s.id} water ${f2(s.ws)} m, depth ${f2(s.depth)} m` : '';
+  }
+  function renderRiver() {
+    $('rf-river-name').textContent = S.name.replace(/ \(.*\)$/, '');
+    $('rf-river-name').title = S.name;
+    $('rf-river-n').textContent = S.sections.length;
+    $('rf-river-len').textContent = `${(S.sections[S.sections.length - 1].x - S.sections[0].x).toFixed(0)} m`;
+  }
+
+  function chip(text, cls) { return `<div class="rf-note ${cls || ''}">${esc(text)}</div>`; }
   function renderStatus() {
     const box = $('rf-status');
     if (!RES || RES.error) { box.innerHTML = `<p class="rf-err">${esc(RES ? RES.error : 'No result')}</p>`; return; }
     const chips = [];
-    chips.push(chip(S.name));
+    if (!hasDesign() && !S.buildings.length) chips.push(chip('No design elements yet. Add an obstruction, bridge, flood wall or building on the left to see its effect.'));
     if (BASE && !BASE.error) {
       let worst = 0, at = null;
       for (const s of RES.sections) { const d = s.ws - RFL.wsAt(BASE, s.x); if (Math.abs(d) > Math.abs(worst)) { worst = d; at = s.x; } }
@@ -5485,7 +5691,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     if (crit.length) chips.push(chip(`Flow chokes (critical depth) at ${crit.map(s => s.id).join(', ')}: the level upstream is set there`, 'rf-warn'));
     const walls = RES.sections.filter(s => s.flags.some(f => f.startsWith('wall-')));
     if (walls.length) chips.push(chip(`Water above the end of ${walls.map(s => s.id).join(', ')}: extend those sections`, 'rf-warn'));
-    box.innerHTML = `<div class="rf-chips">${chips.join('')}</div><p class="rf-note">${esc(CAUTION)}</p>`;
+    box.innerHTML = chips.join('');
   }
 
   function renderTable() {
@@ -5514,7 +5720,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const s = RES.sections.find(q => q.id === id);
     const i = s ? S.sections.findIndex(q => Math.abs(q.x - s.x) < 1e-6) : -1;
     if (i >= 0) { editIdx = i; renderEditor(); }
-    renderViewPicker(); renderPlan(); renderSection(); renderProfile(); renderTable(); build3D(); scheduleRating();
+    renderViewPicker(); renderTiles(); renderFlow(); renderActive(); renderTable(); scheduleRating();
   }
 
   // ---------- design element editors ----------
@@ -5531,7 +5737,11 @@ if (typeof module !== 'undefined') module.exports = RFL;
     walls: 'A flood wall or embankment along a bank. The ground behind it carries no flow until the water overtops the crest.',
     buildings: 'Floor level is checked against the water level at the building’s chainage. Buildings do not affect the flow unless you also add them as obstructions.',
   };
-  function refSection() { return S.sections[editIdx] || S.sections[0]; }
+  function refSection() {
+    const v = viewSection();
+    if (v) return S.sections.reduce((m, q) => Math.abs(q.x - v.x) < Math.abs(m.x - v.x) ? q : m);
+    return S.sections[editIdx] || S.sections[0];
+  }
   function newElement(kind) {
     const s = refSection(), bl = s.banks.left, br = s.banks.right, bank = Math.min(groundAtLocal(s.pts, bl), groundAtLocal(s.pts, br));
     const n = S[kind].length + 1;
@@ -5542,38 +5752,33 @@ if (typeof module !== 'undefined') module.exports = RFL;
     if (kind === 'walls') return { id, side: 'left', x0: s.x - 30, x1: s.x + 30, y: bl - 2, z: +(bank + 1).toFixed(2) };
     return { id, label: `Building ${n}`, x: s.x, y: Math.max(2, bl - 10), w: 8, d: 12, floor: +(groundAtLocal(s.pts, Math.max(2, bl - 10)) + 0.15).toFixed(2) };
   }
-  function renderTabs() {
-    document.querySelectorAll('.rf-tabs [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
-    const panel = $('rf-tabpanel');
-    if (tab === 'eddy') {
-      panel.innerHTML = `<div class="rf-row"><label style="flex-direction:row;align-items:center;gap:.4rem;color:inherit"><input type="checkbox" id="rf-eddy-on"${S.eddy.on ? ' checked' : ''}> Mark eddy zones</label></div>
-        <div class="rf-row"><label>Expansion ratio 1:ER<input type="number" id="rf-eddy-er" min="0.5" max="6" step="0.5" value="${S.eddy.er}"></label><label>Contraction ratio 1:CR<input type="number" id="rf-eddy-cr" min="0.5" max="4" step="0.5" value="${S.eddy.cr}"></label></div>
-        <p class="rf-note">Behind and beside an obstruction or bridge the flow separates and the water swirls in eddies. A one-dimensional model cannot compute that swirl. What it can do is treat the separated water as carrying no flow: below a blockage the flow widens again at 1 across for every ER along, and above it narrows at 1 across for every CR along (HEC-RAS Hydraulic Reference Manual, ch. 5). The hatched zones mark where that dead water lies until the water rises over the blockage.</p>`;
-      $('rf-eddy-on').addEventListener('change', e => { S.eddy.on = e.target.checked; schedule(); });
-      for (const k of ['er', 'cr']) $('rf-eddy-' + k).addEventListener('change', e => { const v = +e.target.value; if (isNum(v) && v > 0) { S.eddy[k] = v; schedule(); } });
-      return;
-    }
-    const items = S[tab];
-    panel.innerHTML = `<p class="rf-note">${NOTES[tab]}</p>` + items.map((it, i) => `<div class="rf-item" data-i="${i}"><div class="rf-item-head"><span>${esc(it.label || it.id)}</span><button class="rf-btn rf-small" type="button" data-del="${i}" aria-label="Remove ${esc(it.label || it.id)}">Remove</button></div><div class="rf-row">` +
-      FIELDS[tab].map(([k, lab, type]) => {
-        if (type === 'pier') return `<label>${lab}<select data-k="${k}">${PIER.map(([v, t]) => `<option value="${v}"${String(it[k]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`;
-        if (type === 'side') return `<label>${lab}<select data-k="${k}"><option value="left"${it[k] === 'left' ? ' selected' : ''}>left</option><option value="right"${it[k] === 'right' ? ' selected' : ''}>right</option></select></label>`;
-        return `<label>${lab}<input type="${type === 'text' ? 'text' : 'number'}" step="0.1" data-k="${k}" value="${esc(it[k] ?? '')}"></label>`;
-      }).join('') + `</div></div>`).join('') +
-      `<button class="rf-btn rf-primary" type="button" id="rf-add">Add ${tab.slice(0, -1)} at ${esc(refSection().id)}</button>`;
-    panel.querySelectorAll('.rf-item').forEach(div => {
-      const it = items[+div.dataset.i];
-      div.querySelectorAll('[data-k]').forEach(inp => inp.addEventListener('change', () => {
-        const k = inp.dataset.k, type = (FIELDS[tab].find(f => f[0] === k) || [])[2];
-        if (type === 'text' || type === 'side') it[k] = inp.value;
-        else if (type === 'pier') it[k] = +inp.value;
-        else { const v = parseFloat(inp.value); if (isNum(v)) it[k] = v; else { inp.value = it[k]; return; } }
-        if (k === 'label') div.querySelector('.rf-item-head span').textContent = it.label;
+  const KIND = { obstructions: 'Obstruction', bridges: 'Bridge', walls: 'Flood wall', buildings: 'Building' };
+  function renderElements(openKey) {
+    const host = $('rf-elements');
+    const all = Object.keys(KIND).flatMap(k => S[k].map((it, i) => ({ k, it, i })));
+    host.innerHTML = all.map(({ k, it, i }) => `<details class="rf-el" data-k="${k}" data-i="${i}"${openKey === k + i ? ' open' : ''}><summary><span><span class="rf-tag">${KIND[k]}</span><span class="rf-el-name">${esc(it.label || it.id)}</span></span><span class="rf-chev" aria-hidden="true">▾</span></summary><div class="rf-el-body">` +
+      FIELDS[k].map(([f, lab, type]) => {
+        const wide = type === 'text' && f !== 'label' ? ' rf-wide2' : '';
+        if (type === 'pier') return `<label>${lab}<select data-f="${f}">${PIER.map(([v, t]) => `<option value="${v}"${String(it[f]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`;
+        if (type === 'side') return `<label>${lab}<select data-f="${f}"><option value="left"${it[f] === 'left' ? ' selected' : ''}>left</option><option value="right"${it[f] === 'right' ? ' selected' : ''}>right</option></select></label>`;
+        return `<label class="${wide}">${lab}<input type="${type === 'text' ? 'text' : 'number'}" step="0.1" data-f="${f}" value="${esc(it[f] ?? '')}"></label>`;
+      }).join('') + `<p class="rf-hint rf-wide2">${NOTES[k]}</p><button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-del>Remove ${esc(KIND[k].toLowerCase())}</button></div></details>`).join('');
+    host.querySelectorAll('details.rf-el').forEach(d => {
+      const k = d.dataset.k, it = S[k][+d.dataset.i];
+      d.querySelectorAll('[data-f]').forEach(inp => inp.addEventListener('change', () => {
+        const f = inp.dataset.f, type = (FIELDS[k].find(x => x[0] === f) || [])[2];
+        if (type === 'text' || type === 'side') it[f] = inp.value;
+        else if (type === 'pier') it[f] = +inp.value;
+        else { const v = parseFloat(inp.value); if (isNum(v)) it[f] = v; else { inp.value = it[f]; return; } }
+        if (f === 'label') d.querySelector('.rf-el-name').textContent = it.label;
         schedule();
       }));
+      d.querySelector('[data-del]').addEventListener('click', () => { S[k].splice(+d.dataset.i, 1); renderElements(); schedule(); });
     });
-    panel.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { items.splice(+b.dataset.del, 1); renderTabs(); schedule(); }));
-    $('rf-add').addEventListener('click', () => { items.push(newElement(tab)); renderTabs(); schedule(); });
+  }
+  function addElement(k) {
+    S[k].push(newElement(k));
+    renderElements(k + (S[k].length - 1)); schedule();
   }
 
   // ---------- section editor ----------
@@ -5586,7 +5791,6 @@ if (typeof module !== 'undefined') module.exports = RFL;
     $('rf-sec-nl').value = s.n.lob; $('rf-sec-nc').value = s.n.ch; $('rf-sec-nr').value = s.n.rob;
     $('rf-sec-pts').value = s.pts.map(p => `${p[0]} ${p[1]}`).join('\n');
     $('rf-sec-msg').textContent = '';
-    if (tab !== 'eddy') { const add = $('rf-add'); if (add) add.textContent = `Add ${tab.slice(0, -1)} at ${s.id}`; }
   }
   function applySection() {
     const msg = $('rf-sec-msg'), s = S.sections[editIdx];
@@ -5632,23 +5836,22 @@ if (typeof module !== 'undefined') module.exports = RFL;
     download('river-flood-lab.csv', new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
   }
   function png() {
-    const s = viewSection(); if (!s) return;
-    const tmp = document.createElement('div'); tmp.id = 'rf-xs-export'; tmp.style.cssText = 'position:absolute;left:-9999px;width:640px';
-    document.body.appendChild(tmp);
-    const svg = renderSection(tmp);
-    svg.setAttribute('width', 640); svg.setAttribute('height', 320);
-    const data = new XMLSerializer().serializeToString(svg); tmp.remove();
+    if (view === '3d') return png3D();
+    const host = $({ plan: 'rf-plan', section: 'rf-xs', profile: 'rf-lp' }[view]);
+    const svg = host.querySelector('svg'); if (!svg) return;
+    const W = +svg.viewBox.baseVal.width, H = +svg.viewBox.baseVal.height;
+    const copy = svg.cloneNode(true); copy.setAttribute('width', W); copy.setAttribute('height', H);
+    const data = new XMLSerializer().serializeToString(copy);
     const img = new Image();
     img.onload = () => {
-      const k = 2, W = 640, H = 320, foot = 70;
+      const k = 2, foot = 70;
       const c = document.createElement('canvas'); c.width = W * k; c.height = (H + foot) * k;
       const g = c.getContext('2d'); g.scale(k, k);
       g.fillStyle = C.panel; g.fillRect(0, 0, W, H + foot); g.drawImage(img, 0, 0, W, H);
-      g.fillStyle = C.ink; g.font = '600 12px system-ui, sans-serif'; g.fillText(`${APP} — ${S.name}`, 12, H + 18);
-      g.font = '11px system-ui, sans-serif'; g.fillStyle = C.muted;
-      g.fillText(settingsLine().slice(0, 120), 12, H + 36);
+      g.fillStyle = C.ink; g.font = '600 12px system-ui, sans-serif'; g.fillText(`${APP} — ${S.name} — ${view}`, 12, H + 18);
+      g.font = '11px system-ui, sans-serif'; g.fillStyle = C.muted; g.fillText(settingsLine().slice(0, 140), 12, H + 36);
       g.fillStyle = C.warn; g.fillText(CAUTION, 12, H + 54);
-      c.toBlob(b => download(`river-flood-lab-${s.id}.png`, b), 'image/png');
+      c.toBlob(b => download(`river-flood-lab-${view}.png`, b), 'image/png');
     };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(data);
   }
@@ -5672,7 +5875,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       const d = defaultState();
       S = { ...d, ...st, flow: { ...d.flow, ...(st.flow || {}) }, eddy: { ...d.eddy, ...(st.eddy || {}) }, boundary: { ...d.boundary, ...(st.boundary || {}) },
         obstructions: st.obstructions || [], bridges: st.bridges || [], walls: st.walls || [], buildings: st.buildings || [] };
-      editIdx = 0; viewId = null; V3.fitted = false; renderEditor(); renderTabs(); schedule();
+      editIdx = 0; viewId = null; V3.fitted = false; renderEditor(); renderElements(); schedule();
     };
     r.readAsText(file);
   }
@@ -5693,7 +5896,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       if (Object.values(p).some(v => !isNum(v) || v < 0) || p.length < 2 * p.spacing || p.spacing <= 0 || p.chW <= 0 || p.chD <= 0 || p.slope <= 0 || p.nCh <= 0 || p.nFp <= 0) { alert('Check the values: all must be positive, with at least three sections.'); return; }
       const d = defaultState();
       S = { ...d, name: 'Template reach (idealised channel, not surveyed)', sections: templateSections(p), boundary: { ...d.boundary, slope: p.slope }, bridges: [] };
-      editIdx = 0; viewId = null; V3.fitted = false; close(); renderEditor(); renderTabs(); schedule();
+      editIdx = 0; viewId = null; V3.fitted = false; close(); renderEditor(); renderElements(); schedule();
     });
   }
 
@@ -5701,14 +5904,29 @@ if (typeof module !== 'undefined') module.exports = RFL;
   function applyTheme(t) {
     if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
     $('rf-theme').textContent = t === 'light' ? 'Light' : t === 'dark' ? 'Dark' : 'Auto theme';
-    palette(); if (RES) { renderPlan(); renderSection(); renderProfile(); markRating(); build3D(); }
+    palette(); if (RES) { renderActive(); markRating(); }
   }
   let theme = 'auto';
   try { theme = localStorage.getItem(THEME_KEY) || 'auto'; } catch { /* storage unavailable */ }
 
   // ---------- wiring ----------
-  $('rf-caution-top').textContent = CAUTION;
-  $('rf-foot').innerHTML = `<p>${esc(CAUTION)}</p><p>Steady one-dimensional flow by the standard-step method (Chow 1959; HEC-RAS Hydraulic Reference Manual). Obstructions are blocked areas, bridges use the energy method with Yarnell’s pier equation as a check, and eddy zones are dead water that carries no flow. Everything runs in this page; nothing you enter is sent anywhere. ${APP} ${VERSION} · code MIT, documentation CC BY 4.0 · © 2026 Karam Al-Obaidi.</p>`;
+  $('rf-caution-foot').textContent = CAUTION;
+  document.querySelectorAll('.rf-views [data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+  document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => preset(b.dataset.preset)));
+  document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => addElement(b.dataset.add)));
+  document.querySelectorAll('.rf-drawers [data-drawer]').forEach(b => b.addEventListener('click', () => {
+    $('rf-root').dataset.drawer = b.dataset.drawer;
+    document.querySelectorAll('.rf-drawers [data-drawer]').forEach(q => q.setAttribute('aria-pressed', String(q === b)));
+    if (b.dataset.drawer === 'results') markRating();
+  }));
+  const fileBtn = $('rf-file-btn'), fileMenu = $('rf-file-menu');
+  const closeMenu = () => { fileMenu.hidden = true; fileBtn.setAttribute('aria-expanded', 'false'); };
+  fileBtn.addEventListener('click', e => { e.stopPropagation(); fileMenu.hidden = !fileMenu.hidden; fileBtn.setAttribute('aria-expanded', String(!fileMenu.hidden)); });
+  fileMenu.addEventListener('click', closeMenu);
+  document.addEventListener('click', e => { if (!fileMenu.hidden && !fileMenu.contains(e.target)) closeMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+  $('rf-eddy-on').addEventListener('change', e => { S.eddy.on = e.target.checked; schedule(); });
+  for (const k of ['er', 'cr']) $('rf-eddy-' + k).addEventListener('change', e => { const v = +e.target.value; if (isNum(v) && v > 0) { S.eddy[k] = v; schedule(); } });
   $('rf-q-range').addEventListener('input', e => {
     const Qmin = Math.max(0.05, S.flow.Qmax / 500);
     S.flow.Q = +(Qmin * Math.pow(S.flow.Qmax / Qmin, e.target.value / 1000)).toPrecision(3); schedule();
@@ -5720,7 +5938,6 @@ if (typeof module !== 'undefined') module.exports = RFL;
   $('rf-bnd-s').addEventListener('change', e => { const v = parseFloat(e.target.value); if (isNum(v) && v > 0) S.boundary.slope = v; schedule(); });
   $('rf-bnd-ws').addEventListener('change', e => { const v = parseFloat(e.target.value); if (isNum(v)) S.boundary.ws = v; schedule(); });
   $('rf-view-sec').addEventListener('change', e => selectView(e.target.value));
-  document.querySelectorAll('.rf-tabs [role=tab]').forEach(b => b.addEventListener('click', () => { tab = b.dataset.tab; renderTabs(); }));
   $('rf-sec-pick').addEventListener('change', e => { editIdx = +e.target.value; renderEditor(); const s = S.sections[editIdx]; const r = RES && RES.sections.find(q => Math.abs(q.x - s.x) < 1e-6); if (r) selectView(r.id); });
   $('rf-sec-apply').addEventListener('click', applySection);
   $('rf-sec-add').addEventListener('click', () => {
@@ -5737,6 +5954,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     S.sections.splice(editIdx, 1); editIdx = Math.max(0, editIdx - 1); viewId = null; renderEditor(); schedule();
   });
   $('rf-new').addEventListener('click', newReach);
+  $('rf-new2').addEventListener('click', newReach);
   $('rf-save').addEventListener('click', save);
   $('rf-open').addEventListener('click', () => $('rf-file').click());
   $('rf-file').addEventListener('change', e => { if (e.target.files[0]) open(e.target.files[0]); e.target.value = ''; });
@@ -5751,19 +5969,18 @@ if (typeof module !== 'undefined') module.exports = RFL;
   addEventListener('resize', () => {
     if (innerWidth === lastW) return; lastW = innerWidth;
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { if (RES) { renderPlan(); renderSection(); renderProfile(); markRating(); } }, 150);
+    resizeTimer = setTimeout(() => { if (RES) { renderActive(); markRating(); } }, 150);
   });
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme(theme));
 
   $('rf-vex').addEventListener('change', e => { V3.vex = +e.target.value; build3D(); });
   $('rf-3d-reset').addEventListener('click', fit3D);
-  $('rf-3d-png').addEventListener('click', png3D);
 
   init3D();
   applyTheme(theme);
-  renderEditor(); renderTabs(); run();
+  renderEditor(); renderElements(); setView('3d'); run();
   // Hook for the browser checks.
-  window.RFL_UI = { get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, get view3d() { return { ok: V3.ok, meshes: V3.meshes, vex: V3.vex, geometries: V3.ok ? V3.renderer.info.memory.geometries : 0 }; } };
+  window.RFL_UI = { get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, setView, get view() { return view; }, get view3d() { return { ok: V3.ok, meshes: V3.meshes, vex: V3.vex, geometries: V3.ok ? V3.renderer.info.memory.geometries : 0 }; } };
 })();
 </script>
 </body>

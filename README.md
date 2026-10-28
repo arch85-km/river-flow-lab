@@ -12,23 +12,27 @@ Sheaf site data follows.
 ## Using it
 
 Open `index.html` in a browser; it needs no installation, account or
-network. It starts on a template reach (an idealised channel with
-floodplains, not a survey) with one example bridge.
+network. The layout follows Urban Wind Lab: controls on the left, one large
+view in the middle, results on the right. It starts on a template reach (an
+idealised channel with floodplains, not a survey) with one example bridge.
 
-- **Flow:** drag the slider or type a flow; add a climate allowance in
-  per cent.
-- **Design elements:** add obstructions, bridges (soffit, deck, opening,
-  piers), flood walls along a bank, and buildings with a floor level.
-  Every result is compared with the same river without them.
-- **Eddies:** mark the dead-water zones beside and behind obstructions and
-  bridges, with the expansion and contraction ratios you choose.
-- **Cross-section editor:** type ground points, banks and Manning's n for
-  each section; widen the channel, add a berm, or change roughness.
-- **Views:** a 3D view (terrain, water coloured by depth, eddy zones and
-  the design elements, with vertical exaggeration), plan, cross-section,
-  long profile, and water level against flow at the chosen section.
-- **Exports:** CSV, section PNG, 3D PNG, and a project file to save and reopen.
-  Every export carries the caution and the settings that produced it.
+- **Flow** (left): type or drag the flow, or pick Low, Bankfull or Twice
+  bankfull (bankfull is found at the chosen section); add a climate
+  allowance in per cent. The downstream boundary is folded away beneath.
+- **Design** (left): add an obstruction, bridge, flood wall or building at
+  the chosen section, then open it to set its size and levels. Eddy zones
+  (the dead water beside and behind a blockage) can be resized or switched
+  off.
+- **River** (left): the active reach, a new template reach, and the
+  cross-section editor.
+- **Views** (middle): 3D, Plan, Section and Profile, one at a time.
+- **Results** (right): the legend for the view, tiles for the chosen
+  section, the effect of the design (afflux, soffit clearance, floor levels,
+  choking), water level against flow, and every section in a table.
+- **File** menu: export the view as PNG, the results as CSV, and save or
+  open a project. Every export carries the caution and the settings.
+
+On a phone the view sits on top, with Controls and Results beneath.
 
 The only thing it stores in the browser is the colour theme
 (`riverfloodlab.theme.v1`).
@@ -79,7 +83,7 @@ The licence notice is in `NOTICE`.
 npm test
 ```
 
-`tests/engine.test.mjs` (27 checks) and `tests/ui.test.mjs` (70 checks,
+`tests/engine.test.mjs` (27 checks) and `tests/ui.test.mjs` (119 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused). The engine checks compare the engine with closed-form results (Manning normal
 depth, critical depth) and with an independent RK4 integration of the
