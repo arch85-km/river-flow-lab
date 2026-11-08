@@ -5119,7 +5119,7 @@ const RFL = (() => {
       ws: h.ws, egl: h.E, bed, depth: h.ws - bed, wsCritical: wc,
       A: h.A, T: h.T, V: h.V, Fr: h.Fr, alpha: h.alpha, K: h.K,
       sub: h.sub, flags: h.flags, eddies: prep.eddies.slice(), ground: prep.pts, raw: prep.raw,
-      banks: prep.banks, ceil: prep.ceil,
+      banks: prep.banks, ceil: prep.ceil, levee: prep.excl.filter(e => e.kind === 'levee').map(e => ({ a: e.a, b: e.b, elev: e.elev })),
     };
   }
 
@@ -5177,7 +5177,7 @@ const RFL = (() => {
       const ws = inReach ? wsAt(result, b.x) : null;
       // A building on low ground behind a ridge is not reached by the river.
       const near = inReach ? s.reduce((m, q) => Math.abs(q.x - b.x) < Math.abs(m.x - b.x) ? q : m) : null;
-      const isolated = !!near && isNum(b.y) && cutOff(near.raw, near.ws, near.banks.left, near.banks.right).some(([p, q]) => b.y > p && b.y < q);
+      const isolated = !!near && isNum(b.y) && (cutOff(near.raw, near.ws, near.banks.left, near.banks.right).some(([p, q]) => b.y > p && b.y < q) || (near.levee || []).some(e => !(near.ws > e.elev) && b.y > e.a && b.y < e.b));
       const depth = ws === null || !isNum(b.floor) ? null : isolated ? Math.min(ws - b.floor, 0) : ws - b.floor;
       return { id: b.id, ws, floor: b.floor, depth, cutOff: isolated };
     });
@@ -5270,6 +5270,10 @@ if (typeof module !== 'undefined') module.exports = RFL;
   // A bridge's abutments reach the valley sides unless it has a set length.
   const bridgeEnds = (b, a, z) => isNum(b.abut) && b.abut >= 0 ? [Math.max(a, b.openLeft - b.abut), Math.min(z, b.openRight + b.abut)] : [a, z];
   const levelUnit = () => S.geo && S.geo.aod ? 'm AOD' : 'm';
+  function wallSide(w) {
+    const mid = (w.x0 + w.x1) / 2, s = S.sections.reduce((m, q) => Math.abs(q.x - mid) < Math.abs(m.x - mid) ? q : m);
+    return w.y < (s.banks.left + s.banks.right) / 2 ? 'left' : 'right';
+  }
   const buildingHeight = b => b.height > 0 ? b.height : 3.5;
   function hasDesign() { return S.obstructions.length + S.bridges.length + S.walls.length + S.models.length + S.floats.length > 0; }
   const isFloating = m => m.floating === 'yes';
@@ -5446,7 +5450,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       floats: withDesign ? floatBoxes().map(({ x0, x1, y0, y1, draft }) => ({ x0, x1, y0, y1, draft })) : [],
       obstructions: withDesign ? [...solidBlocks(), ...S.obstructions.map(o => ({ ...o, x0: Math.min(o.x0, o.x1), x1: Math.max(o.x0, o.x1), y0: Math.min(o.y0, o.y1), y1: Math.max(o.y0, o.y1) }))] : [],
       bridges: withDesign ? S.bridges.map(b => ({ ...b, piers: parsePiers(b.piers), pierK: +b.pierK || 1.25 })) : [],
-      walls: withDesign ? S.walls : [],
+      walls: withDesign ? S.walls.map(w => ({ ...w, side: wallSide(w) })) : [],
     };
   }
   const flowQ = () => S.flow.Q * (1 + (S.flow.allowance || 0) / 100);
@@ -5569,9 +5573,14 @@ if (typeof module !== 'undefined') module.exports = RFL;
   }
 
   // The water that is joined to the river channel at a section.
-  function reached(s, ws = s.ws) {
+  function reached(s, ws = s.ws, noWalls = false) {
     const wet = wetIntervals(s.raw, ws), joined = wet.filter(([a, b]) => b > s.banks.left && a < s.banks.right);
-    return joined.length ? joined : wet;
+    let out = joined.length ? joined : wet;
+    if (!noWalls) for (const e of s.levee || []) {
+      if (ws > e.elev) continue;
+      out = out.flatMap(([a, b]) => [[a, Math.min(b, e.a)], [Math.max(a, e.b), b]]).filter(([a, b]) => b > a);
+    }
+    return out;
   }
   // Offsets where the ground is below the water.
   function wetIntervals(pts, ws) {
@@ -5798,7 +5807,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     // banks
     for (const yb of [s.banks.left, s.banks.right]) el('line', { x1: sx(yb), x2: sx(yb), y1: sy(groundAtLocal(raw, yb)) - 6, y2: sy(groundAtLocal(raw, yb)) + 6, stroke: C.muted }, g);
     // lines
-    if (isNum(baseWs) && Math.abs(baseWs - s.ws) > 5e-4) for (const [p, q] of reached(s, baseWs)) el('line', { x1: sx(p), x2: sx(q), y1: sy(baseWs), y2: sy(baseWs), stroke: C.base, 'stroke-width': 1.4, 'stroke-dasharray': '6 4' }, g);
+    if (isNum(baseWs) && Math.abs(baseWs - s.ws) > 5e-4) for (const [p, q] of reached(s, baseWs, true)) el('line', { x1: sx(p), x2: sx(q), y1: sy(baseWs), y2: sy(baseWs), stroke: C.base, 'stroke-width': 1.4, 'stroke-dasharray': '6 4' }, g);
     if (level === 'advanced') el('line', { x1: box.l, x2: box.r, y1: sy(s.egl), y2: sy(s.egl), stroke: C.egl, 'stroke-width': 1.2, 'stroke-dasharray': '2 3' }, g);
     const joinedNow = reached(s), wetNow = wetIntervals(gr, s.ws).filter(([a, b]) => joinedNow.some(([p, q]) => b > p && a < q));
     for (const [p, q] of wetNow) el('line', { x1: sx(p), x2: sx(q), y1: sy(s.ws), y2: sy(s.ws), stroke: C.water, 'stroke-width': 2 }, g);
@@ -7277,7 +7286,7 @@ onmessage = e => {
     }
     V3.P = P;
     // a common set of fractional offsets across the sections
-    let fr = [...new Set(secs.flatMap(s => { const a = s.raw[0][0], w = s.raw[s.raw.length - 1][0] - a; return s.raw.map(p => +((p[0] - a) / w).toFixed(4)); }))].sort((a, b) => a - b);
+    let fr = [...new Set(secs.flatMap(s => { const a = s.raw[0][0], w = s.raw[s.raw.length - 1][0] - a; return [...s.raw.map(p => (p[0] - a) / w), ...(s.levee || []).flatMap(e => [e.a, e.b].filter(isNum).flatMap(v => [(v - a) / w - 0.004, (v - a) / w + 0.004]))].filter(v => v >= 0 && v <= 1).map(v => +v.toFixed(4)); }))].sort((a, b) => a - b);
     if (fr.length > 120) fr = Array.from({ length: 101 }, (_, i) => i / 100);
     const nJ = fr.length;
     const tPos = [], tCol = [], wPos = [], wCol = [], idx = [];
@@ -7660,7 +7669,7 @@ onmessage = e => {
     }
     RFL.buildings(RES, S.buildings).forEach((r, i) => {
       const name = S.buildings[i].label || r.id;
-      if (r.cutOff) { chips.push(chip(`${name}: dry, cut off from the river by higher ground`, 'rf-good')); return; }
+      if (r.cutOff) { chips.push(chip(`${name}: dry, cut off from the river`, 'rf-good')); return; }
       if (r.ws === null) { chips.push(chip(`${name} is outside the river reach, so it has no water level. Change its chainage.`, 'rf-warn')); return; }
       if (!isNum(r.depth)) return;
       if (r.depth > 0) chips.push(chip(`${name}: ${f2(r.depth)} m of water over the floor`, 'rf-bad'));
@@ -7668,7 +7677,15 @@ onmessage = e => {
       else chips.push(chip(`${name}: floor ${f2(-r.depth)} m above the water`, 'rf-good'));
     });
     const wallsInRiver = S.walls.filter(w => RES.sections.some(s => s.x >= Math.min(w.x0, w.x1) && s.x <= Math.max(w.x0, w.x1) && w.y > s.banks.left && w.y < s.banks.right));
-    for (const w of wallsInRiver) chips.push(chip(`${w.label || w.id} stands inside the river channel, so the water on one side of it is cut off from the flow. Move it to a bank: this usually raises the water a lot.`, 'rf-warn'));
+    if (wallsInRiver.length) {
+      let narrowest = Infinity;
+      for (const s of RES.sections) {
+        let l = s.banks.left, r = s.banks.right, hit = false;
+        for (const w of S.walls) if (s.x >= Math.min(w.x0, w.x1) && s.x <= Math.max(w.x0, w.x1) && w.y > s.banks.left && w.y < s.banks.right) { hit = true; if (wallSide(w) === 'left') l = Math.max(l, w.y); else r = Math.min(r, w.y); }
+        if (hit) narrowest = Math.min(narrowest, r - l);
+      }
+      chips.push(chip(`${wallsInRiver.map(w => w.label || w.id).join(', ')} ${wallsInRiver.length > 1 ? 'stand' : 'stands'} inside the river channel, leaving only ${Math.max(0, narrowest).toFixed(1)} m of river between the banks and walls. Move walls onto the top of the banks to stop squeezing the river.`, 'rf-warn'));
+    }
     const aground = new Set();
     for (const f of floatBoxes()) for (const s of RES.sections) {
       if (s.x < f.x0 - 1e-6 || s.x > f.x1 + 1e-6) continue;
@@ -7725,7 +7742,7 @@ onmessage = e => {
   const FIELDS = {
     obstructions: [['along', 'Distance along river, m'], ['len', 'Length along river, m'], ['left', 'Distance from left side, m'], ['wid', 'Width across river, m'], ['top', 'Top level, m']],
     bridges: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['length', 'Bridge width, m'], ['openAt', 'Opening, distance from left side, m'], ['openW', 'Width of opening, m'], ['abut', 'Length of each abutment, m (blank: to the valley sides)'], ['lowChord', 'Soffit level, m'], ['highChord', 'Deck top, m'], ['piers', 'Piers (distance from left:width, …)', 'text'], ['pierK', 'Pier shape', 'pier']],
-    walls: [['side', 'Bank', 'side'], ['along', 'Distance along river, m'], ['len', 'Length of wall, m'], ['y', 'Distance from left side, m'], ['z', 'Crest level, m']],
+    walls: [['along', 'Distance along river, m'], ['len', 'Length of wall, m'], ['y', 'Distance from left side, m'], ['z', 'Crest level, m']],
     buildings: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['w', 'Width across river, m'], ['d', 'Length along river, m'], ['floor', 'Floor level, m'], ['height', 'Height above floor, m', 'hslide']],
   };
   FIELDS.models = [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['rot', 'Rotation', 'rot'], ['scale', 'Scale (1 = metres)'], ['base', 'Base level, m'], ['up', 'Which way is up', 'axis'], ['floating', 'Floats on the water', 'float'], ['draft', 'Depth below the water, m']];
@@ -7784,7 +7801,7 @@ onmessage = e => {
         if (type === 'pier') return `<label>${lab}<select data-f="${f}">${PIER.map(([v, t]) => `<option value="${v}"${String(it[f]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`;
         if (type === 'side') return `<label>${lab}<select data-f="${f}"><option value="left"${it[f] === 'left' ? ' selected' : ''}>left</option><option value="right"${it[f] === 'right' ? ' selected' : ''}>right</option></select></label>`;
         return `<label class="${wide}" title="${esc(tech)}">${lab}<input type="${type === 'text' ? 'text' : 'number'}" step="0.1" data-f="${f}" value="${esc(SPAN[f] ? +SPAN[f].get(it).toFixed(2) : it[f] ?? '')}"></label>`;
-      }).join('') + `<p class="rf-hint rf-wide2">${k === 'bridges' ? T(NOTES.bridges, NOTES.plainBridges) : k === 'models' ? `${NOTES.models} Size: ${modelGeo(it).size.map(v => v.toFixed(1)).join(' × ')} m (height last).` : NOTES[k]}</p><button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-del>Remove ${esc(KIND[k].toLowerCase())}</button></div></details>`).join('');
+      }).join('') + `<p class="rf-hint rf-wide2">${k === 'walls' ? `${NOTES.walls} It protects the land on the ${wallSide(it)}.` : k === 'bridges' ? T(NOTES.bridges, NOTES.plainBridges) : k === 'models' ? `${NOTES.models} Size: ${modelGeo(it).size.map(v => v.toFixed(1)).join(' × ')} m (height last).` : NOTES[k]}</p><button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-del>Remove ${esc(KIND[k].toLowerCase())}</button></div></details>`).join('');
     host.querySelectorAll('details.rf-el').forEach(d => {
       const k = d.dataset.k, it = S[k][+d.dataset.i];
       d.querySelectorAll('[data-f]').forEach(inp => inp.addEventListener(inp.type === 'range' ? 'input' : 'change', () => {
@@ -7795,6 +7812,7 @@ onmessage = e => {
         else if (SPAN[f]) { const v = parseFloat(inp.value); if (isNum(v) && (!SPAN[f].size || v > 0)) SPAN[f].set(it, v); else { inp.value = +SPAN[f].get(it).toFixed(2); return; } }
         else { const v = parseFloat(inp.value); if (isNum(v)) it[f] = v; else { inp.value = it[f]; return; } }
         if (f === 'label') d.querySelector('.rf-el-name').textContent = it.label;
+        if (k === 'walls') d.querySelector('.rf-el-body .rf-hint').textContent = `${NOTES.walls} It protects the land on the ${wallSide(it)}.`;
         if (type === 'rot') inp.parentElement.querySelector('output').textContent = it[f] + '°';
         if (type === 'hslide') { if (!(it[f] > 0)) it[f] = 3.5; d.querySelectorAll(`[data-f=${f}]`).forEach(o => { if (o !== inp) o.value = it[f]; }); }
         schedule();

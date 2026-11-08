@@ -235,6 +235,14 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('water above the ridge joins the river', near(high.A, all.A, 1e-9), `area ${high.A.toFixed(3)} m\u00b2`);
 }
 
+// 8j. A building behind a wall stays dry until the wall is overtopped
+{
+  const secs = vsecs(), wall = { side: 'left', x0: 0, x1: 300, y: 15, z: 3 };
+  const r = RFL.solve({ ...base, sections: secs, walls: [wall] }, 80), level = RFL.wsAt(r, 100);
+  const [b] = RFL.buildings(r, [{ id: 'h', x: 100, y: 8, floor: level - 0.5 }]);
+  check('a building behind a wall is dry while the wall holds', level < 3 && b.cutOff && b.depth <= 0, `water ${level.toFixed(2)} m`);
+}
+
 // 9. Yarnell's pier equation against a hand calculation
 {
   // K 1.25, V 2 m/s, y 2 m, a 0.1: hv = 0.20387, w = 0.10194
