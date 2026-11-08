@@ -7742,7 +7742,7 @@ onmessage = e => {
   const FIELDS = {
     obstructions: [['along', 'Distance along river, m'], ['len', 'Length along river, m'], ['left', 'Distance from left side, m'], ['wid', 'Width across river, m'], ['top', 'Top level, m']],
     bridges: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['length', 'Bridge width, m'], ['openAt', 'Opening, distance from left side, m'], ['openW', 'Width of opening, m'], ['abut', 'Length of each abutment, m (blank: to the valley sides)'], ['lowChord', 'Soffit level, m'], ['highChord', 'Deck top, m'], ['piers', 'Piers (distance from left:width, …)', 'text'], ['pierK', 'Pier shape', 'pier']],
-    walls: [['along', 'Distance along river, m'], ['len', 'Length of wall, m'], ['y', 'Distance from left side, m'], ['z', 'Crest level, m']],
+    walls: [['along', 'Distance along river, m'], ['len', 'Length of wall, m'], ['y', 'Distance from left side, m'], ['z', 'Crest level, m'], ['setback', 'Set back from bank, m']],
     buildings: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['w', 'Width across river, m'], ['d', 'Length along river, m'], ['floor', 'Floor level, m'], ['height', 'Height above floor, m', 'hslide']],
   };
   FIELDS.models = [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['rot', 'Rotation', 'rot'], ['scale', 'Scale (1 = metres)'], ['base', 'Base level, m'], ['up', 'Which way is up', 'axis'], ['floating', 'Floats on the water', 'float'], ['draft', 'Depth below the water, m']];
@@ -7758,6 +7758,7 @@ onmessage = e => {
     len: { get: SX.size, size: true, set: (it, v) => { const a = SX.start(it); it.x0 = a; it.x1 = a + v; } },
     left: { get: SY.start, set: (it, v) => { const n = SY.size(it); it.y0 = v; it.y1 = v + n; } },
     wid: { get: SY.size, size: true, set: (it, v) => { const a = SY.start(it); it.y0 = a; it.y1 = a + v; } },
+    setback: { get: it => it.setback >= 0 ? it.setback : 1, set: (it, v) => { it.setback = Math.max(0, v); } },
     openAt: { get: SO.start, set: (it, v) => { const n = SO.size(it); it.openLeft = v; it.openRight = v + n; } },
     openW: { get: SO.size, size: true, set: (it, v) => { const a = SO.start(it); it.openLeft = a; it.openRight = a + v; } },
   };
@@ -7792,7 +7793,10 @@ onmessage = e => {
     const lo = Math.min(w.x0, w.x1), hi = Math.max(w.x0, w.x1), mid = (lo + hi) / 2;
     let secs = S.sections.filter(s => s.x >= lo - 1e-6 && s.x <= hi + 1e-6);
     if (!secs.length) secs = [S.sections.reduce((m, q) => Math.abs(q.x - mid) < Math.abs(m.x - mid) ? q : m)];
-    w.y = +(wallSide(w) === 'left' ? Math.min(...secs.map(s => s.banks.left)) - 1 : Math.max(...secs.map(s => s.banks.right)) + 1).toFixed(1);
+    const back = w.setback >= 0 ? w.setback : 1, left = wallSide(w) === 'left';
+    const y = left ? Math.min(...secs.map(s => s.banks.left)) - back : Math.max(...secs.map(s => s.banks.right)) + back;
+    const edge = left ? Math.max(...secs.map(s => s.pts[0][0])) + 0.5 : Math.min(...secs.map(s => s.pts[s.pts.length - 1][0])) - 0.5;
+    w.y = +(left ? Math.max(y, edge) : Math.min(y, edge)).toFixed(1);
     const ground = Math.max(...secs.map(s => groundAtLocal(s.pts, w.y)));
     if (w.z < ground + 0.5) w.z = +(ground + 1).toFixed(2);
   }
@@ -7821,6 +7825,7 @@ onmessage = e => {
         else if (SPAN[f]) { const v = parseFloat(inp.value); if (isNum(v) && (!SPAN[f].size || v > 0)) SPAN[f].set(it, v); else { inp.value = +SPAN[f].get(it).toFixed(2); return; } }
         else { const v = parseFloat(inp.value); if (isNum(v)) it[f] = v; else { inp.value = it[f]; return; } }
         if (f === 'label') d.querySelector('.rf-el-name').textContent = it.label;
+        if (f === 'setback') { wallToBank(it); renderElements(k + d.dataset.i); schedule(); return; }
         if (k === 'walls') d.querySelector('.rf-el-body .rf-hint').textContent = `${NOTES.walls} It protects the land on the ${wallSide(it)}.`;
         if (type === 'rot') inp.parentElement.querySelector('output').textContent = it[f] + '°';
         if (type === 'hslide') { if (!(it[f] > 0)) it[f] = 3.5; d.querySelectorAll(`[data-f=${f}]`).forEach(o => { if (o !== inp) o.value = it[f]; }); }
