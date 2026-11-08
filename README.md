@@ -16,8 +16,14 @@ network. The layout follows Urban Wind Lab: controls on the left, one large
 view in the middle, results on the right. It starts on a template reach (an
 idealised channel with floodplains, not a survey) with one example bridge.
 
-- **Flow** (left): type or drag the flow, or pick Low, Bankfull or Twice
-  bankfull (bankfull is found at the chosen section); add a climate
+- **Basic and Advanced:** the app opens in Basic, with plain words, the flow
+  choices and the design tools. The *Advanced* button at the top (or `#advanced`
+  on the address) shows every setting, result and technical term.
+- **Main result** (above the view): how much the design changes the water,
+  which buildings flood and how clear each bridge is. *With design* and
+  *Without* switch the 3D, Plan, Section and Profile views between the two.
+- **Flow** (left): pick Normal day, River full or Major flood (river full is
+  found at the chosen section). In Advanced, type or drag the flow and add a climate
   allowance in per cent. The downstream boundary is folded away beneath.
 - **Design** (left): add an obstruction, bridge, flood wall or building at
   the chosen section, then open it to set its size and levels. Eddy zones
@@ -122,7 +128,7 @@ The licence notice is in `NOTICE`.
 npm test
 ```
 
-`tests/engine.test.mjs` (32 checks), `tests/overpass-proxy.mjs` (19 checks;
+`tests/engine.test.mjs` (34 checks), `tests/overpass-proxy.mjs` (19 checks;
 skipped where PHP is not installed) and `tests/ui.test.mjs` (181 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused, except map tiles, place search and Overpass, which are

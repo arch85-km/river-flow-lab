@@ -181,6 +181,20 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('soffit clearance is positive only when the opening runs free', bad === 0, bad ? `${bad} of ${seen}; first at ${lowOnly}` : `${seen} soffit heights`);
 }
 
+// 8d. Extra stations give two runs the same sections to compare
+{
+  const r = RFL.solve({ ...base, sections: vsecs(), stations: [158] }, 20);
+  check('a requested station becomes a section with a result', r.sections.some(s => Math.abs(s.x - 158) < 1e-6));
+}
+
+// 8e. An eddy zone shorter than the section spacing still acts
+{
+  const ob = { id: 'o', x0: 150, x1: 154, y0: 21, y1: 27, top: 9 };
+  const on = RFL.solve({ ...base, sections: vsecs(), obstructions: [ob], eddy: { on: true, er: 2, cr: 1 } }, 20);
+  const acting = on.sections.filter(s => s.eddies.length).length;
+  check('an eddy zone shorter than the section spacing reaches a section', acting > 0, `${acting} sections`);
+}
+
 // 9. Yarnell's pier equation against a hand calculation
 {
   // K 1.25, V 2 m/s, y 2 m, a 0.1: hv = 0.20387, w = 0.10194

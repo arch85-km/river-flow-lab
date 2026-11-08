@@ -47,7 +47,7 @@ async function openPage(size, scheme = 'light') {
     if (u.startsWith('https://nominatim.openstreetmap.org/')) { searches.push({ u, t: Date.now() }); return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify([{ lat: '53.3811', lon: '-1.4701', display_name: 'Sheffield, South Yorkshire, England' }]) }); }
     offOrigin.push(u); return route.abort();
   });
-  await page.goto(origin + '/');
+  await page.goto(origin + '/#advanced');
   await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
   // the rating curve is drawn after a short pause so the slider stays responsive
   await page.waitForFunction(() => document.querySelector('#rf-rc svg polyline'));
@@ -157,7 +157,7 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await page.click('[data-add=obstructions]'); await settle(page);
   const el = page.locator('details.rf-el[data-k=obstructions]').first();
   check('new element opens for editing', await el.evaluate(d => d.open));
-  await el.locator('[data-f=y1]').fill('30'); await el.locator('[data-f=y1]').blur(); await settle(page);
+  await el.locator('[data-f=wid]').fill('5.4'); await el.locator('[data-f=wid]').blur(); await settle(page);
   const after = await ws(page, 240), without = await baseAt(page, 240);
   check('obstruction raises the water upstream', after > without, `${after.toFixed(3)} m with it, ${without.toFixed(3)} m without`);
   await page.click('.rf-views [data-view="plan"]'); await settle(page);
@@ -411,7 +411,7 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 } });
   const page = await ctx.newPage();
   await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
-  await page.goto(origin + '/'); await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
+  await page.goto(origin + '/#advanced'); await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
   await page.click('.rf-views [data-view="map"]'); await page.waitForTimeout(500);
   check('map: failed tiles show the failure hint', /did not load/.test(await page.textContent('#rf-map-note')));
   await ctx.close();
