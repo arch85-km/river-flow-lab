@@ -145,6 +145,42 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('overtopped levee lets the overbank flow', near(h2.sub.lob.A, h20.sub.lob.A, 1e-9));
 }
 
+// 8a. Flood walls: a short wall still acts, and interpolated sections keep it
+{
+  const wall = { side: 'left', x0: 152, x1: 163, y: 15, z: 9 };
+  const without = RFL.solve({ ...base, sections: vsecs() }, 80);
+  const short = RFL.solve({ ...base, sections: vsecs(), walls: [wall] }, 80);
+  const rise = RFL.wsAt(short, 200) - RFL.wsAt(without, 200);
+  check('a wall between two sections still raises the water upstream', rise > 0.001, mm(rise));
+  const span = { side: 'left', x0: 140, x1: 175, y: 15, z: 9 };
+  const br = { id: 'br', x: 150, length: 8, openLeft: 10, openRight: 40, lowChord: 8, highChord: 9, piers: [] };
+  const inserted = RFL.prepare({ sections: vsecs(), bridges: [br], walls: [span] }).preps.find(p => Math.abs(p.x - 158) < 1e-6);
+  check('an interpolated section inside a wall keeps the wall', !!inserted && inserted.excl.some(e => e.kind === 'levee'));
+}
+
+// 8b. Design elements outside the reach are reported, not crashed on
+{
+  const br = { id: 'far', x: 5000, length: 8, openLeft: 17, openRight: 31, lowChord: 2.4, highChord: 3.2, piers: [] };
+  let r, thrown = null;
+  try { r = RFL.solve({ ...base, sections: vsecs(), bridges: [br] }, 20); } catch (e) { thrown = e; }
+  check('a bridge outside the reach is refused with a message', !thrown && !!(r && r.error), thrown ? String(thrown) : (r && r.error) || 'no error');
+  const res = RFL.solve({ ...base, sections: vsecs() }, 20);
+  const last = res.sections[res.sections.length - 1].x;
+  const [out] = RFL.buildings(res, [{ id: 'h', x: last + 100, floor: 1 }]);
+  check('a building outside the reach has no water level', out.ws === null && out.depth === null);
+}
+
+// 8c. Soffit clearance agrees with the flow regime at every soffit height
+{
+  let bad = 0, seen = 0, lowOnly = null;
+  for (let lc = 1.6; lc < 2; lc += 0.005) {
+    const b = RFL.solve({ ...base, sections: vsecs(), bridges: [{ id: 'br', x: 150, length: 30, openLeft: 17, openRight: 31, lowChord: lc, highChord: lc + 0.8, piers: [] }] }, 20).bridges[0];
+    seen++;
+    if ((b.flow === 'low') !== (b.freeboard >= 0)) { bad++; if (lowOnly === null) lowOnly = `soffit ${lc.toFixed(2)}: ${b.flow}, clearance ${b.freeboard.toFixed(3)} m`; }
+  }
+  check('soffit clearance is positive only when the opening runs free', bad === 0, bad ? `${bad} of ${seen}; first at ${lowOnly}` : `${seen} soffit heights`);
+}
+
 // 9. Yarnell's pier equation against a hand calculation
 {
   // K 1.25, V 2 m/s, y 2 m, a 0.1: hv = 0.20387, w = 0.10194

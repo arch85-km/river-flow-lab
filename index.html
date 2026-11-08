@@ -4851,21 +4851,39 @@ const RFL = (() => {
     return R * (leftEdge || rightEdge ? w : w / 2);
   }
 
+  // A section with the flood walls that reach its chainage. Walls are
+  // { side, x0, x1, y, z }; a later wall on the same side replaces an earlier one.
+  function withWalls(s, walls) {
+    let levees = s.levees || null;
+    for (const w of walls) {
+      if (s.x < Math.min(w.x0, w.x1) - 1e-6 || s.x > Math.max(w.x0, w.x1) + 1e-6) continue;
+      levees = { ...(levees || {}), [w.side === 'right' ? 'right' : 'left']: { y: w.y, z: w.z } };
+    }
+    return levees === s.levees ? s : { ...s, levees };
+  }
+
   function prepare(model) {
     const eddy = { on: true, cr: 1, er: 2, ...(model.eddy || {}) };
     let secs = model.sections.map(s => ({ ...s, pts: s.pts.map(p => [p[0], p[1]]) })).sort((a, b) => a.x - b.x);
     const blk = blockages(model);
     // Make sure every blockage has a section to act on.
     const extra = [];
+    const addAt = x => { const s = sectionAt(secs, x); if (s && !extra.some(e => Math.abs(e.x - x) < 1e-6)) extra.push(s); };
+    const walls = model.walls || [];
     for (const b of blk) {
       const xs = b.kind === 'bridge' ? [b.x0, b.x1] : (secs.some(s => s.x >= b.x0 && s.x <= b.x1) ? [] : [(b.x0 + b.x1) / 2]);
-      for (const x of xs) { const s = sectionAt(secs, x); if (s) extra.push(s); }
+      xs.forEach(addAt);
+    }
+    // A wall too short to reach a section gets one, as an obstruction does.
+    for (const w of walls) {
+      const lo = Math.min(w.x0, w.x1), hi = Math.max(w.x0, w.x1);
+      if (!secs.some(s => s.x >= lo - 1e-6 && s.x <= hi + 1e-6)) addAt((lo + hi) / 2);
     }
     secs = secs.concat(extra).sort((a, b) => a.x - b.x);
     // A surveyed section's reach lengths run to the next surveyed section;
     // once a section is inserted below it they no longer apply.
     secs = secs.map((s, i) => i > 0 && secs[i - 1].interpolated && s.lengths ? { ...s, lengths: undefined } : s);
-    const preps = secs.map(s => ({
+    const preps = secs.map(s => withWalls(s, walls)).map(s => ({
       id: s.id, x: s.x, interpolated: !!s.interpolated, raw: s.pts, pts: s.pts,
       banks: s.banks, n: s.n, lengths: s.lengths, ceil: undefined, bridge: null, eddies: [],
       excl: [
@@ -4907,7 +4925,7 @@ const RFL = (() => {
 
   // ---------- the profile ----------
 
-  // model: { sections, obstructions, bridges, eddy:{on,cr,er},
+  // model: { sections, obstructions, bridges, walls, eddy:{on,cr,er},
   //          boundary:{type:'normal',slope} | {type:'ws',ws},
   //          coeff:{cc,ce,bridgeCc,bridgeCe} }
   function solve(model, Q) {
@@ -4915,6 +4933,8 @@ const RFL = (() => {
     if (!model || !Array.isArray(model.sections) || model.sections.length < 2) return { error: 'At least two cross-sections are needed.' };
     const coeff = { cc: 0.1, ce: 0.3, bridgeCc: 0.3, bridgeCe: 0.5, ...(model.coeff || {}) };
     const { preps, zones, blockages: blk } = prepare(model);
+    const stray = blk.find(b => b.kind === 'bridge' && !preps.some(p => p.bridge === b.bridge));
+    if (stray) return { error: `${stray.bridge.label || stray.id} is outside the river reach (chainage ${preps[0].x.toFixed(0)} to ${preps[preps.length - 1].x.toFixed(0)} m). Change its chainage or remove it.` };
     const results = [];
     const bnd = model.boundary || { type: 'normal', slope: 0.001 };
     const first = preps[0];
@@ -4982,12 +5002,14 @@ const RFL = (() => {
   function bridgeReport(br, preps, results, Q, noBridge) {
     const iDn = preps.findIndex(p => p.bridge === br);
     const iUp = preps.length - 1 - [...preps].reverse().findIndex(p => p.bridge === br);
-    const below = results[iDn - 1], face = results[iDn], above = results[iUp + 1] || results[iUp];
+    const below = results[iDn - 1], above = results[iUp + 1] || results[iUp];
+    // Water is usually highest at the upstream face; clearance is the tightest gap.
+    const highest = Math.max(...results.slice(iDn, iUp + 1).map(r => r.ws));
     const rep = { id: br.id, lowChord: br.lowChord, highChord: br.highChord,
       wsDownstream: below ? below.ws : null, wsUpstream: above.ws,
       afflux: noBridge && !noBridge.error ? above.ws - wsAt(noBridge, above.x) : null,
-      freeboard: br.lowChord - face.ws,
-      flow: results[iUp].ws > br.highChord ? 'overtopping' : results[iUp].ws > br.lowChord ? 'pressure' : 'low' };
+      freeboard: br.lowChord - highest,
+      flow: highest > br.highChord ? 'overtopping' : highest > br.lowChord ? 'pressure' : 'low' };
     if (below && (br.piers || []).length) {
       const p = preps[iDn];
       let open = p.raw;
@@ -5016,7 +5038,9 @@ const RFL = (() => {
   // Depth over each building's floor (negative = freeboard).
   function buildings(result, list) {
     return list.map(b => {
-      const ws = wsAt(result, b.x);
+      const s = result.sections;
+      const inReach = isNum(b.x) && s.length && b.x >= s[0].x - 1e-6 && b.x <= s[s.length - 1].x + 1e-6;
+      const ws = inReach ? wsAt(result, b.x) : null;
       return { id: b.id, ws, floor: b.floor, depth: ws === null || !isNum(b.floor) ? null : ws - b.floor };
     });
   }
@@ -5028,7 +5052,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
 </script>
 
 <script id="rfl-ui">
-/* River Flood Lab — interface. Everything runs in this page; nothing is sent anywhere. */
+/* River Flood Lab — interface. The model runs in this page; see the README for what the map and river searches contact. */
 (() => {
   'use strict';
   const APP = 'River Flood Lab', VERSION = '0.1.0';
@@ -5087,21 +5111,14 @@ if (typeof module !== 'undefined') module.exports = RFL;
   }
   function hasDesign() { return S.obstructions.length + S.bridges.length + S.walls.length > 0; }
   function model(withDesign) {
-    const sections = S.sections.map(s => {
-      const sec = { ...s, pts: s.pts, levees: null };
-      if (withDesign) for (const w of S.walls) {
-        if (s.x >= Math.min(w.x0, w.x1) - 1e-6 && s.x <= Math.max(w.x0, w.x1) + 1e-6) {
-          sec.levees = { ...(sec.levees || {}), [w.side === 'right' ? 'right' : 'left']: { y: w.y, z: w.z } };
-        }
-      }
-      return sec;
-    });
+    const sections = S.sections.map(s => ({ ...s, pts: s.pts, levees: null }));
     return {
       sections,
       boundary: S.boundary.type === 'ws' ? { type: 'ws', ws: S.boundary.ws } : { type: 'normal', slope: S.boundary.slope },
       eddy: S.eddy,
       obstructions: withDesign ? S.obstructions.map(o => ({ ...o, x0: Math.min(o.x0, o.x1), x1: Math.max(o.x0, o.x1), y0: Math.min(o.y0, o.y1), y1: Math.max(o.y0, o.y1) })) : [],
       bridges: withDesign ? S.bridges.map(b => ({ ...b, piers: parsePiers(b.piers), pierK: +b.pierK || 1.25 })) : [],
+      walls: withDesign ? S.walls : [],
     };
   }
   const flowQ = () => S.flow.Q * (1 + (S.flow.allowance || 0) / 100);
@@ -6023,6 +6040,11 @@ if (typeof module !== 'undefined') module.exports = RFL;
     V3.controls.addEventListener('change', render3D);
     V3.controls.maxPolarAngle = Math.PI * 0.495;
     new ResizeObserver(() => size3D()).observe(host);
+    host.addEventListener('pointerdown', down3D, true);
+    host.addEventListener('pointermove', hover3D);
+    addEventListener('pointermove', move3D);
+    addEventListener('pointerup', up3D);
+    addEventListener('pointercancel', up3D);
     V3.ok = true;
     size3D();
   }
@@ -6035,6 +6057,143 @@ if (typeof module !== 'undefined') module.exports = RFL;
     render3D();
   }
   function render3D() { if (V3.ok) V3.renderer.render(V3.scene, V3.camera); }
+
+  // ---------- moving things in the 3D view ----------
+  // Design elements are picked by their faces and moved over the terrain;
+  // the section line snaps to the sections that have results.
+  function ray3D(ev) {
+    const r = V3.renderer.domElement.getBoundingClientRect(), o = V3.camera.position;
+    const d = new V3.T.Vector3((ev.clientX - r.left) / r.width * 2 - 1, 1 - (ev.clientY - r.top) / r.height * 2, 0.5).unproject(V3.camera).sub(o).normalize();
+    return { o: [o.x, o.y, o.z], d: [d.x, d.y, d.z] };
+  }
+  // Nearest crossing of a ray and a triangle list (Moller-Trumbore).
+  function hitTris(ray, pos, idx) {
+    const n = idx ? idx.length : pos.length / 3, { o, d } = ray;
+    let best = null;
+    for (let k = 0; k < n; k += 3) {
+      const i0 = idx ? idx[k] : k, i1 = idx ? idx[k + 1] : k + 1, i2 = idx ? idx[k + 2] : k + 2;
+      const ax = pos[i0 * 3], ay = pos[i0 * 3 + 1], az = pos[i0 * 3 + 2];
+      const e1x = pos[i1 * 3] - ax, e1y = pos[i1 * 3 + 1] - ay, e1z = pos[i1 * 3 + 2] - az;
+      const e2x = pos[i2 * 3] - ax, e2y = pos[i2 * 3 + 1] - ay, e2z = pos[i2 * 3 + 2] - az;
+      const px = d[1] * e2z - d[2] * e2y, py = d[2] * e2x - d[0] * e2z, pz = d[0] * e2y - d[1] * e2x;
+      const det = e1x * px + e1y * py + e1z * pz;
+      if (Math.abs(det) < 1e-12) continue;
+      const tx = o[0] - ax, ty = o[1] - ay, tz = o[2] - az;
+      const u = (tx * px + ty * py + tz * pz) / det;
+      if (u < 0 || u > 1) continue;
+      const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+      const v = (d[0] * qx + d[1] * qy + d[2] * qz) / det;
+      if (v < 0 || u + v > 1) continue;
+      const t = (e2x * qx + e2y * qy + e2z * qz) / det;
+      if (t > 0 && (!best || t < best.t)) best = { t, i0, i1, i2, u, v };
+    }
+    return best;
+  }
+  // Chainage and offset of the ground under a ray, and how far along it is.
+  function groundUnder(ray) {
+    const g = V3.ground; if (!g) return null;
+    const h = hitTris(ray, g.pos, g.idx); if (!h) return null;
+    const w = 1 - h.u - h.v, at = c => w * g.xy[h.i0 * 2 + c] + h.u * g.xy[h.i1 * 2 + c] + h.v * g.xy[h.i2 * 2 + c];
+    return { x: at(0), y: at(1), t: h.t };
+  }
+  function pickElement(ray) {
+    let best = null;
+    for (const p of V3.pick || []) { const h = hitTris(ray, p.pos, null); if (h && (!best || h.t < best.t)) best = { t: h.t, el: p.el }; }
+    if (!best) return null;
+    const g = groundUnder(ray);
+    return g && g.t < best.t - 1e-6 ? null : best.el;
+  }
+  function toPixels(ev, p) {
+    const r = V3.renderer.domElement.getBoundingClientRect();
+    const v = new V3.T.Vector3(p[0], p[1], p[2]).project(V3.camera);
+    return [(v.x + 1) / 2 * r.width + r.left, (1 - v.y) / 2 * r.height + r.top];
+  }
+  function nearCut(ev) {
+    const c = V3.cut; if (!c) return false;
+    let prev = null;
+    for (let k = 0; k < c.length; k += 3) {
+      const [px, py] = toPixels(ev, [c[k], c[k + 1], c[k + 2]]);
+      if (prev) {
+        const dx = px - prev[0], dy = py - prev[1], len = dx * dx + dy * dy;
+        const s = len ? Math.min(1, Math.max(0, ((ev.clientX - prev[0]) * dx + (ev.clientY - prev[1]) * dy) / len)) : 0;
+        if (Math.hypot(ev.clientX - prev[0] - s * dx, ev.clientY - prev[1] - s * dy) < 9) return true;
+      }
+      prev = [px, py];
+    }
+    return false;
+  }
+  function cutTo(x) {
+    const s = RES.sections.reduce((m, q) => Math.abs(q.x - x) < Math.abs(m.x - x) ? q : m);
+    if (s.id !== viewId) selectView(s.id);
+  }
+  const shiftInside = (lo, hi, min, max, d) => Math.min(max - hi, Math.max(min - lo, d));
+  const round = (v, p) => +v.toFixed(p);
+  // Move an element by (dx, dy) from where it was picked up. Levels move with
+  // the river bed, so it keeps its height above the river wherever it goes.
+  function moveElement(el, was, dx, dy) {
+    const it = S[el.k][el.i]; if (!it) return;
+    const xmin = S.sections[0].x, xmax = S.sections[S.sections.length - 1].x;
+    const beds = { sections: RES.sections.map(s => ({ x: s.x, ws: s.bed })) };
+    const lift = (a, b) => RFL.wsAt(beds, b) - RFL.wsAt(beds, a);
+    const sec = x => S.sections.reduce((m, q) => Math.abs(q.x - x) < Math.abs(m.x - x) ? q : m);
+    const span = x => { const p = sec(x).pts; return [p[0][0], p[p.length - 1][0]]; };
+    if (el.k === 'bridges') {
+      const d = shiftInside(was.x, was.x + was.length, xmin, xmax, dx), up = lift(was.x, was.x + d);
+      it.x = round(was.x + d, 1); it.lowChord = round(was.lowChord + up, 2); it.highChord = round(was.highChord + up, 2);
+    } else if (el.k === 'obstructions') {
+      const d = shiftInside(Math.min(was.x0, was.x1), Math.max(was.x0, was.x1), xmin, xmax, dx);
+      const mid = (was.x0 + was.x1) / 2, [a, b] = span(mid + d);
+      const e = shiftInside(Math.min(was.y0, was.y1), Math.max(was.y0, was.y1), a, b, dy);
+      it.x0 = round(was.x0 + d, 1); it.x1 = round(was.x1 + d, 1); it.y0 = round(was.y0 + e, 1); it.y1 = round(was.y1 + e, 1);
+      it.top = round(was.top + lift(mid, mid + d), 2);
+    } else if (el.k === 'walls') {
+      const d = shiftInside(Math.min(was.x0, was.x1), Math.max(was.x0, was.x1), xmin, xmax, dx);
+      const mid = (was.x0 + was.x1) / 2, [a, b] = span(mid + d);
+      it.x0 = round(was.x0 + d, 1); it.x1 = round(was.x1 + d, 1); it.y = round(Math.min(b, Math.max(a, was.y + dy)), 1);
+      it.z = round(was.z + lift(mid, mid + d), 2);
+    } else {
+      const x = Math.min(xmax, Math.max(xmin, was.x + dx)), [a, b] = span(x);
+      it.x = round(x, 1); it.y = round(Math.min(b, Math.max(a, was.y + dy)), 1);
+      it.floor = round(was.floor + lift(was.x, x), 2);
+    }
+    schedule();
+  }
+  function down3D(ev) {
+    if (ev.button !== 0 || !V3.ok || !RES || RES.error) return;
+    const ray = ray3D(ev), el = pickElement(ray);
+    V3.press = { x: ev.clientX, y: ev.clientY };
+    if (el) {
+      const g = groundUnder(ray);
+      V3.drag = { type: 'element', el, start: g ? [g.x, g.y] : null, was: JSON.parse(JSON.stringify(S[el.k][el.i])) };
+    } else if (nearCut(ev)) V3.drag = { type: 'cut' };
+    else return;
+    V3.controls.enabled = false;
+    $('rf-3d').style.cursor = 'grabbing';
+  }
+  function move3D(ev) {
+    const d = V3.drag; if (!d || !RES || RES.error) return;
+    const g = groundUnder(ray3D(ev)); if (!g) return;
+    if (d.type === 'cut') { cutTo(g.x); return; }
+    if (!d.start) { d.start = [g.x, g.y]; return; }
+    moveElement(d.el, d.was, g.x - d.start[0], g.y - d.start[1]);
+  }
+  function up3D(ev) {
+    const d = V3.drag, press = V3.press;
+    V3.press = null;
+    if (d) {
+      V3.drag = null; V3.controls.enabled = true; $('rf-3d').style.cursor = '';
+      if (d.type === 'element') renderElements(d.el.k + d.el.i);
+      return;
+    }
+    // A plain click on the ground puts the section line there.
+    if (press && V3.ok && RES && !RES.error && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) < 4) {
+      const g = groundUnder(ray3D(ev)); if (g) cutTo(g.x);
+    }
+  }
+  function hover3D(ev) {
+    if (V3.drag || !V3.ok || !RES || RES.error || ev.buttons) return;
+    $('rf-3d').style.cursor = pickElement(ray3D(ev)) || nearCut(ev) ? 'grab' : '';
+  }
   function clear3D() {
     for (const o of [...V3.group.children]) {
       V3.group.remove(o);
@@ -6050,6 +6209,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     if (!V3.ok) return;
     const T = V3.T;
     clear3D();
+    V3.pick = []; V3.cut = null; V3.ground = null;
     V3.scene.background = new T.Color(C.bg || C.panel);
     if (!RES || RES.error) { render3D(); return; }
     const secs = RES.sections, vex = V3.vex;
@@ -6094,6 +6254,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       return new T.Mesh(g, new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide, ...opts }));
     };
     V3.group.add(surface(tPos, tCol, {}));
+    V3.ground = { pos: tPos, idx, xy: secs.flatMap(s => { const a = s.raw[0][0], w = s.raw[s.raw.length - 1][0] - a; return fr.flatMap(f => [s.x, a + f * w]); }) };
     { let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
       for (let k = 0; k < tPos.length; k += 3) { x0 = Math.min(x0, tPos[k]); x1 = Math.max(x1, tPos[k]); z0 = Math.min(z0, tPos[k + 2]); z1 = Math.max(z1, tPos[k + 2]); }
       V3.bounds = { L: x1 - x0, W: z1 - z0, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2 }; }
@@ -6111,7 +6272,23 @@ if (typeof module !== 'undefined') module.exports = RFL;
     V3.group.add(new T.Mesh(sg, new T.MeshLambertMaterial({ color: 0x9c8a6c, side: T.DoubleSide })));
     const water = surface(wPos, wCol, { transparent: true, opacity: 0.82 });
     water.renderOrder = 1; V3.group.add(water);
-    // design elements
+    // the water seen in the two cut ends of the model
+    const fPos = [];
+    for (const s of [secs[0], secs[secs.length - 1]]) for (let i = 0; i < s.raw.length - 1; i++) {
+      let [y1, z1] = s.raw[i], [y2, z2] = s.raw[i + 1];
+      const d1 = s.ws - z1, d2 = s.ws - z2;
+      if ((d1 <= 0 && d2 <= 0) || y2 === y1) continue;
+      if (d1 <= 0) { y1 += (y2 - y1) * -d1 / (d2 - d1); z1 = s.ws; } else if (d2 <= 0) { y2 = y1 + (y2 - y1) * d1 / (d1 - d2); z2 = s.ws; }
+      const a = P(s.x, y1, s.ws), b = P(s.x, y2, s.ws), c = P(s.x, y2, z2), e = P(s.x, y1, z1);
+      fPos.push(...a, ...b, ...c, ...a, ...c, ...e);
+    }
+    if (fPos.length) {
+      const fg = new T.BufferGeometry(); fg.setAttribute('position', new T.Float32BufferAttribute(fPos, 3));
+      const face = new T.Mesh(fg, new T.MeshBasicMaterial({ color: 0x4a90d9, transparent: true, opacity: 0.9, side: T.DoubleSide }));
+      face.renderOrder = 1; V3.group.add(face);
+    }
+    // design elements; `tag` says which one a box belongs to, for dragging
+    let tag = null;
     const box = (x0, x1, y0, y1, z0, z1, color, opacity = 1) => {
       const xa = Math.min(x0, x1), xb = Math.max(x0, x1, xa + 0.3), ya = Math.min(y0, y1), yb = Math.max(y0, y1, ya + 0.3);
       const za = Math.min(z0, z1), zb = Math.max(z0, z1, za + 0.05);
@@ -6119,6 +6296,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       const v = [...c.map(([x, y]) => P(x, y, za)), ...c.map(([x, y]) => P(x, y, zb))];
       const faces = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]];
       const pos = faces.flatMap(([a, b, cc, d]) => [a, b, cc, a, cc, d].flatMap(k => v[k]));
+      if (tag) V3.pick.push({ el: tag, pos });
       const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
       const m = new T.Mesh(g, new T.MeshLambertMaterial({ color, transparent: opacity < 1, opacity, side: T.DoubleSide }));
       V3.group.add(m);
@@ -6127,23 +6305,27 @@ if (typeof module !== 'undefined') module.exports = RFL;
     };
     const nearest = x => secs.reduce((m, s) => Math.abs(s.x - x) < Math.abs(m.x - x) ? s : m);
     const lowest = (s, y0, y1) => Math.min(groundAtLocal(s.raw, y0), groundAtLocal(s.raw, y1), ...s.raw.filter(p => p[0] > y0 && p[0] < y1).map(p => p[1]));
-    for (const o of S.obstructions) {
+    for (const [i, o] of S.obstructions.entries()) {
+      tag = { k: 'obstructions', i };
       const s = nearest((o.x0 + o.x1) / 2), y0 = Math.min(o.y0, o.y1), y1 = Math.max(o.y0, o.y1);
       box(o.x0, o.x1, y0, y1, lowest(s, y0, y1), o.top, 0x8c5a2b);
     }
-    for (const b of S.bridges) {
+    for (const [i, b] of S.bridges.entries()) {
+      tag = { k: 'bridges', i };
       const s = nearest(b.x), ymin = s.raw[0][0], ymax = s.raw[s.raw.length - 1][0];
       box(b.x, b.x + b.length, ymin, ymax, b.lowChord, b.highChord, 0x7d838c);
       if (b.openLeft > ymin) box(b.x, b.x + b.length, ymin, b.openLeft, lowest(s, ymin, b.openLeft), b.lowChord, 0x9a8f80);
       if (b.openRight < ymax) box(b.x, b.x + b.length, b.openRight, ymax, lowest(s, b.openRight, ymax), b.lowChord, 0x9a8f80);
       for (const p of parsePiers(b.piers)) box(b.x, b.x + b.length, p.y - p.width / 2, p.y + p.width / 2, lowest(s, p.y - p.width / 2, p.y + p.width / 2), b.lowChord, 0x9a8f80);
     }
-    for (const w of S.walls) {
+    for (const [i, w] of S.walls.entries()) {
+      tag = { k: 'walls', i };
       const s = nearest((w.x0 + w.x1) / 2);
       box(w.x0, w.x1, w.y - 0.15, w.y + 0.15, groundAtLocal(s.raw, w.y), w.z, 0x8c5a2b);
     }
     const bres = RFL.buildings(RES, S.buildings);
     S.buildings.forEach((b, i) => {
+      tag = { k: 'buildings', i };
       const s = nearest(b.x), g = groundAtLocal(s.raw, b.y), flooded = bres[i].depth > 0;
       const base = Math.min(g, b.floor);
       box(b.x - b.d / 2, b.x + b.d / 2, b.y - b.w / 2, b.y + b.w / 2, base, Math.max(b.floor, g) + 3.5, flooded ? 0xc0392b : 0xb8bcc2);
@@ -6170,6 +6352,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const sel = viewSection();
     if (sel) {
       const pts = sel.raw.flatMap(([y, z]) => P(sel.x, y, z + 0.05));
+      V3.cut = pts;
       const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pts, 3));
       V3.group.add(new T.Line(g, new T.LineBasicMaterial({ color: new T.Color(C.accent) })));
       const wl = new T.BufferGeometry(); wl.setAttribute('position', new T.Float32BufferAttribute([...P(sel.x, sel.raw[0][0], sel.ws + 0.02), ...P(sel.x, sel.raw[sel.raw.length - 1][0], sel.ws + 0.02)], 3));
@@ -6295,7 +6478,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       host.innerHTML = `<div class="rf-kv"><span>Water depth</span><span class="rf-lab">m</span></div><div class="rf-ramp" style="${view === 'plan' ? 'background:var(--rf-water-fill)' : ''}"></div>` +
         (view === '3d' ? '<div class="rf-kv rf-lab rf-mono"><span>0</span><span>1.25</span><span>2.5+</span></div>' : '') +
         line('var(--rf-eddy)', 'Eddy zone (separated flow, not computed)') + line('var(--rf-block)', 'Obstruction or flood wall') + line('var(--rf-deck)', 'Bridge') + line('var(--rf-bad)', 'Building with water over its floor') +
-        `<p class="rf-hint">${view === '3d' ? 'Levels are exaggerated vertically. Buildings are drawn 3.5 m above their floor as a placeholder height.' : 'Flow runs left to right. Click a section line to choose it.'}</p>`;
+        `<p class="rf-hint">${view === '3d' ? 'Drag a design element to move it. Drag the blue line, or click the ground, to choose where the section cuts. Levels are exaggerated vertically. Buildings are drawn 3.5 m above their floor as a placeholder height.' : 'Flow runs left to right. Click a section line to choose it.'}</p>`;
     } else {
       host.innerHTML = line('var(--rf-water)', 'Water level') + line('var(--rf-egl)', 'Energy line', true) + line('var(--rf-base)', 'Without design elements', true) + line('var(--rf-ground)', 'Ground and bed') +
         (view === 'section' ? line('var(--rf-eddy)', 'Eddy zone') + line('var(--rf-block)', 'Blocked area') : line('var(--rf-deck)', 'Bridge deck'));
@@ -6332,6 +6515,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     }
     RFL.buildings(RES, S.buildings).forEach((r, i) => {
       const name = S.buildings[i].label || r.id;
+      if (r.ws === null) { chips.push(chip(`${name} is outside the river reach, so it has no water level. Change its chainage.`, 'rf-warn')); return; }
       if (!isNum(r.depth)) return;
       if (r.depth > 0) chips.push(chip(`${name}: ${f2(r.depth)} m of water over the floor`, 'rf-bad'));
       else if (r.depth > -0.3) chips.push(chip(`${name}: floor only ${f2(-r.depth)} m above the water`, 'rf-warn'));
@@ -6486,7 +6670,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     }
     if (S.buildings.length) {
       lines.push('', 'building,chainage_m,floor_m,water_level_m,water_over_floor_m');
-      RFL.buildings(RES, S.buildings).forEach((r, i) => lines.push([q(S.buildings[i].label || r.id), S.buildings[i].x, r.floor, r.ws.toFixed(3), r.depth.toFixed(3)].join(',')));
+      RFL.buildings(RES, S.buildings).forEach((r, i) => lines.push([q(S.buildings[i].label || r.id), S.buildings[i].x, r.floor, isNum(r.ws) ? r.ws.toFixed(3) : '', isNum(r.depth) ? r.depth.toFixed(3) : ''].join(',')));
     }
     download('river-flood-lab.csv', new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
   }
@@ -6674,7 +6858,11 @@ if (typeof module !== 'undefined') module.exports = RFL;
     // screen position (in the map) of the middle of a section, for the checks
     get rivers() { return MAP.rivers ? MAP.rivers.chains.map(c => ({ name: c.name, kind: c.kind, length: Math.round(c.length), points: c.pts.length, culvert: c.culvert })) : null; },
     chainScreen: (i, f) => { const c = MAP.rivers.chains[i]; const q = chainPart(c, 0, c.length * f); return toScreen(...q[q.length - 1]); },
-    screenOf: id => { const s = RES.sections.find(q => q.id === id); return toScreen(...xyToLatLon(...groundXY(s.x, (s.banks.left + s.banks.right) / 2))); }, get view3d() { return { ok: V3.ok, meshes: V3.meshes, vex: V3.vex, geometries: V3.ok ? V3.renderer.info.memory.geometries : 0, span: V3.bounds ? [Math.round(V3.bounds.L), Math.round(V3.bounds.W)] : null }; } };
+    screenOf: id => { const s = RES.sections.find(q => q.id === id); return toScreen(...xyToLatLon(...groundXY(s.x, (s.banks.left + s.banks.right) / 2))); }, elementScreen: (k, i) => { const p = V3.pick.find(q => q.el.k === k && q.el.i === i); return p ? toPixels(null, [0, 1, 2].map(c => p.pos.filter((_, n) => n % 3 === c).reduce((a, v, _n, l) => a + v / l.length, 0))) : null; },
+    groundScreen: (x, y, z) => toPixels(null, V3.P(x, y, isNum(z) ? z : RES.sections.reduce((m, q) => Math.abs(q.x - x) < Math.abs(m.x - x) ? q : m).bed + 1)),
+    cutScreen: () => V3.cut ? toPixels(null, V3.cut.slice(0, 3)) : null,
+    get viewId() { return viewId; },
+    get view3d() { return { ok: V3.ok, meshes: V3.meshes, vex: V3.vex, geometries: V3.ok ? V3.renderer.info.memory.geometries : 0, span: V3.bounds ? [Math.round(V3.bounds.L), Math.round(V3.bounds.W)] : null }; } };
 })();
 </script>
 </body>

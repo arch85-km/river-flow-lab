@@ -39,7 +39,9 @@ idealised channel with floodplains, not a survey) with one example bridge.
   (ODbL) on screen and in every export. Where the river runs in a culvert,
   the app says at which chainages, and suggests modelling it as a bridge.
 - **Views** (middle): 3D, Map, Plan, Section and Profile, one at a time.
-  On a drawn river the 3D view follows its course.
+  On a drawn river the 3D view follows its course. In 3D, drag a design
+  element to move it (its levels move with the river bed), and drag the
+  blue section line, or click the ground, to choose where the section cuts.
 - **Results** (right): the legend for the view, tiles for the chosen
   section, the effect of the design (afflux, soffit clearance, floor levels,
   choking), water level against flow, and every section in a table.
@@ -120,7 +122,7 @@ The licence notice is in `NOTICE`.
 npm test
 ```
 
-`tests/engine.test.mjs` (27 checks), `tests/overpass-proxy.mjs` (19 checks;
+`tests/engine.test.mjs` (32 checks), `tests/overpass-proxy.mjs` (19 checks;
 skipped where PHP is not installed) and `tests/ui.test.mjs` (181 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused, except map tiles, place search and Overpass, which are
