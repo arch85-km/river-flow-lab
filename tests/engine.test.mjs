@@ -217,6 +217,13 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('a floating object raises the water upstream', rise > 0.001 && held.sections.some(s => Math.abs(s.x - 170) < 1e-6), mm(rise));
 }
 
+// 8h. A bridge with set abutments leaves the floodplain beyond them open
+{
+  const br = { id: 'br', x: 150, length: 8, openLeft: 17, openRight: 31, lowChord: 3.4, highChord: 4.2, piers: [] };
+  const full = RFL.solve({ ...base, sections: vsecs(), bridges: [br], eddy: { on: false } }, 120), short = RFL.solve({ ...base, sections: vsecs(), bridges: [{ ...br, abut: 2 }], eddy: { on: false } }, 120);
+  check('short abutments let the flood pass round them', RFL.wsAt(short, 200) < RFL.wsAt(full, 200) - 0.001, `${RFL.wsAt(full, 200).toFixed(3)} to ${RFL.wsAt(short, 200).toFixed(3)} m`);
+}
+
 // 9. Yarnell's pier equation against a hand calculation
 {
   // K 1.25, V 2 m/s, y 2 m, a 0.1: hv = 0.20387, w = 0.10194

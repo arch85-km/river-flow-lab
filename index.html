@@ -39,6 +39,10 @@ addEventListener('error', function () { document.documentElement.classList.add('
 html:not(.rf-ready) #rf-root{visibility:hidden}
 html:not(.rf-ready) body::after{content:"Loading River Flood Lab…";position:fixed;inset:0;display:grid;place-items:center;color:var(--rf-muted);font-size:15px}
 .rf-lab3d{position:absolute;left:0;top:0;transform:translate(-50%,-100%);background:var(--rf-panel);color:var(--rf-ink);border:1px solid var(--rf-line);border-radius:5px;padding:1px 7px;font-size:12px;white-space:nowrap;pointer-events:none;z-index:3}
+.rf-depth-tip{position:absolute;left:0;top:0;transform:translate(12px,-120%);background:var(--rf-panel);color:var(--rf-ink);border:1px solid var(--rf-line);border-radius:5px;padding:2px 7px;font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none;z-index:4}
+.rf-bands{display:flex;gap:2px}
+.rf-bands div{flex:1;text-align:center;font-size:11px;color:var(--rf-muted)}
+.rf-bands i{display:block;height:14px;border-radius:2px;margin-bottom:2px}
 .rf-lab3d.rf-bad{color:var(--rf-bad);border-color:var(--rf-bad)}
 .rf-lab3d.rf-change{font-weight:650;font-size:14px;color:var(--rf-warn)}
 [hidden]{display:none!important}
@@ -349,6 +353,14 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
     <div class="rf-stage-tools">
       <label class="rf-glass" data-for="3d">Exaggeration <select class="rf-select" id="rf-vex" style="padding:1px 4px"><option value="1">1×</option><option value="2">2×</option><option value="3" selected>3×</option><option value="5">5×</option><option value="10">10×</option></select></label>
       <button class="rf-btn" type="button" id="rf-3d-reset" data-for="3d">Reset view</button>
+      <label class="rf-glass" data-for="section">Heights <select class="rf-select" id="rf-sec-vex" style="padding:1px 4px"><option value="0">Fit to screen</option><option value="1">True scale</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option></select></label>
+      <label class="rf-glass" data-for="profile">Heights <select class="rf-select" id="rf-pro-vex" style="padding:1px 4px"><option value="0">Fit to screen</option><option value="1">True scale</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option><option value="50">50×</option></select></label>
+      <button class="rf-btn rf-sq" type="button" id="rf-pro-out" data-for="profile" aria-label="Zoom out of the profile">−</button>
+      <button class="rf-btn rf-sq" type="button" id="rf-pro-in" data-for="profile" aria-label="Zoom in to the profile">+</button>
+      <button class="rf-btn" type="button" id="rf-pro-fit" data-for="profile">Fit</button>
+      <button class="rf-btn rf-sq" type="button" id="rf-sec-out" data-for="section" aria-label="Zoom out of the section">−</button>
+      <button class="rf-btn rf-sq" type="button" id="rf-sec-in" data-for="section" aria-label="Zoom in to the section">+</button>
+      <button class="rf-btn" type="button" id="rf-sec-fit" data-for="section">Fit</button>
       <button class="rf-btn" type="button" id="rf-look" data-for="section" title="Turn round to see the other way along the river">Looking downstream</button>
       <span class="rf-glass rf-map-search" data-for="map"><input type="search" id="rf-map-q" placeholder="Place or 53.3626, -1.4721" aria-label="Find a place or type coordinates"><button class="rf-btn rf-small" type="button" id="rf-map-go">Go</button></span>
       <button class="rf-btn rf-sq" type="button" id="rf-map-out" data-for="map" aria-label="Zoom out">−</button>
@@ -4912,7 +4924,8 @@ const RFL = (() => {
       list.push({ kind: 'obstruction', id: ob.id, x0: ob.x0, x1: ob.x1, blocks: [{ y0: ob.y0, y1: ob.y1, top: ob.top, noEddy: !!ob.noEddy }] });
     }
     for (const br of model.bridges || []) {
-      const blocks = [{ y0: -Infinity, y1: br.openLeft, top: br.highChord }, { y0: br.openRight, y1: Infinity, top: br.highChord }];
+      const reach = isNum(br.abut) && br.abut >= 0 ? br.abut : Infinity;
+      const blocks = [{ y0: br.openLeft - reach, y1: br.openLeft, top: br.highChord }, { y0: br.openRight, y1: br.openRight + reach, top: br.highChord }];
       for (const p of br.piers || []) blocks.push({ y0: p.y - p.width / 2, y1: p.y + p.width / 2, top: br.highChord, pier: true });
       list.push({ kind: 'bridge', id: br.id, x0: br.x, x1: br.x + br.length, blocks, bridge: br });
     }
@@ -5212,7 +5225,10 @@ if (typeof module !== 'undefined') module.exports = RFL;
   let level = 'basic';
   const ARROWS = { n: 6, size: 1 };
   const T = (tech, plain) => level === 'advanced' ? tech : plain;
-  let compare = false, showingBefore = false, activePreset = null, lookUp = false;
+  let compare = false, showingBefore = false, activePreset = null, lookUp = false, sectionStretch = 0;
+  const secZoom = { k: 1, cy: null, cz: null, map: null };
+  const proZoom = { k: 1, cx: null, cz: null, map: null };
+  let profileStretch = 0;
   const PLAIN = {
     'From chainage, m': 'Starts at, m along river', 'To chainage, m': 'Ends at, m along river',
     'From offset, m': 'Left edge, m across river', 'To offset, m': 'Right edge, m across river',
@@ -5231,6 +5247,9 @@ if (typeof module !== 'undefined') module.exports = RFL;
       return isNum(y) && isNum(w) && w > 0 ? { y, width: w } : null;
     }).filter(Boolean);
   }
+  // A bridge's abutments reach the valley sides unless it has a set length.
+  const bridgeEnds = (b, a, z) => isNum(b.abut) && b.abut >= 0 ? [Math.max(a, b.openLeft - b.abut), Math.min(z, b.openRight + b.abut)] : [a, z];
+  const levelUnit = () => S.geo && S.geo.aod ? 'm AOD' : 'm';
   const buildingHeight = b => b.height > 0 ? b.height : 3.5;
   function hasDesign() { return S.obstructions.length + S.bridges.length + S.walls.length + S.models.length + S.floats.length > 0; }
   const isFloating = m => m.floating === 'yes';
@@ -5418,6 +5437,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
   function run() {
     if (S.geo) bendLengths();
     const Q = flowQ();
+    if (!viewId) cutX = null;
     RES = RFL.solve(model(true), Q);
     BASE = hasDesign() && !RES.error ? RFL.solve({ ...model(false), stations: RES.sections.map(s => s.x) }, Q) : null;
     if (!RES.error && (!viewId || !RES.sections.some(s => s.id === viewId))) viewId = RES.sections[Math.floor(RES.sections.length / 2)].id;
@@ -5584,8 +5604,8 @@ if (typeof module !== 'undefined') module.exports = RFL;
     for (const f of floatBoxes()) el('rect', { x: sx(f.x1), y: sy(f.y0), width: Math.max(3, sx(f.x0) - sx(f.x1)), height: Math.max(1, sy(f.y1) - sy(f.y0)), fill: FLOAT_COLOUR }, svg);
     for (const w of S.walls) el('line', { x1: sx(w.x0), x2: sx(w.x1), y1: sy(w.y), y2: sy(w.y), stroke: C.block, 'stroke-width': 3, 'stroke-linecap': 'round' }, svg);
     for (const b of S.bridges) {
-      const xa = sx(b.x + b.length), xb = sx(b.x);
-      el('rect', { x: xa, y: sy(ymin), width: Math.max(2, xb - xa), height: sy(ymax) - sy(ymin), fill: `url(#${host.id}-deck)`, stroke: C.deck }, svg);
+      const xa = sx(b.x + b.length), xb = sx(b.x), [ea, eb] = bridgeEnds(b, ymin, ymax);
+      el('rect', { x: xa, y: sy(ea), width: Math.max(2, xb - xa), height: sy(eb) - sy(ea), fill: `url(#${host.id}-deck)`, stroke: C.deck }, svg);
       for (const p of parsePiers(b.piers)) el('rect', { x: xa, y: sy(p.y - p.width / 2), width: Math.max(2, xb - xa), height: Math.max(1.5, sy(p.y + p.width / 2) - sy(p.y - p.width / 2)), fill: C.deck }, svg);
       el('text', { x: (xa + xb) / 2, y: box.t + 11, 'text-anchor': 'middle', fill: C.ink, 'font-weight': 600 }, svg).textContent = b.id;
     }
@@ -5607,7 +5627,21 @@ if (typeof module !== 'undefined') module.exports = RFL;
   }
 
   // ---------- cross-section ----------
-  function viewSection() { return RES && !RES.error ? RES.sections.find(s => s.id === viewId) : null; }
+  // A cut can go anywhere: an extra run gives a section at that spot for the views,
+  // and the main results keep their own sections, so moving the cut changes no result.
+  let cutX = null, cutCache = { res: null, s: null };
+  function cutSection() {
+    if (cutCache.res === RES) return cutCache.s;
+    const r = RFL.solve({ ...model(true), stations: [cutX] }, flowQ());
+    const s = r.error ? null : r.sections.find(q => Math.abs(q.x - cutX) < 1e-6) || null;
+    cutCache = { res: RES, s };
+    return s;
+  }
+  function viewSection() {
+    if (!RES || RES.error) return null;
+    if (cutX !== null) { const s = cutSection(); if (s) return s; }
+    return RES.sections.find(s => s.id === viewId);
+  }
   // What can be seen past the cut, looking downstream: every design element
   // wholly on the downstream side, as outlines of { y0, y1, z0, z1 }.
   function elementsBeyond(s) {
@@ -5617,7 +5651,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const add = (name, away, boxes, smooth) => out.push({ name, away, boxes, top: Math.max(...boxes.map(b => b.z1)), smooth: !!smooth });
     for (const b of S.bridges) {
       if (!inView(b.x, b.x + b.length)) continue;
-      const q = secAt(b.x), a = q.raw[0][0], z = q.raw[q.raw.length - 1][0], boxes = [{ y0: a, y1: z, z0: b.lowChord, z1: b.highChord }];
+      const q = secAt(b.x), [a, z] = bridgeEnds(b, q.raw[0][0], q.raw[q.raw.length - 1][0]), boxes = [{ y0: a, y1: z, z0: b.lowChord, z1: b.highChord }];
       if (b.openLeft > a) boxes.push({ y0: a, y1: b.openLeft, z0: low(q, a, b.openLeft), z1: b.lowChord });
       if (b.openRight < z) boxes.push({ y0: b.openRight, y1: z, z0: low(q, b.openRight, z), z1: b.lowChord });
       for (const p of parsePiers(b.piers)) boxes.push({ y0: p.y - p.width / 2, y1: p.y + p.width / 2, z0: q.bed, z1: b.lowChord });
@@ -5689,9 +5723,23 @@ if (typeof module !== 'undefined') module.exports = RFL;
     if (beyond.length) zhi = Math.max(zhi, ...beyond.map(e => e.top + 0.5));
     zlo -= 0.2; zhi += 0.3;
     const box = { l: 46, r: W - 10, t: 42 + stageTop(host), b: H - 38 - stageBottom(host) };
-    box.sx = lin(ymin, ymax, box.l, box.r); box.sy = lin(zlo, zhi, box.b, box.t);
+    if (sectionStretch) {
+      // A chosen stretch: add height above the drawing, or narrow it if it would not fit.
+      const span = (box.b - box.t) / ((box.r - box.l) / (ymax - ymin) * sectionStretch);
+      if (span >= zhi - zlo) zhi = zlo + span;
+      else { const width = (ymax - ymin) * ((box.b - box.t) / (zhi - zlo)) / sectionStretch, mid = (box.l + box.r) / 2; box.l = mid - width / 2; box.r = mid + width / 2; }
+    }
+    // The part of the section on screen: the same factor both ways, so the scale is kept.
+    let va = ymin, vb = ymax, vlo = zlo, vhi = zhi;
+    if (secZoom.k > 1) {
+      const w = (ymax - ymin) / secZoom.k, ht = (zhi - zlo) / secZoom.k;
+      const cy = Math.min(ymax - w / 2, Math.max(ymin + w / 2, secZoom.cy ?? (ymin + ymax) / 2)), cz = Math.min(zhi - ht / 2, Math.max(zlo + ht / 2, secZoom.cz ?? s.ws));
+      secZoom.cy = cy; secZoom.cz = cz; va = cy - w / 2; vb = cy + w / 2; vlo = cz - ht / 2; vhi = cz + ht / 2;
+    }
+    if (!target) secZoom.map = { box, W, H, va, vb, vlo, vhi, ymin, ymax, zlo, zhi };
+    box.sx = lin(va, vb, box.l, box.r); box.sy = lin(vlo, vhi, box.b, box.t);
     const { sx, sy } = box;
-    axes(svg, lookUp ? { ...box, sx: v => box.l + box.r - box.sx(v) } : box, [ymin, ymax], [zlo, zhi], `Across the river, m (looking ${lookUp ? 'upstream' : 'downstream'})`, 'Level, m');
+    axes(svg, lookUp ? { ...box, sx: v => box.l + box.r - box.sx(v) } : box, [va, vb], [vlo, vhi], `Across the river, m (looking ${lookUp ? 'upstream' : 'downstream'})`, `Level, ${levelUnit()}`);
     const clipId = host.id + '-clip';
     el('rect', { x: box.l, y: box.t, width: box.r - box.l, height: box.b - box.t }, el('clipPath', { id: clipId }, svg));
     const g = el('g', { 'clip-path': `url(#${clipId})` }, svg);
@@ -5729,12 +5777,13 @@ if (typeof module !== 'undefined') module.exports = RFL;
     if (level === 'advanced') el('line', { x1: box.l, x2: box.r, y1: sy(s.egl), y2: sy(s.egl), stroke: C.egl, 'stroke-width': 1.2, 'stroke-dasharray': '2 3' }, g);
     const wetNow = wetIntervals(gr, s.ws);
     for (const [p, q] of wetNow) el('line', { x1: sx(p), x2: sx(q), y1: sy(s.ws), y2: sy(s.ws), stroke: C.water, 'stroke-width': 2 }, g);
-    if (ARROWS.n && wetNow.length) { const open = wetNow.reduce((m, w) => w[1] - w[0] > m[1] - m[0] ? w : m), cx = sx((open[0] + open[1]) / 2), cy = sy(s.ws) + 18, r = 9, k = r * 0.7;
+    if (ARROWS.n && wetNow.length) { const open = wetNow.reduce((m, w) => w[1] - w[0] > m[1] - m[0] ? w : m), cx = sx((open[0] + open[1]) / 2), wetPx = sy(s.bed) - sy(s.ws), r = Math.max(3, Math.min(9, wetPx / 2 - 1)), cy = sy(s.ws) + Math.min(18, wetPx / 2), k = r * 0.7;
       el('circle', { class: 'rf-flow', cx, cy, r, fill: C.panel, stroke: C.water, 'stroke-width': 2 }, g);
       if (lookUp) el('circle', { cx, cy, r: 2.5, fill: C.water }, g);
       else for (const q of [1, -1]) el('line', { x1: cx - k, x2: cx + k, y1: cy - q * k, y2: cy + q * k, stroke: C.water, 'stroke-width': 2 }, g); }
     const stretch = ((box.b - box.t) / (zhi - zlo)) / ((box.r - box.l) / (ymax - ymin));
     if (stretch > 1.25) el('text', { x: box.r, y: 30 + stageTop(host), 'text-anchor': 'end', fill: C.muted }, svg).textContent = `Not to scale: heights drawn ${stretch.toFixed(0)}× larger than widths`;
+    else if (Math.abs(stretch - 1) < 0.05) el('text', { x: W - 10, y: 30 + stageTop(host), 'text-anchor': 'end', fill: C.muted }, svg).textContent = 'True scale: heights and widths match';
     for (const { b, z0, z1 } of buildingsHere) {
       const ya = b.y - b.w / 2, yb = b.y + b.w / 2, wet = s.ws > b.floor;
       el('rect', { class: 'rf-cut-building', x: sx(ya), y: sy(z1), width: sx(yb) - sx(ya), height: sy(z0) - sy(z1), fill: wet ? C.bad : C.deck, stroke: C.ink, 'stroke-width': 1.5 }, g);
@@ -5757,7 +5806,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       g.querySelectorAll('text').forEach(t => { const x = +t.getAttribute('x'); t.setAttribute('transform', `translate(${2 * x}, 0) scale(-1, 1)`); });
     }
     el('text', { x: box.l, y: 15 + stageTop(host), fill: C.ink, 'font-weight': 600 }, svg).textContent = T(`${s.id} at ${s.x.toFixed(1)} m`, `Section at ${s.x.toFixed(0)} m along the river`) + (showingBefore ? ' · without your design' : '') + (isNum(baseWs) && Math.abs(baseWs - s.ws) > 5e-4 ? ` · ${sgn(s.ws - baseWs)} m vs without design` : '');
-    el('text', { x: box.l, y: 30 + stageTop(host), fill: C.muted }, svg).textContent = T(`water ${f2(s.ws)} m · depth ${f2(s.depth)} m · V ${f2(s.V)} m/s · Fr ${f2(s.Fr)} · ${lookUp ? '⊙ flow towards you' : '⊗ flow away from you'}`, `water level ${f2(s.ws)} m · depth ${f2(s.depth)} m · ${lookUp ? '⊙ the river flows towards you' : '⊗ the river flows away from you'}`);
+    el('text', { x: box.l, y: 30 + stageTop(host), fill: C.muted }, svg).textContent = T(`water ${f2(s.ws)} m · depth ${f2(s.depth)} m · V ${f2(s.V)} m/s · Fr ${f2(s.Fr)} · ${lookUp ? '⊙ flow towards you' : '⊗ flow away from you'}`, `water level ${f2(s.ws)} ${levelUnit()} · depth ${f2(s.depth)} m · ${lookUp ? '⊙ the river flows towards you' : '⊗ the river flows away from you'}`);
     return svg;
   }
   function groundAtLocal(pts, y) {
@@ -5779,37 +5828,53 @@ if (typeof module !== 'undefined') module.exports = RFL;
     let zlo = Math.min(...secs.map(s => s.bed)) - 0.2;
     let zhi = Math.max(...secs.map(s => Math.max(s.egl, s.ws)), ...(BASE && !BASE.error ? BASE.sections.map(s => s.ws) : []), ...S.bridges.map(b => b.highChord), ...S.buildings.map(b => b.floor).filter(isNum)) + 0.3;
     const box = { l: 46, r: W - 10, t: 12 + stageTop(host), b: H - 38 - stageBottom(host) };
-    box.sx = lin(xmax, xmin, box.l, box.r); box.sy = lin(zlo, zhi, box.b, box.t);
+    if (profileStretch) {
+      const span = (box.b - box.t) / ((box.r - box.l) / (xmax - xmin) * profileStretch);
+      if (span >= zhi - zlo) zhi = zlo + span;
+      else { const width = (xmax - xmin) * ((box.b - box.t) / (zhi - zlo)) / profileStretch, mid = (box.l + box.r) / 2; box.l = mid - width / 2; box.r = mid + width / 2; }
+    }
+    let va = xmin, vb = xmax, vlo = zlo, vhi = zhi;
+    if (proZoom.k > 1) {
+      const w = (xmax - xmin) / proZoom.k, ht = (zhi - zlo) / proZoom.k;
+      const cx = Math.min(xmax - w / 2, Math.max(xmin + w / 2, proZoom.cx ?? (xmin + xmax) / 2)), cz = Math.min(zhi - ht / 2, Math.max(zlo + ht / 2, proZoom.cz ?? RFL.wsAt(RES, cx)));
+      proZoom.cx = cx; proZoom.cz = cz; va = cx - w / 2; vb = cx + w / 2; vlo = cz - ht / 2; vhi = cz + ht / 2;
+    }
+    proZoom.map = { box, W, H, va, vb, vlo, vhi, xmin, xmax, zlo, zhi };
+    box.sx = lin(vb, va, box.l, box.r); box.sy = lin(vlo, vhi, box.b, box.t);
     const { sx, sy } = box;
-    axes(svg, box, [xmin, xmax], [zlo, zhi], T('Chainage, m (flow →)', 'Distance along river, m (flow →)'), 'Level, m');
-    const line = (arr, key, attrs) => el('polyline', { points: arr.map(s => `${sx(s.x)},${sy(s[key])}`).join(' '), fill: 'none', ...attrs }, svg);
-    el('polygon', { points: secs.map(s => `${sx(s.x)},${sy(s.ws)}`).join(' ') + ' ' + [...secs].reverse().map(s => `${sx(s.x)},${sy(s.bed)}`).join(' '), fill: C['water-fill'], opacity: 0.8 }, svg);
-    el('polygon', { points: secs.map(s => `${sx(s.x)},${sy(s.bed)}`).join(' ') + ` ${sx(xmax)},${sy(zlo)} ${sx(xmin)},${sy(zlo)}`, fill: C['ground-fill'] }, svg);
+    axes(svg, box, [va, vb], [vlo, vhi], T('Chainage, m (flow →)', 'Distance along river, m (flow →)'), `Level, ${levelUnit()}`);
+    const proStretchNow = ((box.b - box.t) / (zhi - zlo)) / ((box.r - box.l) / (xmax - xmin));
+    if (proStretchNow > 1.25 || Math.abs(proStretchNow - 1) < 0.05) el('text', { x: box.r - 4, y: box.t + 14, 'text-anchor': 'end', fill: C.muted }, svg).textContent = proStretchNow > 1.25 ? `Not to scale: heights drawn ${proStretchNow.toFixed(0)}× larger than lengths` : 'True scale: heights and lengths match';
+    el('rect', { x: box.l, y: box.t, width: box.r - box.l, height: box.b - box.t }, el('clipPath', { id: 'rf-lp-clip' }, svg));
+    const pg = el('g', { 'clip-path': 'url(#rf-lp-clip)' }, svg);
+    const line = (arr, key, attrs) => el('polyline', { points: arr.map(s => `${sx(s.x)},${sy(s[key])}`).join(' '), fill: 'none', ...attrs }, pg);
+    el('polygon', { points: secs.map(s => `${sx(s.x)},${sy(s.ws)}`).join(' ') + ' ' + [...secs].reverse().map(s => `${sx(s.x)},${sy(s.bed)}`).join(' '), fill: C['water-fill'], opacity: 0.8 }, pg);
+    el('polygon', { points: secs.map(s => `${sx(s.x)},${sy(s.bed)}`).join(' ') + ` ${sx(xmax)},${sy(zlo)} ${sx(xmin)},${sy(zlo)}`, fill: C['ground-fill'] }, pg);
     line(secs, 'bed', { stroke: C.ground, 'stroke-width': 1.6 });
     for (const b of S.bridges) {
-      el('rect', { x: sx(b.x + b.length), y: sy(b.highChord), width: Math.max(2, sx(b.x) - sx(b.x + b.length)), height: sy(b.lowChord) - sy(b.highChord), fill: `url(#${host.id}-deck)`, stroke: C.deck }, svg);
-      el('text', { x: sx(b.x + b.length / 2), y: sy(b.highChord) - 4, 'text-anchor': 'middle', fill: C.ink }, svg).textContent = b.id;
+      el('rect', { x: sx(b.x + b.length), y: sy(b.highChord), width: Math.max(2, sx(b.x) - sx(b.x + b.length)), height: sy(b.lowChord) - sy(b.highChord), fill: `url(#${host.id}-deck)`, stroke: C.deck }, pg);
+      el('text', { x: sx(b.x + b.length / 2), y: sy(b.highChord) - 4, 'text-anchor': 'middle', fill: C.ink }, pg).textContent = b.id;
     }
     for (const o of [...solidBlocks(), ...S.obstructions]) {
       const xa = sx(Math.max(o.x0, o.x1)), xb = sx(Math.min(o.x0, o.x1)), bed = RES.sections.reduce((m, s) => Math.abs(s.x - o.x0) < Math.abs(m.x - o.x0) ? s : m).bed;
-      el('rect', { x: xa - (xb - xa < 3 ? 1.5 : 0), y: sy(Math.min(o.top, zhi)), width: Math.max(3, xb - xa), height: Math.max(0, sy(bed) - sy(Math.min(o.top, zhi))), fill: C.block, opacity: 0.7 }, svg);
+      el('rect', { x: xa - (xb - xa < 3 ? 1.5 : 0), y: sy(Math.min(o.top, zhi)), width: Math.max(3, xb - xa), height: Math.max(0, sy(bed) - sy(Math.min(o.top, zhi))), fill: C.block, opacity: 0.7 }, pg);
     }
     for (const f of floatBoxes()) {
       const ws = RFL.wsAt(RES, (f.x0 + f.x1) / 2);
-      el('rect', { x: sx(f.x1), y: sy(ws + f.height), width: Math.max(3, sx(f.x0) - sx(f.x1)), height: Math.max(1, sy(ws - f.draft) - sy(ws + f.height)), fill: FLOAT_COLOUR }, svg);
+      el('rect', { x: sx(f.x1), y: sy(ws + f.height), width: Math.max(3, sx(f.x0) - sx(f.x1)), height: Math.max(1, sy(ws - f.draft) - sy(ws + f.height)), fill: FLOAT_COLOUR }, pg);
     }
     if (BASE && !BASE.error) line(BASE.sections, 'ws', { stroke: C.base, 'stroke-width': 1.4, 'stroke-dasharray': '6 4' });
     if (level === 'advanced') line(secs, 'egl', { stroke: C.egl, 'stroke-width': 1.2, 'stroke-dasharray': '2 3' });
     line(secs, 'ws', { stroke: C.water, 'stroke-width': 2 });
-    for (const f of flowStations(secs, ARROWS.n)) flowArrow(svg, sx(f.x), sy(RFL.wsAt(RES, f.x)) - 13, sx(xmin) > sx(xmax) ? 0 : Math.PI);
+    for (const f of flowStations(secs, ARROWS.n)) flowArrow(pg, sx(f.x), sy(RFL.wsAt(RES, f.x)) - 13, sx(xmin) > sx(xmax) ? 0 : Math.PI);
     S.buildings.forEach((b, i) => {
       if (!isNum(b.floor)) return;
       const d = bres[i].depth;
-      el('rect', { x: sx(b.x) - 4, y: sy(b.floor) - 4, width: 8, height: 8, fill: d > 0 ? C.bad : C.building }, svg);
-      el('text', { x: sx(b.x) + 6, y: sy(b.floor) - 6, fill: C.ink }, svg).textContent = b.label || b.id;
+      el('rect', { x: sx(b.x) - 4, y: sy(b.floor) - 4, width: 8, height: 8, fill: d > 0 ? C.bad : C.building }, pg);
+      el('text', { x: sx(b.x) + 6, y: sy(b.floor) - 6, fill: C.ink }, pg).textContent = b.label || b.id;
     });
     const sel = viewSection();
-    if (sel) el('line', { x1: sx(sel.x), x2: sx(sel.x), y1: box.t, y2: box.b, stroke: C.accent, 'stroke-width': 1, 'stroke-dasharray': '4 3' }, svg);
+    if (sel) el('line', { x1: sx(sel.x), x2: sx(sel.x), y1: box.t, y2: box.b, stroke: C.accent, 'stroke-width': 1, 'stroke-dasharray': '4 3' }, pg);
   }
 
   // ---------- water level against flow ----------
@@ -5875,7 +5940,7 @@ onmessage = e => {
     const box = { l: 46, r: W - 10, t: 12, b: H - 38 };
     box.sx = lin(0, Qmax, box.l, box.r); box.sy = lin(zlo, zhi, box.b, box.t);
     const { sx, sy } = box;
-    axes(svg, box, [0, Qmax], [zlo, zhi], 'Flow, m³/s', 'Water level, m');
+    axes(svg, box, [0, Qmax], [zlo, zhi], 'Flow, m³/s', `Water level, ${levelUnit()}`);
     el('line', { x1: box.l, x2: box.r, y1: sy(bank), y2: sy(bank), stroke: C.ground, 'stroke-dasharray': '5 4' }, svg);
     el('text', { x: box.l + 4, y: sy(bank) - 4, fill: C.ground }, svg).textContent = 'bankfull (lower bank)';
     if (bpts.length) el('polyline', { points: bpts.map(p => `${sx(p[0])},${sy(p[1])}`).join(' '), fill: 'none', stroke: C.base, 'stroke-width': 1.4, 'stroke-dasharray': '6 4' }, svg);
@@ -6148,6 +6213,34 @@ onmessage = e => {
     };
     return { E0, E1: E0 + (nx - 1) * cell, N0, N1: N0 + (ny - 1) * cell, zlo, zhi, at, georef: true, fine: true };
   }
+  // Move a hand-clicked line onto the lowest ground near it, without sharp jumps
+  // sideways: the cheapest path through a band either side of the line.
+  function snapToChannel(T, line, reach = 15) {
+    const dense = [], step = 3;
+    for (let i = 0; i < line.length - 1; i++) {
+      const [a, b] = [line[i], line[i + 1]], n = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+      for (let k = 0; k < n; k++) dense.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+    }
+    dense.push(line[line.length - 1]);
+    const normals = dense.map((_, i) => { const p = dense[Math.max(0, i - 2)], q = dense[Math.min(dense.length - 1, i + 2)], dx = q[0] - p[0], dy = q[1] - p[1], n = Math.hypot(dx, dy) || 1; return [-dy / n, dx / n]; });
+    const W = 2 * reach + 1, cost = new Float64Array(W), back = dense.map(() => new Int16Array(W));
+    const height = (i, o) => { const z = T.at(dense[i][0] + normals[i][0] * (o - reach), dense[i][1] + normals[i][1] * (o - reach)); return z === null ? 1e6 : z; };
+    for (let o = 0; o < W; o++) cost[o] = height(0, o);
+    for (let i = 1; i < dense.length; i++) {
+      const was = cost.slice();
+      for (let o = 0; o < W; o++) {
+        let best = Infinity, from = o;
+        for (let p = Math.max(0, o - 2); p <= Math.min(W - 1, o + 2); p++) { const c = was[p] + 0.05 * (o - p) * (o - p); if (c < best) { best = c; from = p; } }
+        cost[o] = best + height(i, o); back[i][o] = from;
+      }
+    }
+    let o = cost.indexOf(Math.min(...cost));
+    const off = new Array(dense.length);
+    for (let i = dense.length - 1; i >= 0; i--) { off[i] = o - reach; o = back[i][o]; }
+    const eased = off.map((_, i) => { const part = off.slice(Math.max(0, i - 2), i + 3); return part.reduce((s, v) => s + v, 0) / part.length; });
+    const out = dense.map((p, i) => [p[0] + normals[i][0] * eased[i], p[1] + normals[i][1] * eased[i]]);
+    return out.filter((_, i) => i % 3 === 0 || i === out.length - 1);
+  }
   // Sections square to the line (drawn upstream to downstream), from the terrain.
   function terrainReach(T, line, p) {
     const toGeo = ([e, n]) => [n / M_LAT, e / 111320], downEN = smoothLine(line).reverse(), origin = downEN[0];
@@ -6207,7 +6300,7 @@ onmessage = e => {
     });
     const bedOf = i => p.carve ? beds[i] : Math.min(...sections[i].pts.map(t => t[1]));
     const slope = Math.max(0.0005, (bedOf(sections.length - 1) - bedOf(0)) / f.length);
-    return { g: T.georef ? { line: downEN.map(([e, n]) => bngToWgs(e, n)), yc } : g, sections, slope };
+    return { g: T.georef ? { line: downEN.map(([e, n]) => bngToWgs(e, n)), yc, aod: true } : g, sections, slope };
   }
   function terrainDialog(o, fileName, ready) {
     const size = c => { let lo = Infinity, hi = -Infinity; for (let i = c; i < o.v.length; i += 3) { if (o.v[i] < lo) lo = o.v[i]; if (o.v[i] > hi) hi = o.v[i]; } return hi - lo; };
@@ -6227,6 +6320,7 @@ onmessage = e => {
       </div></fieldset>
       <fieldset${ready ? ' hidden' : ''}><div class="rf-dlg-grid rf-one"><label>Units of the model<select class="rf-select" id="rf-t-unit"><option value="1">Metres</option><option value="0.01">Centimetres</option><option value="0.001">Millimetres</option></select></label></div></fieldset>
       <fieldset><div class="rf-dlg-grid rf-one">
+        <label style="flex-direction:row;align-items:center;gap:8px"${ready ? '' : ' hidden'}><input type="checkbox" id="rf-t-snap" style="width:auto"${ready ? ' checked' : ''}> Move my line onto the lowest part of the channel (up to 15 m)</label>
         <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="rf-t-own" style="width:auto"> The model already includes the real river bed</label>
         <small id="rf-t-note">Most terrain models record the water surface, not the river bed. The channel below is carved in as an estimate.</small>
         ${slider('depth', 'River depth, m', 'From the lower bank down to the bed', [0.5, 6, 0.1], 1.6)}
@@ -6326,7 +6420,7 @@ onmessage = e => {
         p.measures.push(m);
       }
       p.measures.sort((a, b) => a[0] - b[0]);
-      const r = terrainReach(T, pts, p);
+      const r = terrainReach(T, T.fine && $d('#rf-t-snap').checked ? snapToChannel(T, pts) : pts, p);
       if (r.error) { msg.textContent = r.error; return; }
       const d = defaultState(), river = fileName.replace(/\.(obj|asc|tiff?)$/i, ''), note = !p.carve ? 'terrain from a 3D model, not surveyed' : p.measures.length ? 'terrain with a channel from site measurements, not surveyed' : 'terrain from a 3D model; river channel estimated, not surveyed';
       S = { ...d, name: `${river} (${note})`, geo: r.g, sections: r.sections, bridges: [], flow: { ...S.flow }, eddy: { ...S.eddy }, boundary: { ...d.boundary, slope: +r.slope.toFixed(5) } };
@@ -6524,7 +6618,7 @@ onmessage = e => {
       const poly = (pts, fill) => el('polygon', { points: pts.map(p => p.join(',')).join(' '), fill, stroke: halo, 'stroke-width': 1, opacity: 0.9 }, host);
       for (const f of floatBoxes()) poly([[f.x0, f.y0], [f.x1, f.y0], [f.x1, f.y1], [f.x0, f.y1]].map(([x, y]) => scr(x, y)), FLOAT_COLOUR);
       for (const o of [...solidBlocks(), ...S.obstructions]) poly([[o.x0, o.y0], [o.x1, o.y0], [o.x1, o.y1], [o.x0, o.y1]].map(([x, y]) => scr(x, y)), C.block);
-      for (const b of S.bridges) { const s0 = RES.sections[0]; poly([[b.x, s0.raw[0][0]], [b.x + b.length, s0.raw[0][0]], [b.x + b.length, s0.raw[s0.raw.length - 1][0]], [b.x, s0.raw[s0.raw.length - 1][0]]].map(([x, y]) => scr(x, y)), C.deck); }
+      for (const b of S.bridges) { const s0 = RES.sections[0], [ea, eb] = bridgeEnds(b, s0.raw[0][0], s0.raw[s0.raw.length - 1][0]); poly([[b.x, ea], [b.x + b.length, ea], [b.x + b.length, eb], [b.x, eb]].map(([x, y]) => scr(x, y)), C.deck); }
       for (const w of S.walls) line([scr(w.x0, w.y), scr(w.x1, w.y)], C.block, 3);
       const bres = RFL.buildings(RES, S.buildings);
       S.buildings.forEach((b, i) => poly([[b.x - b.d / 2, b.y - b.w / 2], [b.x + b.d / 2, b.y - b.w / 2], [b.x + b.d / 2, b.y + b.w / 2], [b.x - b.d / 2, b.y + b.w / 2]].map(([x, y]) => scr(x, y)), bres[i].depth > 0 ? C.bad : '#9aa3ad'));
@@ -6916,6 +7010,8 @@ onmessage = e => {
     });
     V3.controls.maxPolarAngle = Math.PI * 0.495;
     new ResizeObserver(() => size3D()).observe(host);
+    const tip = document.createElement('div'); tip.id = 'rf-depth-tip'; tip.className = 'rf-depth-tip'; tip.hidden = true; host.appendChild(tip);
+    host.addEventListener('pointerleave', () => { tip.hidden = true; });
     host.addEventListener('pointerdown', down3D, true);
     host.addEventListener('pointermove', onceAFrame('hoverEv', hoverNow));
     addEventListener('pointermove', onceAFrame('moveEv', moveNow));
@@ -7011,8 +7107,10 @@ onmessage = e => {
     return false;
   }
   function cutTo(x) {
-    const s = RES.sections.reduce((m, q) => Math.abs(q.x - x) < Math.abs(m.x - x) ? q : m);
-    if (s.id !== viewId) selectView(s.id);
+    const lo = RES.sections[0].x, hi = RES.sections[RES.sections.length - 1].x, at = +Math.min(hi, Math.max(lo, x)).toFixed(1);
+    if (at === cutX) return;
+    cutX = at; cutCache = { res: null, s: null };
+    renderViewPicker(); renderTiles(); renderFlow(); renderActive(); scheduleRating();
   }
   const shiftInside = (lo, hi, min, max, d) => Math.min(max - hi, Math.max(min - lo, d));
   const round = (v, p) => +v.toFixed(p);
@@ -7102,10 +7200,21 @@ onmessage = e => {
       if (g && V3.placing) placeAt(V3.placing, g); else if (g) cutTo(g.x);
     }
   }
+  function showDepth(ev) {
+    const tip = $('rf-depth-tip'), g = groundUnder(ray3D(ev)), R = before() ? BASE : RES;
+    let d = -1;
+    if (g) { const q = R.sections.reduce((m, s) => Math.abs(s.x - g.x) < Math.abs(m.x - g.x) ? s : m); d = RFL.wsAt(R, g.x) - groundAtLocal(q.raw, g.y); }
+    tip.hidden = !(d > 0.005);
+    if (tip.hidden) return;
+    const r = $('rf-3d').getBoundingClientRect();
+    tip.textContent = `Depth ${d.toFixed(2)} m`;
+    tip.style.left = (ev.clientX - r.left) + 'px'; tip.style.top = (ev.clientY - r.top) + 'px';
+  }
   function hoverNow(ev) {
     if (V3.placing) { $('rf-3d').style.cursor = 'crosshair'; return; }
     if (V3.drag || !V3.ok || !RES || RES.error || ev.buttons) return;
     $('rf-3d').style.cursor = pickElement(ray3D(ev)) || nearCut(ev) ? 'grab' : '';
+    showDepth(ev);
   }
   function clear3D() {
     for (const o of [...V3.group.children]) {
@@ -7113,6 +7222,10 @@ onmessage = e => {
       o.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) [].concat(c.material).forEach(m => m.dispose()); });
     }
   }
+  // Water depth in five bands, from the shallowest to the deepest on this river.
+  const DEPTH_BANDS = ['#fde9a9', '#7fd3c4', '#3a9ad9', '#1f5fb8', '#0b2a5e'];
+  const hexRGB = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16) / 255);
+  function depthColour(d, max) { return hexRGB(DEPTH_BANDS[Math.min(4, Math.max(0, Math.floor(d / max * 5)))]); }
   function mixHex(a, b, t) {
     const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
     const ch = (p, s) => (p >> s) & 255;
@@ -7143,6 +7256,8 @@ onmessage = e => {
     if (fr.length > 120) fr = Array.from({ length: 101 }, (_, i) => i / 100);
     const nJ = fr.length;
     const tPos = [], tCol = [], wPos = [], wCol = [], idx = [];
+    const maxDepth = Math.max(1, Math.ceil(Math.max(...secs.map(s => s.ws - s.bed)) * 2) / 2);
+    V3.maxDepth = maxDepth;
     for (const s of secs) {
       const a = s.raw[0][0], w = s.raw[s.raw.length - 1][0] - a;
       for (const f of fr) {
@@ -7152,7 +7267,7 @@ onmessage = e => {
         tCol.push(...mixHex(inCh ? '#8d7b5f' : '#a9b07f', '#d9cfb3', inCh ? 0 : Math.min(1, Math.max(0, (z - s.ws) / 3))));
         wPos.push(...P(s.x, y, s.ws));
         const d = s.ws - z;
-        wCol.push(...mixHex('#7db9ee', '#16539c', Math.min(1, Math.max(0, d / 2.5))));
+        wCol.push(...depthColour(d, maxDepth));
       }
     }
     for (let i = 0; i < secs.length - 1; i++) for (let j = 0; j < nJ - 1; j++) {
@@ -7183,7 +7298,7 @@ onmessage = e => {
     for (const s of [secs[0], secs[secs.length - 1]]) wallStrip(s.raw.map(([y, z]) => [s.x, y, z]));
     const sg = new T.BufferGeometry(); sg.setAttribute('position', new T.Float32BufferAttribute(sPos, 3)); sg.setIndex(sIdx); sg.computeVertexNormals();
     V3.group.add(new T.Mesh(sg, new T.MeshLambertMaterial({ color: 0x9c8a6c, side: T.DoubleSide })));
-    const water = surface(wPos, wCol, { transparent: true, opacity: 0.82 });
+    const water = surface(wPos, wCol, { transparent: true, opacity: 0.9 });
     water.renderOrder = 1; V3.group.add(water);
     // the water seen in the two cut ends of the model
     const fPos = [];
@@ -7240,9 +7355,10 @@ onmessage = e => {
     for (const [i, b] of S.bridges.entries()) {
       tag = { k: 'bridges', i };
       const s = nearest(b.x), ymin = s.raw[0][0], ymax = s.raw[s.raw.length - 1][0];
-      box(b.x, b.x + b.length, ymin, ymax, b.lowChord, b.highChord, 0x7d838c);
-      if (b.openLeft > ymin) box(b.x, b.x + b.length, ymin, b.openLeft, lowest(s, ymin, b.openLeft), b.lowChord, 0x9a8f80);
-      if (b.openRight < ymax) box(b.x, b.x + b.length, b.openRight, ymax, lowest(s, b.openRight, ymax), b.lowChord, 0x9a8f80);
+      const [ea, eb] = bridgeEnds(b, ymin, ymax);
+      box(b.x, b.x + b.length, ea, eb, b.lowChord, b.highChord, 0x7d838c);
+      if (b.openLeft > ea) box(b.x, b.x + b.length, ea, b.openLeft, lowest(s, ea, b.openLeft), b.lowChord, 0x9a8f80);
+      if (b.openRight < eb) box(b.x, b.x + b.length, b.openRight, eb, lowest(s, b.openRight, eb), b.lowChord, 0x9a8f80);
       for (const p of parsePiers(b.piers)) box(b.x, b.x + b.length, p.y - p.width / 2, p.y + p.width / 2, lowest(s, p.y - p.width / 2, p.y + p.width / 2), b.lowChord, 0x9a8f80);
     }
     for (const [i, w] of S.walls.entries()) {
@@ -7302,8 +7418,7 @@ onmessage = e => {
     V3.labels = [];
     const label = (at, text, cls) => { const node = document.createElement('div'); node.className = 'rf-lab3d ' + (cls || ''); node.textContent = text; $('rf-3d').appendChild(node); V3.labels.push({ at, node }); };
     if (BASE && !BASE.error) {
-      let worst = 0, sx0 = secs[0];
-      for (const s of secs) { const d = s.ws - RFL.wsAt(BASE, s.x); if (Math.abs(d) > Math.abs(worst)) { worst = d; sx0 = s; } }
+      const { worst, at } = designChange(), sx0 = secs.find(s => s.x === at) || secs[0];
       const cm = Math.round(Math.abs(worst) * 100);
       if (cm >= 1) label(P(sx0.x, (sx0.banks.left + sx0.banks.right) / 2, sx0.ws + 0.1), `${worst > 0 ? '+' : '−'}${cm} cm`, 'rf-change');
     }
@@ -7413,6 +7528,18 @@ onmessage = e => {
     p.hidden = level !== 'advanced' && cls === 'rf-good';
   }
 
+  // What the design does to the water. A rise is what matters: water can also dip
+  // locally as it speeds up through a gap, which is not the design lowering the river.
+  function designChange() {
+    let rise = 0, riseAt = null, dip = 0, dipAt = null;
+    for (const s of RES.sections) {
+      const d = s.ws - RFL.wsAt(BASE, s.x);
+      if (d > rise) { rise = d; riseAt = s.x; }
+      if (d < dip) { dip = d; dipAt = s.x; }
+    }
+    const raised = rise >= 0.005;
+    return { worst: raised || dip > -0.005 ? rise : dip, at: raised || dip > -0.005 ? riseAt : dipAt, raised, dip, dipAt };
+  }
   // The one sentence a student reads first.
   function renderHeadline() {
     const big = $('rf-hl-big'), sub = $('rf-hl-sub'), seg = $('rf-compare');
@@ -7437,11 +7564,10 @@ onmessage = e => {
       else say('Add a bridge, wall, obstruction or building to see what it does to the river', '', more);
       return;
     }
-    let worst = 0, at = 0;
-    for (const s of RES.sections) { const d = s.ws - RFL.wsAt(BASE, s.x); if (Math.abs(d) > Math.abs(worst)) { worst = d; at = s.x; } }
+    const { worst, at, raised, dip, dipAt } = designChange();
     const cm = Math.round(Math.abs(worst) * 100);
     if (cm < 1) { say('Your design hardly changes the water level', tone || 'rf-good', more); return; }
-    say(`Your design ${worst > 0 ? 'raises' : 'lowers'} the water by ${cm} cm`, tone || (worst > 0.05 ? 'rf-warn' : ''), [`Largest change ${at.toFixed(0)} m along the river`, ...more]);
+    say(`Your design ${worst > 0 ? 'raises' : 'lowers'} the water by ${cm} cm`, tone || (worst > 0.05 ? 'rf-warn' : ''), [`Largest ${worst > 0 ? 'rise' : 'drop'} ${at.toFixed(0)} m along the river`, ...(raised && dip <= -0.01 ? [`Water dips ${Math.round(-dip * 100)} cm as it speeds through the gap at ${dipAt.toFixed(0)} m`] : []), ...more]);
   }
 
   function tile(label, value, unit, adv) { return `<div class="rf-tile${adv ? ' rf-adv' : ''}"><span class="rf-eyebrow">${esc(label)}</span><b class="rf-mono">${esc(value)}</b><small>${esc(unit)}</small></div>`; }
@@ -7451,7 +7577,7 @@ onmessage = e => {
     $('rf-at-head').textContent = T(`At section ${s.id} · ${s.x.toFixed(0)} m`, `At ${s.x.toFixed(0)} m along the river`);
     $('rf-at').textContent = refSection().id;
     const baseWs = BASE && !BASE.error ? RFL.wsAt(BASE, s.x) : null;
-    host.innerHTML = tile('Water level', f2(s.ws), 'm') + tile('Depth', f2(s.depth), 'm') + tile(T('Channel velocity', 'Water speed'), f2(s.sub.ch.V), 'm/s') + tile('Froude', f2(s.Fr), '', true) +
+    host.innerHTML = tile('Water level', f2(s.ws), levelUnit()) + tile('Depth', f2(s.depth), 'm') + tile(T('Channel velocity', 'Water speed'), f2(s.sub.ch.V), 'm/s') + tile('Froude', f2(s.Fr), '', true) +
       (isNum(baseWs) ? tile(T('Change by design', 'Change from your design'), sgn(s.ws - baseWs), 'm') + tile('Without design', f2(baseWs), 'm', true) : '');
   }
 
@@ -7464,10 +7590,11 @@ onmessage = e => {
       return;
     }
     if (view === '3d' || view === 'plan') {
-      host.innerHTML = `<div class="rf-kv"><span>Water depth</span><span class="rf-lab">m</span></div><div class="rf-ramp" style="${view === 'plan' ? 'background:var(--rf-water-fill)' : ''}"></div>` +
-        (view === '3d' ? '<div class="rf-kv rf-lab rf-mono"><span>0</span><span>1.25</span><span>2.5+</span></div>' : '') +
-        line('var(--rf-eddy)', T('Eddy zone (separated flow, not computed)', 'Still water beside a blockage (not computed)')) + line('var(--rf-block)', 'Obstruction or flood wall') + line('var(--rf-deck)', 'Bridge') + (S.floats.length || S.models.some(isFloating) ? line(FLOAT_COLOUR, 'Floating object') : '') + line('var(--rf-bad)', 'Building with water over its floor') +
-        `<p class="rf-hint">${view === '3d' ? 'White arrows show which way the water flows. Drag a design element to move it. Drag the blue line, or click the ground, to choose where the section cuts. Levels are exaggerated vertically. Set the height of a building on its card.' : 'Arrows show which way the water flows. Click a section line to choose it.'}</p>`;
+      const top = V3.maxDepth || 2.5, step = top / 5, nice = v => +v.toFixed(2);
+      host.innerHTML = `<div class="rf-kv"><span>Water depth</span><span class="rf-lab">m</span></div>` +
+        (view === '3d' ? `<div class="rf-bands">${DEPTH_BANDS.map((c, i) => `<div><i style="background:${c}"></i>${nice(i * step)}–${nice((i + 1) * step)}</div>`).join('')}</div>` : '<div class="rf-ramp" style="background:var(--rf-water-fill)"></div>') +
+        line('var(--rf-eddy)', T('Eddy zone (separated flow; the swirl is not calculated)', 'Still water beside a blockage (the swirl is not calculated)')) + line('var(--rf-block)', 'Obstruction or flood wall') + line('var(--rf-deck)', 'Bridge') + (S.floats.length || S.models.some(isFloating) ? line(FLOAT_COLOUR, 'Floating object') : '') + line('var(--rf-bad)', 'Building with water over its floor') +
+        `<p class="rf-hint">${view === '3d' ? 'Point at the water to read its depth. White arrows show which way the water flows. Drag a design element to move it. Drag the blue line, or click the ground, to choose where the section cuts. Levels are exaggerated vertically. Set the height of a building on its card.' : 'Arrows show which way the water flows. Click a section line to choose it.'}</p>`;
     } else {
       host.innerHTML = line('var(--rf-water)', 'Water level') + (level === 'advanced' ? line('var(--rf-egl)', 'Energy line', true) : '') + line('var(--rf-base)', 'Without design elements', true) + line('var(--rf-ground)', 'Ground and bed') +
         (view === 'section' ? line('var(--rf-eddy)', T('Eddy zone', 'Still water')) + line('var(--rf-block)', 'Blocked area') + (viewSection() && elementsBeyond(viewSection()).length ? line('var(--rf-muted)', 'Beyond the cut, in the view') : '') + (S.floats.length ? line(FLOAT_COLOUR, 'Floating object') : '') + (viewSection() && S.models.some(m => modelCut(m, viewSection().x)) ? line('var(--rf-deck)', 'Your model, cut at this section') : '') : line('var(--rf-deck)', 'Bridge deck'));
@@ -7475,7 +7602,7 @@ onmessage = e => {
   }
   function renderCaption() {
     const s = viewSection();
-    $('rf-caption').textContent = view === 'map' ? '' : s ? `${flowQ().toFixed(1)} m³/s · ${T(s.id + ' water', 'water')} ${f2(s.ws)} m, depth ${f2(s.depth)} m${showingBefore ? ' · without your design' : ''}` : '';
+    $('rf-caption').textContent = view === 'map' ? '' : s ? `${flowQ().toFixed(1)} m³/s · ${T(s.id + ' water', 'water')} ${f2(s.ws)} ${levelUnit()}, depth ${f2(s.depth)} m${showingBefore ? ' · without your design' : ''}` : '';
   }
   function renderRiver() {
     $('rf-river-name').textContent = S.name.replace(/ \(.*\)$/, '');
@@ -7494,8 +7621,7 @@ onmessage = e => {
     const chips = [];
     if (!hasDesign() && !S.buildings.length) chips.push(chip('No design elements yet. Add an obstruction, bridge, flood wall or building on the left to see its effect.'));
     if (BASE && !BASE.error) {
-      let worst = 0, at = null;
-      for (const s of RES.sections) { const d = s.ws - RFL.wsAt(BASE, s.x); if (Math.abs(d) > Math.abs(worst)) { worst = d; at = s.x; } }
+      const { worst, at, raised, dip, dipAt } = designChange();
       chips.push(chip(Math.abs(worst) < 0.0005 ? 'Design elements change the water level by less than 1 mm' : `${T('Design elements change', 'Your design changes')} the water level by up to ${sgn(worst)} m (at ${at.toFixed(0)} m)`, worst > 0.05 ? 'rf-warn' : ''));
     }
     for (const b of RES.bridges) {
@@ -7524,6 +7650,7 @@ onmessage = e => {
     for (const name of aground) chips.push(chip(`${name} is touching the ground at this flow, so it is not floating freely. It blocks the water down to the bed there.`, 'rf-warn'));
     const dryZones = RES.eddyZones.filter(z => !z.pier && !zoneWet(z, RES.sections));
     if (dryZones.length) chips.push(chip(T('Eddy zones on dry ground have no effect at this flow. Raise the flow, or put a blockage in the river.', 'The still-water zones here are on dry ground, so they have no effect at this flow.')));
+    if (BASE && !BASE.error) { const c = designChange(); if (c.raised && c.dip <= -0.01) chips.push(chip(`The water surface dips ${Math.round(-c.dip * 100)} cm at ${c.dipAt.toFixed(0)} m as the flow speeds up through the gap. Upstream it still rises.`)); }
     const crit = RES.sections.filter(s => s.flags.includes('critical'));
     if (crit.length) chips.push(chip(T(`Flow chokes (critical depth) at ${crit.map(s => s.id).join(', ')}: the level upstream is set there`, `The flow is squeezed at ${crit.map(s => s.x.toFixed(0) + ' m').join(', ')} along the river, which sets the water level upstream`), 'rf-warn'));
     if (S.geo && S.geo.culverts && S.geo.culverts.length) chips.push(chip(`OpenStreetMap maps this river in a culvert at ${S.geo.culverts.map(([p, q]) => `${p.toFixed(0)}–${q.toFixed(0)} m`).join(', ')}. The template treats it as open channel: model the culvert as a bridge with its soffit at the culvert roof, or enter surveyed sections.`, 'rf-warn'));
@@ -7553,9 +7680,11 @@ onmessage = e => {
   function renderViewPicker() {
     const sel = $('rf-view-sec');
     if (!RES || RES.error) { sel.textContent = ''; return; }
-    sel.innerHTML = [...RES.sections].reverse().map(s => `<option value="${esc(s.id)}"${s.id === viewId ? ' selected' : ''}>${esc(s.id)} · ${s.x.toFixed(1)} m${s.bridge ? ' · bridge' : ''}${s.interpolated && !s.bridge ? ' · interpolated' : ''}</option>`).join('');
+    sel.innerHTML = (cutX !== null ? `<option value="cut" selected>Cut at ${cutX.toFixed(1)} m</option>` : '') + [...RES.sections].reverse().map(s => `<option value="${esc(s.id)}"${cutX === null && s.id === viewId ? ' selected' : ''}>${esc(s.id)} · ${s.x.toFixed(1)} m${s.bridge ? ' · bridge' : ''}${s.interpolated && !s.bridge ? ' · interpolated' : ''}</option>`).join('');
   }
   function selectView(id) {
+    if (id === 'cut') return;
+    cutX = null;
     viewId = id;
     const s = RES.sections.find(q => q.id === id);
     const i = s ? S.sections.findIndex(q => Math.abs(q.x - s.x) < 1e-6) : -1;
@@ -7567,7 +7696,7 @@ onmessage = e => {
   const PIER = [['1.25', 'square nose'], ['0.9', 'semicircular nose'], ['1.05', 'triangular nose (90°)']];
   const FIELDS = {
     obstructions: [['along', 'Distance along river, m'], ['len', 'Length along river, m'], ['left', 'Distance from left side, m'], ['wid', 'Width across river, m'], ['top', 'Top level, m']],
-    bridges: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['length', 'Bridge width, m'], ['openAt', 'Opening, distance from left side, m'], ['openW', 'Width of opening, m'], ['lowChord', 'Soffit level, m'], ['highChord', 'Deck top, m'], ['piers', 'Piers (distance from left:width, …)', 'text'], ['pierK', 'Pier shape', 'pier']],
+    bridges: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['length', 'Bridge width, m'], ['openAt', 'Opening, distance from left side, m'], ['openW', 'Width of opening, m'], ['abut', 'Length of each abutment, m (blank: to the valley sides)'], ['lowChord', 'Soffit level, m'], ['highChord', 'Deck top, m'], ['piers', 'Piers (distance from left:width, …)', 'text'], ['pierK', 'Pier shape', 'pier']],
     walls: [['side', 'Bank', 'side'], ['along', 'Distance along river, m'], ['len', 'Length of wall, m'], ['y', 'Distance from left side, m'], ['z', 'Crest level, m']],
     buildings: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['w', 'Width across river, m'], ['d', 'Length along river, m'], ['floor', 'Floor level, m'], ['height', 'Height above floor, m', 'hslide']],
   };
@@ -7608,7 +7737,7 @@ onmessage = e => {
     let id = ids[kind] + n; while (S[kind].some(e => e.id === id)) id += "'";
     if (kind === 'floats') return { id, label: `Floating object ${n}`, x0: s.x, x1: s.x + 10, y0: (bl + br) / 2 - 2, y1: (bl + br) / 2 + 2, draft: 0.5, height: 1 };
     if (kind === 'obstructions') return { id, x0: s.x, x1: s.x + 4, y0: (bl + br) / 2 - 1, y1: (bl + br) / 2 + 1, top: +(bank + 1).toFixed(2) };
-    if (kind === 'bridges') return { id, label: `Bridge ${n}`, x: s.x, length: 8, openLeft: bl - 2, openRight: br + 2, lowChord: +(bank + 0.8).toFixed(2), highChord: +(bank + 1.6).toFixed(2), piers: '', pierK: 1.25 };
+    if (kind === 'bridges') return { id, label: `Bridge ${n}`, x: s.x, length: 8, openLeft: bl - 2, openRight: br + 2, lowChord: +(bank + 0.8).toFixed(2), highChord: +(bank + 1.6).toFixed(2), piers: '', pierK: 1.25, abut: 15 };
     if (kind === 'walls') return { id, side: 'left', x0: s.x - 30, x1: s.x + 30, y: bl - 2, z: +(bank + 1).toFixed(2) };
     return { id, label: `Building ${n}`, x: s.x, y: Math.max(2, bl - 10), w: 8, d: 12, floor: +(groundAtLocal(s.pts, Math.max(2, bl - 10)) + 0.15).toFixed(2), height: 3.5 };
   }
@@ -7634,6 +7763,7 @@ onmessage = e => {
         const f = inp.dataset.f, type = (FIELDS[k].find(x => x[0] === f) || [])[2];
         if (type === 'text' || type === 'side' || type === 'axis' || type === 'float') it[f] = inp.value;
         else if (type === 'pier') it[f] = +inp.value;
+        else if (f === 'abut' && inp.value.trim() === '') delete it.abut;
         else if (SPAN[f]) { const v = parseFloat(inp.value); if (isNum(v) && (!SPAN[f].size || v > 0)) SPAN[f].set(it, v); else { inp.value = +SPAN[f].get(it).toFixed(2); return; } }
         else { const v = parseFloat(inp.value); if (isNum(v)) it[f] = v; else { inp.value = it[f]; return; } }
         if (f === 'label') d.querySelector('.rf-el-name').textContent = it.label;
@@ -7952,6 +8082,71 @@ onmessage = e => {
   });
   $('rf-terrain').addEventListener('click', () => $('rf-terrain-file').click());
   $('rf-terrain-file').addEventListener('change', e => { if (e.target.files.length) importTerrain([...e.target.files]); e.target.value = ''; });
+  // Zoom and move the section: scroll or + and − to zoom, drag to move, double-click to fit.
+  function zoomSection(factor, fx, fy) {
+    const m = secZoom.map; if (!m) return;
+    const k = Math.min(60, Math.max(1, secZoom.k * factor)), s = viewSection();
+    if (fx === undefined) {
+      if (secZoom.k === 1) secZoom.aim = true;
+      if (secZoom.aim && s) { secZoom.cy = (s.banks.left + s.banks.right) / 2; secZoom.cz = s.ws; }
+      secZoom.k = k; if (k === 1) secZoom.cy = secZoom.cz = null;
+      renderSection(); return;
+    }
+    const py = m.va + fx * (m.vb - m.va), pz = m.vhi - fy * (m.vhi - m.vlo), w = (m.ymax - m.ymin) / k, ht = (m.zhi - m.zlo) / k;
+    secZoom.aim = false; secZoom.k = k; secZoom.cy = py - (fx - 0.5) * w; secZoom.cz = pz + (fy - 0.5) * ht;
+    renderSection();
+  }
+  function fitSection() { secZoom.aim = false; secZoom.k = 1; secZoom.cy = secZoom.cz = null; renderSection(); }
+  const sectionPoint = ev => {
+    const m = secZoom.map, r = $('rf-xs').getBoundingClientRect(), x = (ev.clientX - r.left) * m.W / r.width, y = (ev.clientY - r.top) * m.H / r.height;
+    const f = (x - m.box.l) / (m.box.r - m.box.l);
+    return [Math.min(1, Math.max(0, lookUp ? 1 - f : f)), Math.min(1, Math.max(0, (y - m.box.t) / (m.box.b - m.box.t)))];
+  };
+  $('rf-xs').addEventListener('wheel', ev => { if (!secZoom.map) return; ev.preventDefault(); const [fx, fy] = sectionPoint(ev); zoomSection(ev.deltaY < 0 ? 1.25 : 0.8, fx, fy); }, { passive: false });
+  let secDrag = null;
+  $('rf-xs').addEventListener('pointerdown', ev => { if (ev.button === 0 && secZoom.k > 1) { secDrag = { x: ev.clientX, y: ev.clientY }; $('rf-xs').style.cursor = 'grabbing'; } });
+  addEventListener('pointermove', ev => {
+    if (!secDrag || !secZoom.map) return;
+    const m = secZoom.map, r = $('rf-xs').getBoundingClientRect(), dx = (ev.clientX - secDrag.x) * m.W / r.width, dy = (ev.clientY - secDrag.y) * m.H / r.height;
+    secDrag = { x: ev.clientX, y: ev.clientY };
+    secZoom.aim = false; secZoom.cy -= (lookUp ? -1 : 1) * dx / (m.box.r - m.box.l) * (m.vb - m.va); secZoom.cz += dy / (m.box.b - m.box.t) * (m.vhi - m.vlo);
+    renderSection();
+  });
+  addEventListener('pointerup', () => { if (secDrag) { secDrag = null; $('rf-xs').style.cursor = ''; } });
+  $('rf-xs').addEventListener('dblclick', fitSection);
+  $('rf-sec-in').addEventListener('click', () => zoomSection(1.5));
+  $('rf-sec-out').addEventListener('click', () => zoomSection(1 / 1.5));
+  $('rf-sec-fit').addEventListener('click', fitSection);
+  function zoomProfile(factor, fx, fy) {
+    const m = proZoom.map; if (!m) return;
+    const k = Math.min(60, Math.max(1, proZoom.k * factor));
+    if (fx === undefined) { if (proZoom.k === 1) proZoom.aim = true; if (proZoom.aim) { proZoom.cx = (m.xmin + m.xmax) / 2; proZoom.cz = RFL.wsAt(RES, proZoom.cx); } proZoom.k = k; if (k === 1) proZoom.cx = proZoom.cz = null; renderProfile(); return; }
+    const px = m.vb - fx * (m.vb - m.va), pz = m.vhi - fy * (m.vhi - m.vlo), w = (m.xmax - m.xmin) / k, ht = (m.zhi - m.zlo) / k;
+    proZoom.aim = false; proZoom.k = k; proZoom.cx = px + (fx - 0.5) * w; proZoom.cz = pz + (fy - 0.5) * ht;
+    renderProfile();
+  }
+  function fitProfile() { proZoom.aim = false; proZoom.k = 1; proZoom.cx = proZoom.cz = null; renderProfile(); }
+  $('rf-lp').addEventListener('wheel', ev => {
+    const m = proZoom.map; if (!m) return; ev.preventDefault();
+    const r = $('rf-lp').getBoundingClientRect(), x = (ev.clientX - r.left) * m.W / r.width, y = (ev.clientY - r.top) * m.H / r.height;
+    zoomProfile(ev.deltaY < 0 ? 1.25 : 0.8, Math.min(1, Math.max(0, (x - m.box.l) / (m.box.r - m.box.l))), Math.min(1, Math.max(0, (y - m.box.t) / (m.box.b - m.box.t))));
+  }, { passive: false });
+  let proDrag = null;
+  $('rf-lp').addEventListener('pointerdown', ev => { if (ev.button === 0 && proZoom.k > 1) { proDrag = { x: ev.clientX, y: ev.clientY }; $('rf-lp').style.cursor = 'grabbing'; } });
+  addEventListener('pointermove', ev => {
+    if (!proDrag || !proZoom.map) return;
+    const m = proZoom.map, r = $('rf-lp').getBoundingClientRect(), dx = (ev.clientX - proDrag.x) * m.W / r.width, dy = (ev.clientY - proDrag.y) * m.H / r.height;
+    proDrag = { x: ev.clientX, y: ev.clientY };
+    proZoom.aim = false; proZoom.cx += dx / (m.box.r - m.box.l) * (m.vb - m.va); proZoom.cz += dy / (m.box.b - m.box.t) * (m.vhi - m.vlo);
+    renderProfile();
+  });
+  addEventListener('pointerup', () => { if (proDrag) { proDrag = null; $('rf-lp').style.cursor = ''; } });
+  $('rf-lp').addEventListener('dblclick', fitProfile);
+  $('rf-pro-in').addEventListener('click', () => zoomProfile(1.5));
+  $('rf-pro-out').addEventListener('click', () => zoomProfile(1 / 1.5));
+  $('rf-pro-fit').addEventListener('click', fitProfile);
+  $('rf-pro-vex').addEventListener('change', e => { profileStretch = +e.target.value; renderActive(); });
+  $('rf-sec-vex').addEventListener('change', e => { sectionStretch = +e.target.value; renderActive(); });
   $('rf-look').addEventListener('click', () => { lookUp = !lookUp; $('rf-look').textContent = lookUp ? 'Looking upstream' : 'Looking downstream'; renderActive(); });
   $('rf-import').addEventListener('click', () => $('rf-obj').click());
   $('rf-obj').addEventListener('change', e => { if (e.target.files[0]) importObj(e.target.files[0]); e.target.value = ''; });
