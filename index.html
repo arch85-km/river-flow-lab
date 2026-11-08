@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>River Flood Lab</title>
 <meta name="description" content="River Flood Lab: a browser teaching tool for how river flow, water level, obstructions and bridges interact. Not a flood risk assessment.">
+<script>
+/* Apply the saved theme at once, and never leave the page hidden if the start-up fails. */
+try { var rfT = localStorage.getItem('riverfloodlab.theme.v1'); if (rfT === 'light' || rfT === 'dark') document.documentElement.setAttribute('data-theme', rfT); } catch (e) {}
+addEventListener('error', function () { document.documentElement.classList.add('rf-ready'); });
+</script>
 <style>
 /* Layout and look follow Urban Wind Lab: a top bar, controls on the left,
    one large view in the middle, results on the right, a one-line footer. */
@@ -31,12 +36,17 @@
   --rf-ground:#c2ae90;--rf-ground-fill:#3d3529;--rf-water:#6fb6f5;--rf-water-fill:#1d4670;--rf-egl:#ff8a80;--rf-base:#93a1b0;
   --rf-eddy:#c4a6ff;--rf-deck:#b9bec6;--rf-block:#d9a06a;--rf-building:#e8eef6;--rf-grid:#1a242f}
 *{box-sizing:border-box}
+html:not(.rf-ready) #rf-root{visibility:hidden}
+html:not(.rf-ready) body::after{content:"Loading River Flood Lab…";position:fixed;inset:0;display:grid;place-items:center;color:var(--rf-muted);font-size:15px}
+.rf-lab3d{position:absolute;left:0;top:0;transform:translate(-50%,-100%);background:var(--rf-panel);color:var(--rf-ink);border:1px solid var(--rf-line);border-radius:5px;padding:1px 7px;font-size:12px;white-space:nowrap;pointer-events:none;z-index:3}
+.rf-lab3d.rf-bad{color:var(--rf-bad);border-color:var(--rf-bad)}
+.rf-lab3d.rf-change{font-weight:650;font-size:14px;color:var(--rf-warn)}
 [hidden]{display:none!important}
 html,body{margin:0;height:100%;background:var(--rf-bg);color:var(--rf-ink);font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--rf-accent);outline-offset:2px}
 .rf-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
-.rf-eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--rf-muted);font-weight:650}
+.rf-eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--rf-muted);font-weight:650}
 
 /* shell */
 #rf-root{display:grid;height:100vh;grid-template-columns:300px minmax(0,1fr) 300px;grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"top top top" "left head right" "left stage right" "foot foot foot"}
@@ -81,7 +91,7 @@ details[open]>summary .rf-chev{transform:rotate(180deg)}
 .rf-num{width:84px;padding:4px 8px;border:1px solid var(--rf-line);border-radius:6px;background:var(--rf-panel-2);text-align:right}
 .rf-select{padding:4px 8px;border:1px solid var(--rf-line);border-radius:6px;background:var(--rf-panel-2);max-width:100%}
 input[type=range]{width:100%;accent-color:var(--rf-accent);margin:0}
-.rf-hint{font-size:12px;color:var(--rf-muted);margin:0}
+.rf-hint{font-size:13px;color:var(--rf-muted);margin:0}
 .rf-seg{display:flex;border:1px solid var(--rf-line);border-radius:7px;overflow:hidden;background:var(--rf-panel-2)}
 .rf-seg button{flex:1;border:0;background:none;padding:6px 4px;cursor:pointer;color:var(--rf-muted);white-space:nowrap}
 .rf-seg button[aria-pressed=true]{background:var(--rf-panel);color:var(--rf-ink);box-shadow:inset 0 0 0 1px var(--rf-line)}
@@ -92,7 +102,7 @@ details.rf-el{border:1px solid var(--rf-line);border-radius:7px;background:var(-
 details.rf-el>summary{list-style:none;display:flex;justify-content:space-between;align-items:center;padding:6px 9px;cursor:pointer}
 details.rf-el>summary::-webkit-details-marker{display:none}
 .rf-el-body{padding:2px 9px 9px;display:grid;grid-template-columns:1fr 1fr;gap:6px 8px}
-.rf-el-body label{display:flex;flex-direction:column;font-size:11.5px;color:var(--rf-muted);gap:2px}
+.rf-el-body label{display:flex;flex-direction:column;font-size:12.5px;color:var(--rf-muted);gap:2px}
 .rf-el-body input,.rf-el-body select{width:100%;padding:3px 6px;border:1px solid var(--rf-line);border-radius:5px;background:var(--rf-panel)}
 .rf-el-body .rf-wide2{grid-column:1/-1}
 .rf-tag{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--rf-muted);margin-right:6px}
@@ -118,10 +128,10 @@ textarea.rf-pts{width:100%;min-height:8rem;font:12px/1.35 ui-monospace,SFMono-Re
 .rf-tile b{font-size:17px;font-weight:650;font-variant-numeric:tabular-nums}
 .rf-tile small{color:var(--rf-muted);margin-left:2px}
 .rf-ramp{height:12px;border-radius:3px;background:linear-gradient(90deg,#7db9ee,#16539c)}
-.rf-legend-row{display:flex;align-items:center;gap:8px;color:var(--rf-muted);font-size:12px}
+.rf-legend-row{display:flex;align-items:center;gap:8px;color:var(--rf-muted);font-size:13px}
 .rf-legend-row i{width:18px;height:3px;display:inline-block;border-radius:2px}
 .rf-notes{display:flex;flex-direction:column;gap:5px}
-.rf-note{font-size:12px;padding:5px 8px;border-radius:6px;background:var(--rf-panel-2);border:1px solid var(--rf-line)}
+.rf-note{font-size:13px;padding:5px 8px;border-radius:6px;background:var(--rf-panel-2);border:1px solid var(--rf-line)}
 .rf-note.rf-good{background:var(--rf-good-bg);color:var(--rf-good);border-color:transparent}
 .rf-note.rf-warn{background:var(--rf-warn-bg);color:var(--rf-warn);border-color:transparent}
 .rf-note.rf-bad{background:var(--rf-bad-bg);color:var(--rf-bad);border-color:transparent}
@@ -271,6 +281,8 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
         <div class="rf-kv"><span class="rf-lab">Sections</span><span id="rf-river-n"></span></div>
         <div class="rf-kv"><span class="rf-lab">Length</span><span id="rf-river-len"></span></div>
         <p class="rf-hint">Draw the river's course on the map, from upstream to downstream. Sections are cut square to your line; their levels come from the template shape until surveyed levels are entered.</p>
+        <button class="rf-btn rf-sq" type="button" id="rf-terrain">Build from a terrain model (.obj)</button>
+        <input type="file" id="rf-terrain-file" accept=".obj" hidden>
         <button class="rf-btn rf-sq" type="button" id="rf-map-osm">Find rivers here (OpenStreetMap)</button>
         <p class="rf-hint">Loads the rivers and streams in the map view (up to 3 km across). Click one, then click where your reach starts and ends; OpenStreetMap's direction of flow sets which end is upstream. Or draw the line yourself:</p>
         <div class="rf-grid2">
@@ -5933,6 +5945,195 @@ onmessage = e => {
     });
     return { g, sections };
   }
+  // ---------- a river built from a terrain model ----------
+  // An OBJ terrain is turned into a height grid, the student clicks the
+  // river's course on it, and sections are cut square to that line. Most
+  // terrain models do not record the river bed, so by default a channel of
+  // the depth and width given is carved in, and the reach says it is estimated.
+  function makeTerrain(o, unit) {
+    const n = o.v.length / 3, range = c => { let lo = Infinity, hi = -Infinity; for (let i = c; i < o.v.length; i += 3) { if (o.v[i] < lo) lo = o.v[i]; if (o.v[i] > hi) hi = o.v[i]; } return hi - lo; };
+    const ext = [range(0), range(1), range(2)], up = ext.indexOf(Math.min(...ext));
+    const E = new Float64Array(n), N = new Float64Array(n), Z = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = o.v[i * 3] * unit, y = o.v[i * 3 + 1] * unit, z = o.v[i * 3 + 2] * unit;
+      if (up === 2) { E[i] = x; N[i] = y; Z[i] = z; } else if (up === 1) { E[i] = x; N[i] = -z; Z[i] = y; } else { E[i] = y; N[i] = z; Z[i] = x; }
+    }
+    // A closed terrain model has a flat base and skirt: leave those out.
+    const sorted = Float64Array.from(Z).sort(), low = sorted[0], hasBase = sorted[Math.floor(n * 0.05)] - low > 3;
+    const keep = k => !hasBase || Z[k] > low + 0.5;
+    let E0 = Infinity, E1 = -Infinity, N0 = Infinity, N1 = -Infinity, zlo = Infinity, zhi = -Infinity;
+    for (let i = 0; i < n; i++) if (keep(i)) { E0 = Math.min(E0, E[i]); E1 = Math.max(E1, E[i]); N0 = Math.min(N0, N[i]); N1 = Math.max(N1, N[i]); zlo = Math.min(zlo, Z[i]); zhi = Math.max(zhi, Z[i]); }
+    if (!(E1 > E0 && N1 > N0)) return { error: 'No ground surface was found in that model.' };
+    const cell = Math.max(E1 - E0, N1 - N0) / 500, nx = Math.ceil((E1 - E0) / cell) + 1, ny = Math.ceil((N1 - N0) / cell) + 1, grid = new Float32Array(nx * ny).fill(NaN);
+    for (let k = 0; k < o.f.length; k += 3) {
+      const a = o.f[k], b = o.f[k + 1], c = o.f[k + 2];
+      if (!keep(a) || !keep(b) || !keep(c)) continue;
+      const det = (N[b] - N[c]) * (E[a] - E[c]) + (E[c] - E[b]) * (N[a] - N[c]);
+      if (Math.abs(det) < 1e-9) continue;
+      const i0 = Math.max(0, Math.floor((Math.min(E[a], E[b], E[c]) - E0) / cell)), i1 = Math.min(nx - 1, Math.ceil((Math.max(E[a], E[b], E[c]) - E0) / cell));
+      const j0 = Math.max(0, Math.floor((Math.min(N[a], N[b], N[c]) - N0) / cell)), j1 = Math.min(ny - 1, Math.ceil((Math.max(N[a], N[b], N[c]) - N0) / cell));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const e = E0 + i * cell, m = N0 + j * cell;
+        const u = ((N[b] - N[c]) * (e - E[c]) + (E[c] - E[b]) * (m - N[c])) / det, v = ((N[c] - N[a]) * (e - E[c]) + (E[a] - E[c]) * (m - N[c])) / det, w = 1 - u - v;
+        if (u < -1e-6 || v < -1e-6 || w < -1e-6) continue;
+        const z = u * Z[a] + v * Z[b] + w * Z[c], at = j * nx + i;
+        if (!(grid[at] >= z)) grid[at] = z;
+      }
+    }
+    const at = (e, m) => {
+      const fx = (e - E0) / cell, fy = (m - N0) / cell, i = Math.floor(fx), j = Math.floor(fy);
+      if (i < 0 || j < 0 || i >= nx - 1 || j >= ny - 1) return null;
+      const s = fx - i, t = fy - j, p = grid[j * nx + i], q = grid[j * nx + i + 1], r = grid[(j + 1) * nx + i], w = grid[(j + 1) * nx + i + 1];
+      if (isNaN(p) || isNaN(q) || isNaN(r) || isNaN(w)) return null;
+      return p * (1 - s) * (1 - t) + q * s * (1 - t) + r * (1 - s) * t + w * s * t;
+    };
+    return { E0, E1, N0, N1, zlo, zhi, at, up: 'XYZ'[up] };
+  }
+  // Sections square to the line (drawn upstream to downstream), from the terrain.
+  function terrainReach(T, line, p) {
+    const toGeo = ([e, n]) => [n / M_LAT, e / 111320], origin = smoothLine(line).reverse()[0];
+    const down = smoothLine(line).reverse().map(toGeo), yc = p.half, g = { line: down, yc, local: true }, f = geoFrame(g);
+    if (f.length < 2 * p.spacing) return { error: `The line is ${f.length.toFixed(0)} m long: draw at least ${(2 * p.spacing).toFixed(0)} m.` };
+    const xs = []; for (let x = 0; x <= f.length + 1e-6; x += p.spacing) xs.push(+x.toFixed(2));
+    if (f.length - xs[xs.length - 1] > p.spacing / 3) xs.push(+f.length.toFixed(2));
+    const tw = p.bed / 2 + p.side * p.depth, yL = yc - tw, yR = yc + tw, cuts = [];
+    for (const x of xs) {
+      const c = pointAlong(f, x), d = flowDir(f, x), left = [-d[1], d[0]];
+      const ground = y => T.at(origin[0] + c[0] + left[0] * (yc - y), origin[1] + c[1] + left[1] * (yc - y));
+      if (ground(yL) === null || ground(yR) === null) return { error: `The river runs off the edge of the terrain ${x.toFixed(0)} m from its downstream end. Keep the line further inside the model.` };
+      let a = yc, b = yc;
+      while (a - 4 >= 0 && ground(a - 4) !== null) a -= 4;
+      while (b + 4 <= 2 * yc && ground(b + 4) !== null) b += 4;
+      cuts.push({ x, ground, a, b, gL: ground(yL), gR: ground(yR) });
+    }
+    // The bed: the given depth below the lower bank, never rising on the way downstream.
+    const beds = cuts.map(q => Math.min(q.gL, q.gR) - p.depth);
+    const blocks = []; for (const b of beds) { blocks.push({ sum: b, n: 1 }); while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].n > blocks[blocks.length - 1].sum / blocks[blocks.length - 1].n) { const t = blocks.pop(), u = blocks[blocks.length - 1]; u.sum += t.sum; u.n += t.n; } } let bi = 0; for (const u of blocks) for (let c = 0; c < u.n; c++) beds[bi++] = Math.min(u.sum / u.n, Math.min(cuts[bi - 1].gL, cuts[bi - 1].gR) - 0.3); for (let i = beds.length - 2; i >= 0; i--) beds[i] = Math.min(beds[i], beds[i + 1]);
+    const sections = cuts.map((q, i) => {
+      const raw = [], put = (y, z) => raw.push([+y.toFixed(3), +z.toFixed(3)]);
+      for (let y = q.a; y <= q.b + 1e-9; y += 4) {
+        if (p.carve && y > yL - 0.5 && y < yR + 0.5) continue;
+        put(y, q.ground(y));
+      }
+      if (p.carve) { put(yL, q.gL); put(yc - p.bed / 2, beds[i]); put(yc + p.bed / 2, beds[i]); put(yR, q.gR); }
+      raw.sort((u, v) => u[0] - v[0]);
+      // drop points on a straight run, to keep the sections light
+      const pts = raw.filter((t, k) => {
+        if (k === 0 || k === raw.length - 1) return true;
+        const u = raw[k - 1], v = raw[k + 1];
+        return Math.abs(u[1] + (v[1] - u[1]) * (t[0] - u[0]) / ((v[0] - u[0]) || 1) - t[1]) > 0.03;
+      });
+      return { id: `XS${String(i + 1).padStart(2, '0')}`, x: q.x, pts, banks: { left: yL, right: yR }, n: { lob: TEMPLATE.nFp, ch: TEMPLATE.nCh, rob: TEMPLATE.nFp } };
+    });
+    const bedOf = s => Math.min(...s.pts.map(t => t[1]));
+    const slope = Math.max(0.0005, (bedOf(sections[sections.length - 1]) - bedOf(sections[0])) / f.length);
+    return { g, sections, slope };
+  }
+  function terrainDialog(o, fileName) {
+    const size = c => { let lo = Infinity, hi = -Infinity; for (let i = c; i < o.v.length; i += 3) { if (o.v[i] < lo) lo = o.v[i]; if (o.v[i] > hi) hi = o.v[i]; } return hi - lo; };
+    const biggest = Math.max(size(0), size(1), size(2));
+    let T = null, pts = [], base = null;
+    const dlg = document.createElement('dialog');
+    dlg.className = 'rf-dlg';
+    dlg.setAttribute('aria-labelledby', 'rf-dlg-h');
+    const slider = (k, label, note, r, v) => `<label>${label}<span class="rf-dlg-slide"><input type="range" data-link="${k}" min="${r[0]}" max="${r[1]}" step="${r[2]}" value="${v}" aria-label="${label}"><input type="number" step="any" data-k="${k}" value="${v}"></span>${note ? `<small>${note}</small>` : ''}</label>`;
+    dlg.innerHTML = `<h2 id="rf-dlg-h">Build the river from a terrain model</h2>
+      <p class="rf-dlg-intro">Click along the river from its upstream end to its downstream end. This replaces the current river and your design.</p>
+      <canvas id="rf-t-map" width="552" height="360" style="width:100%;display:block;border:1px solid var(--rf-line);border-radius:8px;cursor:crosshair" role="img" aria-label="Terrain seen from above; click along the river"></canvas>
+      <div class="rf-dlg-slide" style="margin:8px 0 14px;justify-content:space-between"><small id="rf-t-info"></small><span style="display:flex;gap:6px;flex:none"><button class="rf-btn rf-sq rf-small" type="button" id="rf-t-undo">Undo point</button><button class="rf-btn rf-sq rf-small" type="button" id="rf-t-clear">Clear line</button></span></div>
+      <fieldset><div class="rf-dlg-grid rf-one">
+        <label>Units of the model<select class="rf-select" id="rf-t-unit"><option value="1">Metres</option><option value="0.01">Centimetres</option><option value="0.001">Millimetres</option></select></label>
+        <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="rf-t-own" style="width:auto"> The model already includes the real river bed</label>
+        <small id="rf-t-note">Most terrain models record the water surface, not the river bed. The channel below is carved in as an estimate.</small>
+        ${slider('depth', 'River depth, m', 'From the lower bank down to the bed', [0.5, 6, 0.1], 1.6)}
+        ${slider('bed', 'Width of the river bed, m', '', [2, 40, 0.5], 8)}
+        ${slider('side', 'Bank slope', 'Left is steep, right is gentle', [0.25, 4, 0.25], 1)}
+        ${slider('half', 'Land to include each side, m', 'Wide enough to hold the flood', [20, 200, 5], 60)}
+        ${slider('spacing', 'Distance between sections, m', '', [5, 50, 1], 15)}
+      </div></fieldset>
+      <p class="rf-err" id="rf-t-msg" role="status" style="margin:0 0 10px"></p>
+      <div class="rf-dlg-actions"><button class="rf-btn" type="button" id="rf-t-cancel">Cancel</button><button class="rf-btn rf-primary" type="button" id="rf-t-ok">Build the river</button></div>`;
+    document.body.appendChild(dlg); dlg.showModal();
+    const canvas = dlg.querySelector('#rf-t-map'), g = canvas.getContext('2d'), info = dlg.querySelector('#rf-t-info'), msg = dlg.querySelector('#rf-t-msg');
+    const unit = dlg.querySelector('#rf-t-unit');
+    unit.value = biggest > 20000 ? '0.001' : '1';
+    const paintLine = () => {
+      if (base) g.putImageData(base, 0, 0);
+      if (!T) return;
+      const px = ([e, n]) => [(e - T.E0) / (T.E1 - T.E0) * canvas.width, (T.N1 - n) / (T.N1 - T.N0) * canvas.height];
+      g.strokeStyle = '#0a6ebd'; g.lineWidth = 3; g.lineJoin = 'round'; g.beginPath();
+      pts.forEach((p, i) => { const [x, y] = px(p); if (i) g.lineTo(x, y); else g.moveTo(x, y); });
+      g.stroke();
+      g.font = '600 12px system-ui, sans-serif';
+      pts.forEach((p, i) => { const [x, y] = px(p); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); g.fillStyle = '#0a6ebd'; g.beginPath(); g.arc(x, y, 3.5, 0, 7); g.fill(); });
+      const tag = (p, t) => { const [x, y] = px(p); g.fillStyle = '#fff'; g.fillRect(x + 8, y - 16, g.measureText(t).width + 8, 17); g.fillStyle = '#14202c'; g.fillText(t, x + 12, y - 3); };
+      if (pts.length) tag(pts[0], 'Upstream');
+      if (pts.length > 1) tag(pts[pts.length - 1], 'Downstream');
+    };
+    const load = () => {
+      T = makeTerrain(o, +unit.value); pts = []; base = null; msg.textContent = '';
+      if (T.error) { msg.textContent = T.error; T = null; paintLine(); return; }
+      const W = T.E1 - T.E0, H = T.N1 - T.N0;
+      canvas.height = Math.max(160, Math.min(420, Math.round(canvas.width * H / W)));
+      const img = g.createImageData(canvas.width, canvas.height), span = (T.zhi - T.zlo) || 1, stepE = W / canvas.width, stepN = H / canvas.height;
+      for (let j = 0; j < canvas.height; j++) for (let i = 0; i < canvas.width; i++) {
+        const e = T.E0 + (i + 0.5) * stepE, n = T.N1 - (j + 0.5) * stepN, z = T.at(e, n), k = (j * canvas.width + i) * 4;
+        if (z === null) { img.data[k] = 225; img.data[k + 1] = 228; img.data[k + 2] = 232; img.data[k + 3] = 255; continue; }
+        const v = Math.pow((z - T.zlo) / span, 0.6), dz = (T.at(e + stepE * 2, n) ?? z) - (T.at(e - stepE * 2, n) ?? z), dn = (T.at(e, n + stepN * 2) ?? z) - (T.at(e, n - stepN * 2) ?? z);
+        const shade = Math.max(0.55, Math.min(1.25, 1 + (dn - dz) * 0.5 / Math.max(stepE * 4, 0.1)));
+        img.data[k] = (70 + 170 * v) * shade; img.data[k + 1] = (125 + 95 * v) * shade; img.data[k + 2] = (120 + 40 * v) * shade; img.data[k + 3] = 255;
+      }
+      g.putImageData(img, 0, 0);
+      base = g.getImageData(0, 0, canvas.width, canvas.height);
+      info.textContent = `${W.toFixed(0)} × ${H.toFixed(0)} m, ground ${T.zlo.toFixed(1)} to ${T.zhi.toFixed(1)} m. Darker is lower.`;
+      paintLine();
+    };
+    canvas.addEventListener('click', ev => {
+      if (!T) return;
+      const r = canvas.getBoundingClientRect(), e = T.E0 + (ev.clientX - r.left) / r.width * (T.E1 - T.E0), n = T.N1 - (ev.clientY - r.top) / r.height * (T.N1 - T.N0);
+      if (T.at(e, n) === null) return;
+      pts.push([e, n]); msg.textContent = ''; paintLine();
+    });
+    dlg.querySelector('#rf-t-undo').addEventListener('click', () => { pts.pop(); paintLine(); });
+    dlg.querySelector('#rf-t-clear').addEventListener('click', () => { pts = []; paintLine(); });
+    unit.addEventListener('change', load);
+    const own = dlg.querySelector('#rf-t-own');
+    own.addEventListener('change', () => { dlg.querySelector('#rf-t-note').textContent = own.checked ? 'The ground is used as it is. The depth and bank slope only set where the banks are.' : 'Most terrain models record the water surface, not the river bed. The channel below is carved in as an estimate.'; });
+    dlg.querySelectorAll('[data-link]').forEach(r => r.addEventListener('input', () => { dlg.querySelector(`[data-k=${r.dataset.link}]`).value = r.value; }));
+    dlg.querySelectorAll('[data-k]').forEach(n => n.addEventListener('input', () => { const r = dlg.querySelector(`[data-link=${n.dataset.k}]`); if (r) r.value = n.value; }));
+    const close = () => { dlg.close(); dlg.remove(); };
+    dlg.querySelector('#rf-t-cancel').addEventListener('click', close);
+    dlg.addEventListener('cancel', close);
+    dlg.querySelector('#rf-t-ok').addEventListener('click', () => {
+      const val = k => parseFloat(dlg.querySelector(`[data-k=${k}]`).value), p = { depth: val('depth'), bed: val('bed'), side: val('side'), half: val('half'), spacing: val('spacing'), carve: !own.checked };
+      if (!T) return;
+      if (pts.length < 2) { msg.textContent = 'Click at least two points along the river.'; return; }
+      if (![p.depth, p.bed, p.half, p.spacing].every(v => isNum(v) && v > 0) || !isNum(p.side) || p.side < 0) { msg.textContent = 'Check the values: they must be positive numbers.'; return; }
+      if (p.half < p.bed / 2 + p.side * p.depth + 8) { msg.textContent = 'Include more land each side of the river.'; return; }
+      const r = terrainReach(T, pts, p);
+      if (r.error) { msg.textContent = r.error; return; }
+      const d = defaultState(), river = fileName.replace(/\.obj$/i, '');
+      S = { ...d, name: `${river} (${p.carve ? 'terrain from a 3D model; river channel estimated, not surveyed' : 'terrain from a 3D model, not surveyed'})`, geo: r.g, sections: r.sections, bridges: [], flow: { ...S.flow }, eddy: { ...S.eddy }, boundary: { ...d.boundary, slope: +r.slope.toFixed(5) } };
+      bendLengths();
+      editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = ''; compare = false;
+      close(); renderEditor(); renderElements(); setView('3d'); run();
+      $('rf-map-msg').textContent = `Built ${S.sections.length} sections over ${geoFrame(S.geo).length.toFixed(0)} m from the terrain model.` + (crossingSections().length ? ' Some sections cross on a bend: draw a gentler bend or use wider spacing.' : '');
+    });
+    load();
+  }
+  function importTerrain(file) {
+    const msg = $('rf-map-msg');
+    if (file.size > 80e6) { msg.textContent = 'That file is over 80 MB. Simplify the model and export it again.'; return; }
+    const r = new FileReader();
+    r.onerror = () => { msg.textContent = 'That file could not be read.'; };
+    r.onload = () => {
+      const o = parseObj(String(r.result));
+      if (o.error) { msg.textContent = o.error; return; }
+      terrainDialog(o, file.name);
+    };
+    r.readAsText(file);
+  }
+
   // On a bend the overbanks travel different distances from the channel;
   // each gets its own reach length (discharge-weighted in the engine).
   function bendLengths() {
@@ -6120,7 +6321,7 @@ onmessage = e => {
     $('rf-map-undo').disabled = !MAP.draft.length;
   }
   function centreOnReach() {
-    if (MAP.centred || !S.geo) return;
+    if (MAP.centred || !S.geo || S.geo.local) return;
     const f = geoFrame(S.geo), c = xyToLatLon(...pointAlong(f, f.length / 2));
     MAP.lat = c[0]; MAP.lon = c[1]; MAP.centred = true;
   }
@@ -6496,7 +6697,19 @@ onmessage = e => {
     V3.camera.aspect = w / h; V3.camera.updateProjectionMatrix();
     render3D();
   }
-  function render3D() { if (V3.ok) V3.renderer.render(V3.scene, V3.camera); }
+  function render3D() { if (V3.ok) { V3.renderer.render(V3.scene, V3.camera); placeLabels(); } }
+  function placeLabels() {
+    const placed = [];
+    for (const l of V3.labels || []) {
+      const v = new V3.T.Vector3(l.at[0], l.at[1], l.at[2]).project(V3.camera), host = $('rf-3d');
+      l.node.hidden = v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1;
+      const px = (v.x + 1) / 2 * host.clientWidth;
+      let py = (1 - v.y) / 2 * host.clientHeight - 6;
+      if (!l.node.hidden) { while (placed.some(p => Math.abs(p[0] - px) < 95 && Math.abs(p[1] - py) < 25)) py -= 25; placed.push([px, py]); }
+      l.node.style.left = px.toFixed(1) + 'px';
+      l.node.style.top = py.toFixed(1) + 'px';
+    }
+  }
 
   // ---------- moving things in the 3D view ----------
   // Design elements are picked by their faces and moved over the terrain;
@@ -6600,6 +6813,7 @@ onmessage = e => {
   }
   function down3D(ev) {
     if (ev.button !== 0 || !V3.ok || !RES || RES.error) return;
+    if (V3.placing) { V3.press = { x: ev.clientX, y: ev.clientY }; return; }
     const ray = ray3D(ev), el = pickElement(ray);
     V3.press = { x: ev.clientX, y: ev.clientY };
     if (el) {
@@ -6642,10 +6856,12 @@ onmessage = e => {
     }
     // A plain click on the ground puts the section line there.
     if (press && V3.ok && RES && !RES.error && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) < 4) {
-      const g = groundUnder(ray3D(ev)); if (g) cutTo(g.x);
+      const g = groundUnder(ray3D(ev));
+      if (g && V3.placing) placeAt(V3.placing, g); else if (g) cutTo(g.x);
     }
   }
   function hoverNow(ev) {
+    if (V3.placing) { $('rf-3d').style.cursor = 'crosshair'; return; }
     if (V3.drag || !V3.ok || !RES || RES.error || ev.buttons) return;
     $('rf-3d').style.cursor = pickElement(ray3D(ev)) || nearCut(ev) ? 'grab' : '';
   }
@@ -6839,6 +7055,26 @@ onmessage = e => {
       const wl = new T.BufferGeometry(); wl.setAttribute('position', new T.Float32BufferAttribute([...P(sel.x, sel.raw[0][0], sel.ws + 0.02), ...P(sel.x, sel.raw[sel.raw.length - 1][0], sel.ws + 0.02)], 3));
       V3.group.add(new T.Line(wl, new T.LineBasicMaterial({ color: new T.Color(C.accent) })));
     }
+    // labels on the drawing: the biggest change, each bridge and each building
+    $('rf-3d').querySelectorAll('.rf-lab3d').forEach(n => n.remove());
+    V3.labels = [];
+    const label = (at, text, cls) => { const node = document.createElement('div'); node.className = 'rf-lab3d ' + (cls || ''); node.textContent = text; $('rf-3d').appendChild(node); V3.labels.push({ at, node }); };
+    if (BASE && !BASE.error) {
+      let worst = 0, sx0 = secs[0];
+      for (const s of secs) { const d = s.ws - RFL.wsAt(BASE, s.x); if (Math.abs(d) > Math.abs(worst)) { worst = d; sx0 = s; } }
+      const cm = Math.round(Math.abs(worst) * 100);
+      if (cm >= 1) label(P(sx0.x, (sx0.banks.left + sx0.banks.right) / 2, sx0.ws + 0.1), `${worst > 0 ? '+' : '−'}${cm} cm`, 'rf-change');
+    }
+    for (const r of RES.bridges) {
+      const b = S.bridges.find(q => q.id === r.id); if (!b) continue;
+      const open = r.flow === 'low';
+      label(P(b.x + b.length / 2, (b.openLeft + b.openRight) / 2, b.highChord), open ? `${f2(r.freeboard)} m clear` : r.flow === 'pressure' ? 'Opening full' : 'Water over the top', open ? '' : 'rf-bad');
+    }
+    S.buildings.forEach((b, i) => {
+      if (!isNum(bres[i].depth)) return;
+      const q = nearest(b.x), g = groundAtLocal(q.raw, b.y), wet = bres[i].depth > 0;
+      label(P(b.x, b.y, Math.max(b.floor, g) + 3.5), wet ? `${f2(bres[i].depth)} m flooded` : 'Dry', wet ? 'rf-bad' : '');
+    });
     V3.meshes = V3.group.children.length;
     if (!V3.fitted) fit3D();
     render3D();
@@ -6852,8 +7088,8 @@ onmessage = e => {
     // From the right bank, a little downstream, looking across the reach;
     // far enough back that its whole length fits the frame.
     const hfov = 2 * Math.atan(Math.tan(V3.camera.fov * Math.PI / 360) * V3.camera.aspect);
-    const dist = 1.08 * (L / 2) / Math.tan(hfov / 2) + W / 2;
-    const dir = [0.12, 0.42, 0.9], n = Math.hypot(...dir);
+    const dist = 1.3 * (L / 2) / Math.tan(hfov / 2) + W / 2;
+    const dir = [0.3, 0.72, 0.85], n = Math.hypot(...dir);
     V3.controls.target.set(bb.cx, 0, bb.cz);
     V3.camera.position.set(bb.cx + dir[0] / n * dist, dir[1] / n * dist, bb.cz + dir[2] / n * dist);
     V3.camera.near = r / 500; V3.camera.far = r * 20; V3.camera.updateProjectionMatrix();
@@ -6864,15 +7100,12 @@ onmessage = e => {
   function png3D() {
     if (!V3.ok) return;
     render3D();
-    const src = V3.renderer.domElement, W = src.width, H = src.height, k = W / $('rf-3d').clientWidth, foot = 86 * k;
-    const c = document.createElement('canvas'); c.width = W; c.height = H + foot;
+    const src = V3.renderer.domElement, W = src.width, H = src.height, k = W / $('rf-3d').clientWidth;
+    const f = exportFoot(W / k, `${APP} — ${S.name} — 3D view, vertical exaggeration ${V3.vex}×`, settingsLine().replace('; ' + RIVER_CREDIT, ''));
+    const c = document.createElement('canvas'); c.width = W; c.height = H + f.h * k;
     const g = c.getContext('2d');
-    g.fillStyle = C.panel; g.fillRect(0, 0, W, H + foot); g.drawImage(src, 0, 0);
-    g.scale(k, k);
-    g.fillStyle = C.ink; g.font = '600 12px system-ui, sans-serif'; g.fillText(`${APP} — ${S.name} — 3D view, vertical exaggeration ${V3.vex}×`, 12, H / k + 18);
-    g.font = '11px system-ui, sans-serif'; g.fillStyle = C.muted; g.fillText(settingsLine().replace('; ' + RIVER_CREDIT, '').slice(0, 140), 12, H / k + 36);
-    g.fillStyle = C.warn; g.fillText(CAUTION, 12, H / k + 54);
-    if (creditLine()) { g.fillStyle = C.muted; g.fillText(creditLine(), 12, H / k + 72); }
+    g.fillStyle = C.panel; g.fillRect(0, 0, c.width, c.height); g.drawImage(src, 0, 0);
+    g.scale(k, k); f.draw(g, H / k);
     c.toBlob(b => download('river-flood-lab-3d.png', b), 'image/png');
   }
 
@@ -7004,6 +7237,9 @@ onmessage = e => {
   }
   function renderRiver() {
     $('rf-river-name').textContent = S.name.replace(/ \(.*\)$/, '');
+    const local = !!(S.geo && S.geo.local), mapBtn = document.querySelector('.rf-views [data-view=map]');
+    mapBtn.disabled = local; mapBtn.title = local ? 'A river from a terrain model has no position on the world map' : '';
+    if (local && view === 'map' && !MAP.drawing) setView('3d');
     $('rf-river-name').title = S.name;
     $('rf-river-n').textContent = S.sections.length;
     $('rf-river-len').textContent = `${(S.sections[S.sections.length - 1].x - S.sections[0].x).toFixed(0)} m`;
@@ -7162,6 +7398,22 @@ onmessage = e => {
       d.querySelector('[data-del]').addEventListener('click', () => { S[k].splice(+d.dataset.i, 1); renderElements(); schedule(); });
     });
   }
+  // Basic mode: choose what to add, then click where it goes.
+  function armPlacing(k) {
+    if (view !== '3d') setView('3d');
+    V3.placing = k;
+    $('rf-3d').style.cursor = 'crosshair';
+    $('rf-import-msg').textContent = `Click in the 3D view to place the ${KIND[k].toLowerCase()}. Press Esc to cancel.`;
+    $('rf-import-msg').scrollIntoView({ block: 'nearest' });
+  }
+  function placeAt(k, g) {
+    const it = newElement(k), i = S[k].push(it) - 1;
+    const refX = k === 'bridges' || k === 'buildings' ? it.x : (it.x0 + it.x1) / 2;
+    const refY = k === 'buildings' || k === 'walls' ? it.y : k === 'bridges' ? g.y : (it.y0 + it.y1) / 2;
+    moveElement({ k, i }, JSON.parse(JSON.stringify(it)), g.x - refX, g.y - refY);
+    V3.placing = null; $('rf-3d').style.cursor = ''; $('rf-import-msg').textContent = '';
+    renderElements(k + i);
+  }
   function addElement(k) {
     S[k].push(newElement(k));
     renderElements(k + (S[k].length - 1)); schedule();
@@ -7230,13 +7482,15 @@ onmessage = e => {
   // service without CORS headers taints the canvas; the export then keeps
   // the overlay on a plain ground and says why.
   function pngMap() {
-    const [W, H] = mapSize(), k = 2, foot = 86;
+    const [W, H] = mapSize(), k = 2, title = `${APP} — ${S.name} — map`, settings = settingsLine().replace('; ' + RIVER_CREDIT, '');
     const svg = $('rf-map-svg').cloneNode(true);
     svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     const img = new Image();
     img.onload = () => {
       const draw = withTiles => {
-        const c = document.createElement('canvas'); c.width = W * k; c.height = (H + foot) * k;
+        const note = (withTiles ? 'Map ' + tileSource().credit : 'Map tiles left out: the tile service does not allow copying') + (creditLine() ? ' · ' + creditLine() : '');
+        const f = exportFoot(W, title, settings, note);
+        const c = document.createElement('canvas'); c.width = W * k; c.height = (H + f.h) * k;
         const g = c.getContext('2d'); g.scale(k, k);
         g.fillStyle = '#e5e3df'; g.fillRect(0, 0, W, H);
         if (withTiles) for (const t of MAP.tiles.values()) {
@@ -7245,11 +7499,7 @@ onmessage = e => {
           if (m) g.drawImage(t, +m[1], +m[2], TILE, TILE);
         }
         g.drawImage(img, 0, 0, W, H);
-        g.fillStyle = C.panel; g.fillRect(0, H, W, foot);
-        g.fillStyle = C.ink; g.font = '600 12px system-ui, sans-serif'; g.fillText(`${APP} — ${S.name} — map`, 12, H + 18);
-        g.font = '11px system-ui, sans-serif'; g.fillStyle = C.muted;
-        g.fillText((withTiles ? 'Map ' + tileSource().credit : 'Map tiles left out: the tile service does not allow copying') + (creditLine() ? ' · ' + creditLine() : ''), 12, H + 36);
-        g.fillStyle = C.warn; g.fillText(CAUTION, 12, H + 54);
+        f.draw(g, H);
         return c;
       };
       let c = draw(true);
@@ -7268,17 +7518,32 @@ onmessage = e => {
     const data = new XMLSerializer().serializeToString(copy);
     const img = new Image();
     img.onload = () => {
-      const k = 2, foot = 86;
-      const c = document.createElement('canvas'); c.width = W * k; c.height = (H + foot) * k;
+      const k = 2, f = exportFoot(W, `${APP} — ${S.name} — ${view}`, settingsLine().replace('; ' + RIVER_CREDIT, ''));
+      const c = document.createElement('canvas'); c.width = W * k; c.height = (H + f.h) * k;
       const g = c.getContext('2d'); g.scale(k, k);
-      g.fillStyle = C.panel; g.fillRect(0, 0, W, H + foot); g.drawImage(img, 0, 0, W, H);
-      g.fillStyle = C.ink; g.font = '600 12px system-ui, sans-serif'; g.fillText(`${APP} — ${S.name} — ${view}`, 12, H + 18);
-      g.font = '11px system-ui, sans-serif'; g.fillStyle = C.muted; g.fillText(settingsLine().replace('; ' + RIVER_CREDIT, '').slice(0, 140), 12, H + 36);
-      g.fillStyle = C.warn; g.fillText(CAUTION, 12, H + 54);
-      if (creditLine()) { g.fillStyle = C.muted; g.fillText(creditLine(), 12, H + 72); }
+      g.fillStyle = C.panel; g.fillRect(0, 0, W, H); g.drawImage(img, 0, 0, W, H);
+      f.draw(g, H);
       c.toBlob(b => download(`river-flood-lab-${view}.png`, b), 'image/png');
     };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(data);
+  }
+  // The strip under every exported image: title, settings, caution and credits, wrapped to fit.
+  function exportFoot(W, title, settings, note) {
+    const m = document.createElement('canvas').getContext('2d'), bold = '600 12px system-ui, sans-serif', small = '11px system-ui, sans-serif', rows = [];
+    const wrap = (text, font, color) => {
+      m.font = font;
+      let line = '';
+      for (const word of text.split(' ')) {
+        const next = line ? line + ' ' + word : word;
+        if (line && m.measureText(next).width > W - 24) { rows.push({ text: line, font, color }); line = word; } else line = next;
+      }
+      if (line) rows.push({ text: line, font, color });
+    };
+    wrap(title, bold, C.ink); wrap(settings, small, C.muted); wrap(CAUTION, small, C.warn);
+    const credit = note || creditLine();
+    if (credit) wrap(credit, small, C.muted);
+    const h = 16 + rows.length * 16;
+    return { h, draw(g, y) { g.fillStyle = C.panel; g.fillRect(0, y, W, h); rows.forEach((r, i) => { g.font = r.font; g.fillStyle = r.color; g.fillText(r.text, 12, y + 18 + i * 16); }); } };
   }
   function save() {
     download('river-flood-lab-project.json', new Blob([JSON.stringify({ app: APP, version: VERSION, saved: new Date().toISOString(), caution: CAUTION, state: S }, null, 1)], { type: 'application/json' }));
@@ -7289,6 +7554,14 @@ onmessage = e => {
       if (!isNum(s.x) || !Array.isArray(s.pts) || s.pts.length < 3 || s.pts.some(p => !isNum(p[0]) || !isNum(p[1]))) return `Section ${s.id || '?'} is not readable.`;
       if (!s.banks || !isNum(s.banks.left) || !isNum(s.banks.right) || !s.n || !isNum(s.n.ch)) return `Section ${s.id || '?'} has no banks or roughness.`;
     }
+    if (st.name !== undefined && typeof st.name !== 'string') return 'The project name is not readable.';
+    for (const s of st.sections) {
+      if (!isNum(s.n.lob) || !isNum(s.n.rob) || !(s.n.lob > 0 && s.n.ch > 0 && s.n.rob > 0)) return `Section ${s.id || '?'} has no usable roughness.`;
+      for (let i = 1; i < s.pts.length; i++) if (s.pts[i][0] < s.pts[i - 1][0]) return `Section ${s.id || '?'}: ground points must run left to right.`;
+    }
+    const numeric = (list, keys, what) => { for (const e of list || []) if (!keys.every(k => isNum(e[k]))) return `${what} ${e.id || '?'} is not readable.`; return null; };
+    const badElement = numeric(st.obstructions, ['x0', 'x1', 'y0', 'y1', 'top'], 'Obstruction') || numeric(st.bridges, ['x', 'length', 'openLeft', 'openRight', 'lowChord', 'highChord'], 'Bridge') || numeric(st.walls, ['x0', 'x1', 'y', 'z'], 'Flood wall') || numeric(st.buildings, ['x', 'y', 'w', 'd', 'floor'], 'Building');
+    if (badElement) return badElement;
     for (const f of st.floats || []) if (![f.x0, f.x1, f.y0, f.y1, f.draft, f.height].every(isNum)) return `Floating object ${f.id || '?'} is not readable.`;
     for (const m of st.models || []) {
       const nv = Array.isArray(m.v) ? m.v.length / 3 : 0;
@@ -7370,7 +7643,10 @@ onmessage = e => {
   $('rf-caution-foot').textContent = CAUTION;
   document.querySelectorAll('.rf-views [data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
   document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => preset(b.dataset.preset)));
-  document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => addElement(b.dataset.add)));
+  document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => {
+    if (level === 'advanced' || !V3.ok || !RES || RES.error) addElement(b.dataset.add); else armPlacing(b.dataset.add);
+  }));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && V3.placing) { V3.placing = null; $('rf-3d').style.cursor = ''; $('rf-import-msg').textContent = ''; } });
   document.querySelectorAll('.rf-drawers [data-drawer]').forEach(b => b.addEventListener('click', () => {
     $('rf-root').dataset.drawer = b.dataset.drawer;
     document.querySelectorAll('.rf-drawers [data-drawer]').forEach(q => q.setAttribute('aria-pressed', String(q === b)));
@@ -7428,6 +7704,8 @@ onmessage = e => {
     $(id + '-out').textContent = key === 'n' ? (ARROWS.n || 'Off') : Math.round(ARROWS.size * 100) + '%';
     if (RES) renderActive();
   });
+  $('rf-terrain').addEventListener('click', () => $('rf-terrain-file').click());
+  $('rf-terrain-file').addEventListener('change', e => { if (e.target.files[0]) importTerrain(e.target.files[0]); e.target.value = ''; });
   $('rf-import').addEventListener('click', () => $('rf-obj').click());
   $('rf-obj').addEventListener('change', e => { if (e.target.files[0]) importObj(e.target.files[0]); e.target.value = ''; });
   $('rf-new').addEventListener('click', newReach);
@@ -7458,6 +7736,7 @@ onmessage = e => {
   applyLevel(location.hash === '#advanced' ? 'advanced' : 'basic');
   applyTheme(theme);
   renderEditor(); renderElements(); setView('3d'); run();
+  document.documentElement.classList.add('rf-ready');
   // Hook for the browser checks.
   window.RFL_UI = { get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, setView, get view() { return view; },
     // screen position (in the map) of the middle of a section, for the checks

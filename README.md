@@ -19,6 +19,8 @@ idealised channel with floodplains, not a survey) with one example bridge.
 - **Basic and Advanced:** the app opens in Basic, with plain words, the flow
   choices and the design tools. The *Advanced* button at the top (or `#advanced`
   on the address) shows every setting, result and technical term.
+- **Placing a design element:** in Basic, press its button, then click where it
+  goes in the 3D view. In Advanced it is added at the chosen section.
 - **Main result** (above the view): how much the design changes the water,
   which buildings flood and how clear each bridge is. *With design* and
   *Without* switch the 3D, Plan, Section and Profile views between the two.
@@ -37,6 +39,11 @@ idealised channel with floodplains, not a survey) with one example bridge.
   imported model can be set to float. It rises and falls with the water; only
   the part below the water blocks the flow, and water passes underneath. It
   cannot drift, because the model is steady.
+- **River from a terrain model:** *Build from a terrain model (.obj)* in River
+  shows the model from above. Click along the river from upstream to
+  downstream; sections are cut square to the line. Most terrain models do not
+  record the river bed, so a channel of the depth and width given is carved in
+  and the reach is labelled as estimated. The file stays in the browser.
 - **River** (left): the active reach, a new template reach, and the
   cross-section editor.
 - **Map** (middle): find a place (or type coordinates), press *Draw the

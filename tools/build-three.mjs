@@ -9,11 +9,12 @@
 
 import { build } from 'esbuild';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const root = new URL('../', import.meta.url);
 const version = JSON.parse(readFileSync(new URL('node_modules/three/package.json', root))).version;
 const out = await build({
-  entryPoints: [new URL('tools/three-entry.js', root).pathname],
+  entryPoints: [fileURLToPath(new URL('tools/three-entry.js', root))],
   bundle: true, minify: true, format: 'iife', globalName: 'RFL_THREE',
   legalComments: 'none', write: false, target: 'es2020',
 });
