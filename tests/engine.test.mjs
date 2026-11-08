@@ -224,6 +224,17 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('short abutments let the flood pass round them', RFL.wsAt(short, 200) < RFL.wsAt(full, 200) - 0.001, `${RFL.wsAt(full, 200).toFixed(3)} to ${RFL.wsAt(short, 200).toFixed(3)} m`);
 }
 
+// 8i. Low ground behind a ridge carries no flow until the water tops the ridge
+{
+  const pts = [[0, 5], [5, 1.5], [10, 1.5], [12, 3], [14, 3], [16, 0], [24, 0], [26, 3], [40, 3.2]];
+  const s = { id: 'r', x: 0, pts, n: { lob: 0.05, ch: 0.05, rob: 0.05 }, banks: { left: 14, right: 26 } };
+  const p = RFL.prepare({ sections: [s, { ...s, x: 50 }] }).preps[0];
+  const low = RFL.hydraulics(p, 2, 10), channel = RFL.wetted(pts, 2, 12, 40);
+  check('water behind a ridge carries no flow', near(low.A, channel.A, 1e-9), `area ${low.A.toFixed(3)} m\u00b2`);
+  const high = RFL.hydraulics(p, 3.5, 10), all = RFL.wetted(pts, 3.5, 0, 40);
+  check('water above the ridge joins the river', near(high.A, all.A, 1e-9), `area ${high.A.toFixed(3)} m\u00b2`);
+}
+
 // 9. Yarnell's pier equation against a hand calculation
 {
   // K 1.25, V 2 m/s, y 2 m, a 0.1: hv = 0.20387, w = 0.10194
