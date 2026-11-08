@@ -281,8 +281,8 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
         <div class="rf-kv"><span class="rf-lab">Sections</span><span id="rf-river-n"></span></div>
         <div class="rf-kv"><span class="rf-lab">Length</span><span id="rf-river-len"></span></div>
         <p class="rf-hint">Draw the river's course on the map, from upstream to downstream. Sections are cut square to your line; their levels come from the template shape until surveyed levels are entered.</p>
-        <button class="rf-btn rf-sq" type="button" id="rf-terrain">Build from a terrain model (.obj or .asc)</button>
-        <input type="file" id="rf-terrain-file" accept=".obj,.asc" multiple hidden>
+        <button class="rf-btn rf-sq" type="button" id="rf-terrain">Build from a terrain model (.tif, .asc or .obj)</button>
+        <input type="file" id="rf-terrain-file" accept=".tif,.tiff,.asc,.obj" multiple hidden>
         <button class="rf-btn rf-sq" type="button" id="rf-map-osm">Find rivers here (OpenStreetMap)</button>
         <p class="rf-hint">Loads the rivers and streams in the map view (up to 3 km across). Click one, then click where your reach starts and ends; OpenStreetMap's direction of flow sets which end is upstream. Or draw the line yourself:</p>
         <div class="rf-grid2">
@@ -349,6 +349,7 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
     <div class="rf-stage-tools">
       <label class="rf-glass" data-for="3d">Exaggeration <select class="rf-select" id="rf-vex" style="padding:1px 4px"><option value="1">1×</option><option value="2">2×</option><option value="3" selected>3×</option><option value="5">5×</option><option value="10">10×</option></select></label>
       <button class="rf-btn" type="button" id="rf-3d-reset" data-for="3d">Reset view</button>
+      <button class="rf-btn" type="button" id="rf-look" data-for="section" title="Turn round to see the other way along the river">Looking downstream</button>
       <span class="rf-glass rf-map-search" data-for="map"><input type="search" id="rf-map-q" placeholder="Place or 53.3626, -1.4721" aria-label="Find a place or type coordinates"><button class="rf-btn rf-small" type="button" id="rf-map-go">Go</button></span>
       <button class="rf-btn rf-sq" type="button" id="rf-map-out" data-for="map" aria-label="Zoom out">−</button>
       <button class="rf-btn rf-sq" type="button" id="rf-map-in" data-for="map" aria-label="Zoom in">+</button>
@@ -5211,7 +5212,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
   let level = 'basic';
   const ARROWS = { n: 6, size: 1 };
   const T = (tech, plain) => level === 'advanced' ? tech : plain;
-  let compare = false, showingBefore = false, activePreset = null;
+  let compare = false, showingBefore = false, activePreset = null, lookUp = false;
   const PLAIN = {
     'From chainage, m': 'Starts at, m along river', 'To chainage, m': 'Ends at, m along river',
     'From offset, m': 'Left edge, m across river', 'To offset, m': 'Right edge, m across river',
@@ -5230,6 +5231,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       return isNum(y) && isNum(w) && w > 0 ? { y, width: w } : null;
     }).filter(Boolean);
   }
+  const buildingHeight = b => b.height > 0 ? b.height : 3.5;
   function hasDesign() { return S.obstructions.length + S.bridges.length + S.walls.length + S.models.length + S.floats.length > 0; }
   const isFloating = m => m.floating === 'yes';
   const solidBlocks = () => S.models.filter(m => !isFloating(m)).flatMap(modelBlocks);
@@ -5609,43 +5611,43 @@ if (typeof module !== 'undefined') module.exports = RFL;
   // What can be seen past the cut, looking downstream: every design element
   // wholly on the downstream side, as outlines of { y0, y1, z0, z1 }.
   function elementsBeyond(s) {
-    const out = [], past = x => x < s.x - 1e-6;
+    const out = [], inView = (lo, hi) => lookUp ? lo > s.x + 1e-6 : hi < s.x - 1e-6, gap = (lo, hi) => lookUp ? lo - s.x : s.x - hi;
     const secAt = x => RES.sections.reduce((m, q) => Math.abs(q.x - x) < Math.abs(m.x - x) ? q : m);
     const low = (q, a, b) => Math.min(groundAtLocal(q.raw, a), groundAtLocal(q.raw, b));
-    const add = (name, far, boxes, smooth) => out.push({ name, away: s.x - far, boxes, top: Math.max(...boxes.map(b => b.z1)), smooth: !!smooth });
+    const add = (name, away, boxes, smooth) => out.push({ name, away, boxes, top: Math.max(...boxes.map(b => b.z1)), smooth: !!smooth });
     for (const b of S.bridges) {
-      if (!past(b.x + b.length)) continue;
+      if (!inView(b.x, b.x + b.length)) continue;
       const q = secAt(b.x), a = q.raw[0][0], z = q.raw[q.raw.length - 1][0], boxes = [{ y0: a, y1: z, z0: b.lowChord, z1: b.highChord }];
       if (b.openLeft > a) boxes.push({ y0: a, y1: b.openLeft, z0: low(q, a, b.openLeft), z1: b.lowChord });
       if (b.openRight < z) boxes.push({ y0: b.openRight, y1: z, z0: low(q, b.openRight, z), z1: b.lowChord });
       for (const p of parsePiers(b.piers)) boxes.push({ y0: p.y - p.width / 2, y1: p.y + p.width / 2, z0: q.bed, z1: b.lowChord });
-      add(b.label || b.id, b.x + b.length, boxes);
+      add(b.label || b.id, gap(b.x, b.x + b.length), boxes);
     }
     for (const o of S.obstructions) {
-      const far = Math.max(o.x0, o.x1); if (!past(far)) continue;
+      const nl = Math.min(o.x0, o.x1), nh = Math.max(o.x0, o.x1); if (!inView(nl, nh)) continue;
       const q = secAt((o.x0 + o.x1) / 2), a = Math.min(o.y0, o.y1), b = Math.max(o.y0, o.y1);
-      add(o.label || o.id, far, [{ y0: a, y1: b, z0: low(q, a, b), z1: o.top }]);
+      add(o.label || o.id, gap(nl, nh), [{ y0: a, y1: b, z0: low(q, a, b), z1: o.top }]);
     }
     for (const w of S.walls) {
-      const far = Math.max(w.x0, w.x1); if (!past(far)) continue;
+      const nl = Math.min(w.x0, w.x1), nh = Math.max(w.x0, w.x1); if (!inView(nl, nh)) continue;
       const q = secAt((w.x0 + w.x1) / 2);
-      add(w.label || 'Flood wall', far, [{ y0: w.y - 0.15, y1: w.y + 0.15, z0: groundAtLocal(q.raw, w.y), z1: w.z }]);
+      add(w.label || 'Flood wall', gap(nl, nh), [{ y0: w.y - 0.15, y1: w.y + 0.15, z0: groundAtLocal(q.raw, w.y), z1: w.z }]);
     }
     for (const b of S.buildings) {
-      const far = b.x + b.d / 2; if (!past(far)) continue;
+      const nl = b.x - b.d / 2, nh = b.x + b.d / 2; if (!inView(nl, nh)) continue;
       const g = groundAtLocal(secAt(b.x).raw, b.y);
-      add(b.label || b.id, far, [{ y0: b.y - b.w / 2, y1: b.y + b.w / 2, z0: Math.min(g, b.floor), z1: Math.max(b.floor, g) + 3.5 }]);
+      add(b.label || b.id, gap(nl, nh), [{ y0: b.y - b.w / 2, y1: b.y + b.w / 2, z0: Math.min(g, b.floor), z1: Math.max(b.floor, g) + buildingHeight(b) }]);
     }
     for (const f of S.floats) {
-      const far = Math.max(f.x0, f.x1); if (!past(far)) continue;
+      const nl = Math.min(f.x0, f.x1), nh = Math.max(f.x0, f.x1); if (!inView(nl, nh)) continue;
       const ws = RFL.wsAt(RES, (f.x0 + f.x1) / 2);
-      add(f.label || f.id, far, [{ y0: Math.min(f.y0, f.y1), y1: Math.max(f.y0, f.y1), z0: ws - f.draft, z1: ws + f.height }]);
+      add(f.label || f.id, gap(nl, nh), [{ y0: Math.min(f.y0, f.y1), y1: Math.max(f.y0, f.y1), z0: ws - f.draft, z1: ws + f.height }]);
     }
     for (const m of S.models) {
       const strips = modelBlocks(m); if (!strips.length) continue;
-      const far = Math.max(...strips.map(b => b.x1)); if (!past(far)) continue;
+      const nl = Math.min(...strips.map(b => b.x0)), nh = Math.max(...strips.map(b => b.x1)); if (!inView(nl, nh)) continue;
       const dz = floatShift(m), base = m.base + dz;
-      add(m.label || m.id, far, strips.map(b => ({ y0: b.y0, y1: b.y1, z0: base, z1: isFloating(m) ? base + modelGeo(m).size[2] : b.top })), true);
+      add(m.label || m.id, gap(nl, nh), strips.map(b => ({ y0: b.y0, y1: b.y1, z0: base, z1: isFloating(m) ? base + modelGeo(m).size[2] : b.top })), true);
     }
     return out;
   }
@@ -5679,6 +5681,8 @@ if (typeof module !== 'undefined') module.exports = RFL;
     zhi = Math.min(zhi, Math.max(s.egl, s.ws) + 3);
     const cuts = S.models.map(m => modelCut(m, s.x)).filter(Boolean);
     if (cuts.length) zhi = Math.max(zhi, ...cuts.map(c => c.top + 0.5));
+    const buildingsHere = S.buildings.filter(b => Math.abs(b.x - s.x) <= b.d / 2 + 1e-6).map(b => { const g0 = groundAtLocal(raw, b.y); return { b, z0: Math.min(g0, b.floor), z1: Math.max(b.floor, g0) + buildingHeight(b) }; });
+    if (buildingsHere.length) zhi = Math.max(zhi, ...buildingsHere.map(c => c.z1 + 0.5));
     const floatsHere = S.floats.filter(f => s.x >= Math.min(f.x0, f.x1) - 1e-6 && s.x <= Math.max(f.x0, f.x1) + 1e-6);
     if (floatsHere.length) zhi = Math.max(zhi, ...floatsHere.map(f => s.ws + f.height + 0.5));
     const beyond = elementsBeyond(s);
@@ -5687,7 +5691,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const box = { l: 46, r: W - 10, t: 42 + stageTop(host), b: H - 38 - stageBottom(host) };
     box.sx = lin(ymin, ymax, box.l, box.r); box.sy = lin(zlo, zhi, box.b, box.t);
     const { sx, sy } = box;
-    axes(svg, box, [ymin, ymax], [zlo, zhi], 'Across the river, m (looking downstream)', 'Level, m');
+    axes(svg, lookUp ? { ...box, sx: v => box.l + box.r - box.sx(v) } : box, [ymin, ymax], [zlo, zhi], `Across the river, m (looking ${lookUp ? 'upstream' : 'downstream'})`, 'Level, m');
     const clipId = host.id + '-clip';
     el('rect', { x: box.l, y: box.t, width: box.r - box.l, height: box.b - box.t }, el('clipPath', { id: clipId }, svg));
     const g = el('g', { 'clip-path': `url(#${clipId})` }, svg);
@@ -5715,8 +5719,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       el('rect', { x: sx(Math.max(ymin, bridge.openLeft)), y: sy(bridge.highChord), width: sx(Math.min(ymax, bridge.openRight)) - sx(Math.max(ymin, bridge.openLeft)), height: sy(bridge.lowChord) - sy(bridge.highChord), fill: `url(#${host.id}-deck)`, stroke: C.deck }, g);
     }
     // walls (levees) on this section
-    const sec = S.sections.find(q => Math.abs(q.x - s.x) < 1e-6);
-    for (const w of S.walls) if (sec && s.x >= Math.min(w.x0, w.x1) - 1e-6 && s.x <= Math.max(w.x0, w.x1) + 1e-6) {
+    for (const w of S.walls) if (s.x >= Math.min(w.x0, w.x1) - 1e-6 && s.x <= Math.max(w.x0, w.x1) + 1e-6) {
       el('line', { x1: sx(w.y), x2: sx(w.y), y1: sy(groundAtLocal(raw, w.y)), y2: sy(w.z), stroke: C.block, 'stroke-width': 4 }, g);
     }
     // banks
@@ -5728,9 +5731,16 @@ if (typeof module !== 'undefined') module.exports = RFL;
     for (const [p, q] of wetNow) el('line', { x1: sx(p), x2: sx(q), y1: sy(s.ws), y2: sy(s.ws), stroke: C.water, 'stroke-width': 2 }, g);
     if (ARROWS.n && wetNow.length) { const open = wetNow.reduce((m, w) => w[1] - w[0] > m[1] - m[0] ? w : m), cx = sx((open[0] + open[1]) / 2), cy = sy(s.ws) + 18, r = 9, k = r * 0.7;
       el('circle', { class: 'rf-flow', cx, cy, r, fill: C.panel, stroke: C.water, 'stroke-width': 2 }, g);
-      for (const q of [1, -1]) el('line', { x1: cx - k, x2: cx + k, y1: cy - q * k, y2: cy + q * k, stroke: C.water, 'stroke-width': 2 }, g); }
+      if (lookUp) el('circle', { cx, cy, r: 2.5, fill: C.water }, g);
+      else for (const q of [1, -1]) el('line', { x1: cx - k, x2: cx + k, y1: cy - q * k, y2: cy + q * k, stroke: C.water, 'stroke-width': 2 }, g); }
     const stretch = ((box.b - box.t) / (zhi - zlo)) / ((box.r - box.l) / (ymax - ymin));
     if (stretch > 1.25) el('text', { x: box.r, y: 30 + stageTop(host), 'text-anchor': 'end', fill: C.muted }, svg).textContent = `Not to scale: heights drawn ${stretch.toFixed(0)}× larger than widths`;
+    for (const { b, z0, z1 } of buildingsHere) {
+      const ya = b.y - b.w / 2, yb = b.y + b.w / 2, wet = s.ws > b.floor;
+      el('rect', { class: 'rf-cut-building', x: sx(ya), y: sy(z1), width: sx(yb) - sx(ya), height: sy(z0) - sy(z1), fill: wet ? C.bad : C.deck, stroke: C.ink, 'stroke-width': 1.5 }, g);
+      el('line', { x1: sx(ya), x2: sx(yb), y1: sy(b.floor), y2: sy(b.floor), stroke: C.panel, 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }, g);
+      el('text', { x: sx(b.y), y: sy(z1) - 6, 'text-anchor': 'middle', fill: C.ink, 'font-weight': 600 }, g).textContent = b.label || b.id;
+    }
     for (const f of floatsHere) {
       const ya = Math.min(f.y0, f.y1), yb = Math.max(f.y0, f.y1);
       el('rect', { class: 'rf-float', x: sx(ya), y: sy(s.ws + f.height), width: sx(yb) - sx(ya), height: sy(s.ws - f.draft) - sy(s.ws + f.height), fill: FLOAT_COLOUR, stroke: C.ink, 'stroke-width': 1.5 }, g);
@@ -5742,8 +5752,12 @@ if (typeof module !== 'undefined') module.exports = RFL;
       el('path', { class: 'rf-model-cut', d, fill: C.deck, 'fill-rule': 'evenodd', stroke: C.ink, 'stroke-width': 1.8, 'stroke-linejoin': 'round' }, g);
       el('text', { x: sx(c.mid), y: sy(c.top) - 6, 'text-anchor': 'middle', fill: C.ink, 'font-weight': 600 }, g).textContent = c.name;
     }
+    if (lookUp) {
+      g.setAttribute('transform', `translate(${box.l + box.r}, 0) scale(-1, 1)`);
+      g.querySelectorAll('text').forEach(t => { const x = +t.getAttribute('x'); t.setAttribute('transform', `translate(${2 * x}, 0) scale(-1, 1)`); });
+    }
     el('text', { x: box.l, y: 15 + stageTop(host), fill: C.ink, 'font-weight': 600 }, svg).textContent = T(`${s.id} at ${s.x.toFixed(1)} m`, `Section at ${s.x.toFixed(0)} m along the river`) + (showingBefore ? ' · without your design' : '') + (isNum(baseWs) && Math.abs(baseWs - s.ws) > 5e-4 ? ` · ${sgn(s.ws - baseWs)} m vs without design` : '');
-    el('text', { x: box.l, y: 30 + stageTop(host), fill: C.muted }, svg).textContent = T(`water ${f2(s.ws)} m · depth ${f2(s.depth)} m · V ${f2(s.V)} m/s · Fr ${f2(s.Fr)} · ⊗ flow away from you`, `water level ${f2(s.ws)} m · depth ${f2(s.depth)} m · ⊗ the river flows away from you`);
+    el('text', { x: box.l, y: 30 + stageTop(host), fill: C.muted }, svg).textContent = T(`water ${f2(s.ws)} m · depth ${f2(s.depth)} m · V ${f2(s.V)} m/s · Fr ${f2(s.Fr)} · ${lookUp ? '⊙ flow towards you' : '⊗ flow away from you'}`, `water level ${f2(s.ws)} m · depth ${f2(s.depth)} m · ${lookUp ? '⊙ the river flows towards you' : '⊗ the river flows away from you'}`);
     return svg;
   }
   function groundAtLocal(pts, y) {
@@ -6034,6 +6048,70 @@ onmessage = e => {
     let m = /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/.exec(t) || /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/.exec(t) || /^(-?\d+(?:\.\d+)?)[\s,;]+(-?\d+(?:\.\d+)?)$/.exec(t);
     return m ? [+m[1], +m[2]] : null;
   }
+  // A GeoTIFF height grid: 32-bit floats, one band, tiled or striped, uncompressed or LZW.
+  function lzwDecode(src, size) {
+    const out = new Uint8Array(size), prefix = new Int32Array(4096), suffix = new Uint8Array(4096), len = new Int32Array(4096);
+    for (let i = 0; i < 256; i++) { prefix[i] = -1; suffix[i] = i; len[i] = 1; }
+    let bit = 0, bits = 9, next = 258, prev = -1, op = 0;
+    const end = src.length * 8;
+    const emit = c => { let p = op + len[c] - 1, k = c; op += len[c]; while (k >= 0 && p >= 0) { if (p < size) out[p] = suffix[k]; p--; k = prefix[k]; } };
+    while (bit + bits <= end && op < size) {
+      const b = bit >> 3, code = (((src[b] << 16) | (src[b + 1] << 8) | src[b + 2]) >> (24 - (bit & 7) - bits)) & ((1 << bits) - 1);
+      bit += bits;
+      if (code === 257) break;
+      if (code === 256) { bits = 9; next = 258; prev = -1; continue; }
+      if (prev < 0) { if (code > 255) return null; out[op++] = code; prev = code; continue; }
+      if (code > next) return null;
+      if (code < next) {
+        const start = op; emit(code);
+        prefix[next] = prev; suffix[next] = out[start]; len[next] = len[prev] + 1;
+      } else {
+        const first = out[op - len[prev]];
+        prefix[next] = prev; suffix[next] = first; len[next] = len[prev] + 1;
+        emit(next);
+      }
+      next++;
+      if (next >= (1 << bits) - 1 && bits < 12) bits++;
+      prev = code;
+    }
+    return out;
+  }
+  function parseTiff(buffer) {
+    const dv = new DataView(buffer), bytes = new Uint8Array(buffer), order = dv.getUint16(0, false);
+    if (order !== 0x4949 && order !== 0x4D4D) return { error: 'That is not a readable TIFF file.' };
+    const le = order === 0x4949;
+    if (dv.getUint16(2, le) !== 42) return { error: 'That TIFF uses the BigTIFF format, which cannot be read here. Use the 1 m tile from Defra.' };
+    const ifd = dv.getUint32(4, le), count = dv.getUint16(ifd, le), tags = {}, unit = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 11: 4, 12: 8 };
+    for (let i = 0; i < count; i++) {
+      const e = ifd + 2 + i * 12, tag = dv.getUint16(e, le), type = dv.getUint16(e + 2, le), n = dv.getUint32(e + 4, le), w = unit[type] || 1, at = n * w <= 4 ? e + 8 : dv.getUint32(e + 8, le);
+      if (type === 2) { tags[tag] = new TextDecoder().decode(bytes.subarray(at, at + n)).replace(/\0.*$/, ''); continue; }
+      const v = []; for (let k = 0; k < n; k++) { const o = at + k * w; v.push(type === 3 ? dv.getUint16(o, le) : type === 4 ? dv.getUint32(o, le) : type === 11 ? dv.getFloat32(o, le) : type === 12 ? dv.getFloat64(o, le) : bytes[o]); }
+      tags[tag] = v;
+    }
+    const nx = tags[256] && tags[256][0], ny = tags[257] && tags[257][0], comp = tags[259] ? tags[259][0] : 1;
+    if (!nx || !ny) return { error: 'That TIFF has no image size.' };
+    if (!tags[33550] || !tags[33922]) return { error: 'That TIFF does not say where it is on the ground.' };
+    if ((tags[258] || [0])[0] !== 32 || (tags[339] || [0])[0] !== 3 || (tags[277] || [1])[0] !== 1) return { error: 'That TIFF is not a 32-bit height grid. Use the 1 m DTM tile from Defra.' };
+    if (comp !== 1 && comp !== 5) return { error: 'That TIFF uses a compression that cannot be read here. Save it as ASC instead.' };
+    if ((tags[317] || [1])[0] !== 1) return { error: 'That TIFF uses a predictor that cannot be read here. Save it as ASC instead.' };
+    if (nx * ny > 26e6) return { error: 'That TIFF is too large. Use a single 5 km tile.' };
+    const tiled = !!tags[322], tw = tiled ? tags[322][0] : nx, th = tiled ? tags[323][0] : (tags[278] ? tags[278][0] : ny);
+    const offsets = tiled ? tags[324] : tags[273], counts = tiled ? tags[325] : tags[279];
+    if (!offsets || !counts) return { error: 'That TIFF has no image data.' };
+    const across = tiled ? Math.ceil(nx / tw) : 1, nd = tags[42113] ? parseFloat(tags[42113]) : NaN, z = new Float32Array(nx * ny).fill(NaN);
+    for (let t = 0; t < offsets.length; t++) {
+      const col = t % across, row = Math.floor(t / across), rows = tiled ? th : Math.min(th, ny - row * th), width = tiled ? tw : nx, size = width * rows * 4;
+      const raw = bytes.subarray(offsets[t], offsets[t] + counts[t]), data = comp === 5 ? lzwDecode(raw, size) : raw;
+      if (!data || data.length < size) return { error: 'Part of that TIFF could not be read.' };
+      const px = new DataView(data.buffer, data.byteOffset, size), xs = col * tw, ys = row * th;
+      for (let j = 0; j < rows && ys + j < ny; j++) for (let i = 0; i < width && xs + i < nx; i++) {
+        const v = px.getFloat32((j * width + i) * 4, le);
+        if (v > -1e4 && v !== nd) z[(ny - 1 - ys - j) * nx + xs + i] = v;
+      }
+    }
+    const cell = tags[33550][0], left = tags[33922][3] - tags[33922][0] * cell, top = tags[33922][4] + tags[33922][1] * cell;
+    return { nx, ny, cell, x0: left + cell / 2, y0: top - cell * (ny - 0.5), z };
+  }
   // One or more ESRI ASCII grids on the same cell size, joined into a height grid.
   function parseAsc(text) {
     let at = 0;
@@ -6053,7 +6131,7 @@ onmessage = e => {
     if (tiles.some(t => Math.abs(t.cell - cell) > 1e-6)) return { error: 'All the tiles need the same cell size.' };
     const E0 = Math.min(...tiles.map(t => t.x0)), N0 = Math.min(...tiles.map(t => t.y0));
     const nx = Math.round((Math.max(...tiles.map(t => t.x0 + (t.nx - 1) * t.cell)) - E0) / cell) + 1, ny = Math.round((Math.max(...tiles.map(t => t.y0 + (t.ny - 1) * t.cell)) - N0) / cell) + 1;
-    if (nx * ny > 25e6) return { error: 'Those tiles cover too large an area together. Choose fewer tiles.' };
+    if (nx * ny > 64e6) return { error: 'Those tiles cover too large an area together. Choose up to two 5 km tiles.' };
     const g = new Float32Array(nx * ny).fill(NaN);
     let zlo = Infinity, zhi = -Infinity;
     for (const t of tiles) {
@@ -6097,12 +6175,14 @@ onmessage = e => {
       let a = yc, b = yc;
       while (a - step >= 0 && ground(a - step) !== null) a -= step;
       while (b + step <= 2 * yc && ground(b + step) !== null) b += step;
-      cuts.push({ x, ground, a, b, gL: ground(yL), gR: ground(yR), yL, yR, size });
+      let low = Infinity; for (let y = yL; y <= yR; y += 1) low = Math.min(low, ground(y) ?? low);
+      cuts.push({ x, ground, a, b, gL: ground(yL), gR: ground(yR), yL, yR, size, low });
     }
     // Bank tops smoothed along the river, so one rough cell does not set the depth.
     const smooth = key => cuts.map((_, i) => { const part = cuts.slice(Math.max(0, i - 3), i + 4).map(q => q[key]); return part.reduce((s, v) => s + v, 0) / part.length; });
     const sL = smooth('gL'), sR = smooth('gR');
-    const beds = cuts.map((q, i) => Math.min(sL[i], sR[i]) - q.size.depth);
+    // never above the ground already there: detailed terrain can show the channel itself
+    const beds = cuts.map((q, i) => Math.min(Math.min(sL[i], sR[i]) - q.size.depth, q.low));
     // best-fit bed that never rises going downstream, always below the banks
     const blocks = [];
     for (const b of beds) { blocks.push({ sum: b, n: 1 }); while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].n > blocks[blocks.length - 1].sum / blocks[blocks.length - 1].n) { const t = blocks.pop(), u = blocks[blocks.length - 1]; u.sum += t.sum; u.n += t.n; } }
@@ -6248,7 +6328,7 @@ onmessage = e => {
       p.measures.sort((a, b) => a[0] - b[0]);
       const r = terrainReach(T, pts, p);
       if (r.error) { msg.textContent = r.error; return; }
-      const d = defaultState(), river = fileName.replace(/\.(obj|asc)$/i, ''), note = !p.carve ? 'terrain from a 3D model, not surveyed' : p.measures.length ? 'terrain with a channel from site measurements, not surveyed' : 'terrain from a 3D model; river channel estimated, not surveyed';
+      const d = defaultState(), river = fileName.replace(/\.(obj|asc|tiff?)$/i, ''), note = !p.carve ? 'terrain from a 3D model, not surveyed' : p.measures.length ? 'terrain with a channel from site measurements, not surveyed' : 'terrain from a 3D model; river channel estimated, not surveyed';
       S = { ...d, name: `${river} (${note})`, geo: r.g, sections: r.sections, bridges: [], flow: { ...S.flow }, eddy: { ...S.eddy }, boundary: { ...d.boundary, slope: +r.slope.toFixed(5) } };
       bendLengths();
       editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = ''; compare = false; MAP.centred = false;
@@ -6258,19 +6338,24 @@ onmessage = e => {
     load();
   }
   function importTerrain(files) {
-    const msg = $('rf-map-msg'), asc = files.filter(f => /\.asc$/i.test(f.name));
+    const msg = $('rf-map-msg'), grids = files.filter(f => /\.(asc|tif|tiff)$/i.test(f.name));
     if (files.reduce((s, f) => s + f.size, 0) > 400e6) { msg.textContent = 'Those files are over 400 MB together. Choose fewer tiles.'; return; }
-    if (asc.length) {
-      if (asc.length !== files.length) { msg.textContent = 'Choose either ASC tiles or one OBJ file, not both.'; return; }
-      msg.textContent = 'Reading the terrain…';
-      Promise.all(asc.map(f => f.text())).then(texts => {
+    if (grids.length) {
+      if (grids.length !== files.length) { msg.textContent = 'Choose either terrain tiles (.tif or .asc) or one OBJ file, not both.'; return; }
+      msg.textContent = 'Reading the terrain. A 5 km tile can take a few seconds…';
+      (async () => {
+        await new Promise(r => setTimeout(r, 30));
         const tiles = [];
-        for (const t of texts) { const p = parseAsc(t); if (p.error) { msg.textContent = p.error; return; } tiles.push(p); }
+        for (const f of grids) {
+          const p = /\.asc$/i.test(f.name) ? parseAsc(await f.text()) : parseTiff(await f.arrayBuffer());
+          if (p.error) { msg.textContent = p.error; return; }
+          tiles.push(p);
+        }
         const T = gridTerrain(tiles);
         if (T.error) { msg.textContent = T.error; return; }
         msg.textContent = '';
-        terrainDialog(null, asc.length > 1 ? 'LIDAR terrain.asc' : asc[0].name, T);
-      }).catch(() => { msg.textContent = 'Those files could not be read.'; });
+        terrainDialog(null, grids.length > 1 ? 'LIDAR terrain.tif' : grids[0].name, T);
+      })().catch(() => { msg.textContent = 'Those files could not be read.'; });
       return;
     }
     if (files.length !== 1) { msg.textContent = 'Choose one OBJ file at a time.'; return; }
@@ -6963,7 +7048,7 @@ onmessage = e => {
   }
   function down3D(ev) {
     if (ev.button !== 0 || !V3.ok || !RES || RES.error) return;
-    if (V3.placing) { V3.press = { x: ev.clientX, y: ev.clientY }; return; }
+    if (V3.placing) { V3.press = { x: ev.clientX, y: ev.clientY }; V3.controls.enabled = false; return; }
     const ray = ray3D(ev), el = pickElement(ray);
     V3.press = { x: ev.clientX, y: ev.clientY };
     if (el) {
@@ -7002,6 +7087,13 @@ onmessage = e => {
     if (d) {
       V3.drag = null; V3.controls.enabled = true; $('rf-3d').style.cursor = '';
       if (d.type === 'element') renderElements(d.el.k + d.el.i);
+      return;
+    }
+    // While placing, a hand that moves a little during the click still places it.
+    if (press && V3.placing && V3.ok && RES && !RES.error) {
+      V3.controls.enabled = true;
+      const spot = groundUnder(ray3D(ev));
+      if (spot) placeAt(V3.placing, spot); else $('rf-import-msg').textContent = 'Click on the ground in the 3D view, or press Esc to cancel.';
       return;
     }
     // A plain click on the ground puts the section line there.
@@ -7175,7 +7267,7 @@ onmessage = e => {
       tag = { k: 'buildings', i };
       const s = nearest(b.x), g = groundAtLocal(s.raw, b.y), flooded = bres[i].depth > 0;
       const base = Math.min(g, b.floor);
-      box(b.x - b.d / 2, b.x + b.d / 2, b.y - b.w / 2, b.y + b.w / 2, base, Math.max(b.floor, g) + 3.5, flooded ? 0xc0392b : 0xb8bcc2);
+      box(b.x - b.d / 2, b.x + b.d / 2, b.y - b.w / 2, b.y + b.w / 2, base, Math.max(b.floor, g) + buildingHeight(b), flooded ? 0xc0392b : 0xb8bcc2);
       box(b.x - b.d / 2 - 0.2, b.x + b.d / 2 + 0.2, b.y - b.w / 2 - 0.2, b.y + b.w / 2 + 0.2, b.floor - 0.02, b.floor + 0.02, 0xffffff, 0.9);
     });
     // eddy zones, lying on the water
@@ -7223,7 +7315,7 @@ onmessage = e => {
     S.buildings.forEach((b, i) => {
       if (!isNum(bres[i].depth)) return;
       const q = nearest(b.x), g = groundAtLocal(q.raw, b.y), wet = bres[i].depth > 0;
-      label(P(b.x, b.y, Math.max(b.floor, g) + 3.5), wet ? `${f2(bres[i].depth)} m flooded` : 'Dry', wet ? 'rf-bad' : '');
+      label(P(b.x, b.y, Math.max(b.floor, g) + buildingHeight(b)), wet ? `${f2(bres[i].depth)} m flooded` : 'Dry', wet ? 'rf-bad' : '');
     });
     V3.meshes = V3.group.children.length;
     if (!V3.fitted) fit3D();
@@ -7375,7 +7467,7 @@ onmessage = e => {
       host.innerHTML = `<div class="rf-kv"><span>Water depth</span><span class="rf-lab">m</span></div><div class="rf-ramp" style="${view === 'plan' ? 'background:var(--rf-water-fill)' : ''}"></div>` +
         (view === '3d' ? '<div class="rf-kv rf-lab rf-mono"><span>0</span><span>1.25</span><span>2.5+</span></div>' : '') +
         line('var(--rf-eddy)', T('Eddy zone (separated flow, not computed)', 'Still water beside a blockage (not computed)')) + line('var(--rf-block)', 'Obstruction or flood wall') + line('var(--rf-deck)', 'Bridge') + (S.floats.length || S.models.some(isFloating) ? line(FLOAT_COLOUR, 'Floating object') : '') + line('var(--rf-bad)', 'Building with water over its floor') +
-        `<p class="rf-hint">${view === '3d' ? 'White arrows show which way the water flows. Drag a design element to move it. Drag the blue line, or click the ground, to choose where the section cuts. Levels are exaggerated vertically. Buildings are drawn 3.5 m above their floor as a placeholder height.' : 'Arrows show which way the water flows. Click a section line to choose it.'}</p>`;
+        `<p class="rf-hint">${view === '3d' ? 'White arrows show which way the water flows. Drag a design element to move it. Drag the blue line, or click the ground, to choose where the section cuts. Levels are exaggerated vertically. Set the height of a building on its card.' : 'Arrows show which way the water flows. Click a section line to choose it.'}</p>`;
     } else {
       host.innerHTML = line('var(--rf-water)', 'Water level') + (level === 'advanced' ? line('var(--rf-egl)', 'Energy line', true) : '') + line('var(--rf-base)', 'Without design elements', true) + line('var(--rf-ground)', 'Ground and bed') +
         (view === 'section' ? line('var(--rf-eddy)', T('Eddy zone', 'Still water')) + line('var(--rf-block)', 'Blocked area') + (viewSection() && elementsBeyond(viewSection()).length ? line('var(--rf-muted)', 'Beyond the cut, in the view') : '') + (S.floats.length ? line(FLOAT_COLOUR, 'Floating object') : '') + (viewSection() && S.models.some(m => modelCut(m, viewSection().x)) ? line('var(--rf-deck)', 'Your model, cut at this section') : '') : line('var(--rf-deck)', 'Bridge deck'));
@@ -7421,6 +7513,8 @@ onmessage = e => {
       else if (r.depth > -0.3) chips.push(chip(`${name}: floor only ${f2(-r.depth)} m above the water`, 'rf-warn'));
       else chips.push(chip(`${name}: floor ${f2(-r.depth)} m above the water`, 'rf-good'));
     });
+    const wallsInRiver = S.walls.filter(w => RES.sections.some(s => s.x >= Math.min(w.x0, w.x1) && s.x <= Math.max(w.x0, w.x1) && w.y > s.banks.left && w.y < s.banks.right));
+    for (const w of wallsInRiver) chips.push(chip(`${w.label || w.id} stands inside the river channel, so the water on one side of it is cut off from the flow. Move it to a bank: this usually raises the water a lot.`, 'rf-warn'));
     const aground = new Set();
     for (const f of floatBoxes()) for (const s of RES.sections) {
       if (s.x < f.x0 - 1e-6 || s.x > f.x1 + 1e-6) continue;
@@ -7475,7 +7569,7 @@ onmessage = e => {
     obstructions: [['along', 'Distance along river, m'], ['len', 'Length along river, m'], ['left', 'Distance from left side, m'], ['wid', 'Width across river, m'], ['top', 'Top level, m']],
     bridges: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['length', 'Bridge width, m'], ['openAt', 'Opening, distance from left side, m'], ['openW', 'Width of opening, m'], ['lowChord', 'Soffit level, m'], ['highChord', 'Deck top, m'], ['piers', 'Piers (distance from left:width, …)', 'text'], ['pierK', 'Pier shape', 'pier']],
     walls: [['side', 'Bank', 'side'], ['along', 'Distance along river, m'], ['len', 'Length of wall, m'], ['y', 'Distance from left side, m'], ['z', 'Crest level, m']],
-    buildings: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['w', 'Width across river, m'], ['d', 'Length along river, m'], ['floor', 'Floor level, m']],
+    buildings: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['w', 'Width across river, m'], ['d', 'Length along river, m'], ['floor', 'Floor level, m'], ['height', 'Height above floor, m', 'hslide']],
   };
   FIELDS.models = [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['rot', 'Rotation', 'rot'], ['scale', 'Scale (1 = metres)'], ['base', 'Base level, m'], ['up', 'Which way is up', 'axis'], ['floating', 'Floats on the water', 'float'], ['draft', 'Depth below the water, m']];
   FIELDS.floats = [['label', 'Name', 'text'], ['along', 'Distance along river, m'], ['len', 'Length along river, m'], ['left', 'Distance from left side, m'], ['wid', 'Width across river, m'], ['draft', 'Depth below the water, m'], ['height', 'Height above the water, m']];
@@ -7516,7 +7610,7 @@ onmessage = e => {
     if (kind === 'obstructions') return { id, x0: s.x, x1: s.x + 4, y0: (bl + br) / 2 - 1, y1: (bl + br) / 2 + 1, top: +(bank + 1).toFixed(2) };
     if (kind === 'bridges') return { id, label: `Bridge ${n}`, x: s.x, length: 8, openLeft: bl - 2, openRight: br + 2, lowChord: +(bank + 0.8).toFixed(2), highChord: +(bank + 1.6).toFixed(2), piers: '', pierK: 1.25 };
     if (kind === 'walls') return { id, side: 'left', x0: s.x - 30, x1: s.x + 30, y: bl - 2, z: +(bank + 1).toFixed(2) };
-    return { id, label: `Building ${n}`, x: s.x, y: Math.max(2, bl - 10), w: 8, d: 12, floor: +(groundAtLocal(s.pts, Math.max(2, bl - 10)) + 0.15).toFixed(2) };
+    return { id, label: `Building ${n}`, x: s.x, y: Math.max(2, bl - 10), w: 8, d: 12, floor: +(groundAtLocal(s.pts, Math.max(2, bl - 10)) + 0.15).toFixed(2), height: 3.5 };
   }
   const KIND = { obstructions: 'Obstruction', bridges: 'Bridge', walls: 'Flood wall', buildings: 'Building', models: 'Imported model', floats: 'Floating object' };
   function renderElements(openKey) {
@@ -7526,6 +7620,7 @@ onmessage = e => {
       FIELDS[k].map(([f, tech, type]) => {
         const lab = T(tech, PLAIN[tech] || tech);
         const wide = type === 'text' && f !== 'label' ? ' rf-wide2' : '';
+        if (type === 'hslide') return `<label class="rf-wide2">${lab}<span class="rf-dlg-slide"><input type="range" min="2" max="60" step="0.5" data-f="${f}" value="${buildingHeight(it)}" aria-label="${lab}" style="flex:1;min-width:0;padding:0;border:0;background:none"><input type="number" min="1" step="0.5" data-f="${f}" value="${buildingHeight(it)}" style="flex:none;width:76px"></span></label>`;
         if (type === 'float') return `<label>${lab}<select data-f="${f}"><option value="no"${it[f] !== 'yes' ? ' selected' : ''}>No, solid to the ground</option><option value="yes"${it[f] === 'yes' ? ' selected' : ''}>Yes, moored</option></select></label>`;
         if (type === 'axis') return `<label>${lab}<select data-f="${f}"><option value="y"${it[f] !== 'z' ? ' selected' : ''}>Y is up (most exports)</option><option value="z"${it[f] === 'z' ? ' selected' : ''}>Z is up</option></select></label>`;
         if (type === 'rot') return `<label class="rf-wide2">${lab}: <output>${it[f]}°</output><input type="range" min="-180" max="180" step="1" data-f="${f}" value="${it[f]}"></label>`;
@@ -7543,6 +7638,7 @@ onmessage = e => {
         else { const v = parseFloat(inp.value); if (isNum(v)) it[f] = v; else { inp.value = it[f]; return; } }
         if (f === 'label') d.querySelector('.rf-el-name').textContent = it.label;
         if (type === 'rot') inp.parentElement.querySelector('output').textContent = it[f] + '°';
+        if (type === 'hslide') { if (!(it[f] > 0)) it[f] = 3.5; d.querySelectorAll(`[data-f=${f}]`).forEach(o => { if (o !== inp) o.value = it[f]; }); }
         schedule();
       }));
       d.querySelector('[data-del]').addEventListener('click', () => { S[k].splice(+d.dataset.i, 1); renderElements(); schedule(); });
@@ -7856,6 +7952,7 @@ onmessage = e => {
   });
   $('rf-terrain').addEventListener('click', () => $('rf-terrain-file').click());
   $('rf-terrain-file').addEventListener('change', e => { if (e.target.files.length) importTerrain([...e.target.files]); e.target.value = ''; });
+  $('rf-look').addEventListener('click', () => { lookUp = !lookUp; $('rf-look').textContent = lookUp ? 'Looking upstream' : 'Looking downstream'; renderActive(); });
   $('rf-import').addEventListener('click', () => $('rf-obj').click());
   $('rf-obj').addEventListener('change', e => { if (e.target.files[0]) importObj(e.target.files[0]); e.target.value = ''; });
   $('rf-new').addEventListener('click', newReach);
