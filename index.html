@@ -246,7 +246,11 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
           <button class="rf-btn rf-sq" type="button" data-add="bridges">+ Bridge</button>
           <button class="rf-btn rf-sq" type="button" data-add="walls">+ Flood wall</button>
           <button class="rf-btn rf-sq" type="button" data-add="buildings">+ Building</button>
+          <button class="rf-btn rf-sq" type="button" data-add="floats" style="grid-column:1/-1">+ Floating object</button>
         </div>
+        <button class="rf-btn rf-sq" type="button" id="rf-import">Import a 3D model (.obj)</button>
+        <input type="file" id="rf-obj" accept=".obj" hidden>
+        <p class="rf-hint" id="rf-import-msg" role="status"></p>
         <div id="rf-elements" class="rf-notes"></div>
         <details class="rf-adv">
           <summary class="rf-lab" style="cursor:pointer">Eddy zones</summary>
@@ -4760,7 +4764,20 @@ const RFL = (() => {
       if (b > a) for (const [p, q] of subtractSpans(a, b, spans)) {
         const w = wetted(pts, ws, p, q, prep.ceil);
         A += w.A; P += w.P; T += w.T;
+        // A floating object: the water above its underside is gone, and its
+        // underside and sides become wetted perimeter. Flow passes beneath it.
+        for (const f of prep.floats || []) {
+          const l = Math.max(p, f.y0), r = Math.min(q, f.y1);
+          if (!(r > l)) continue;
+          const whole = wetted(pts, ws, l, r, prep.ceil), under = wetted(pts, ws - f.draft, l, r, prep.ceil);
+          A -= whole.A - under.A; P += under.T; T -= whole.T;
+          const side = y => Math.min(f.draft, Math.max(0, ws - groundAt(pts, y)));
+          if (f.y0 >= l && f.y0 < r) P += side(f.y0);
+          if (f.y1 > l && f.y1 <= r) P += side(f.y1);
+        }
       }
+      if (A < 0) A = 0;
+      if (T < 0) T = 0;
       // Water above an end of the ground line is held by a vertical wall.
       if (key === 'lob' && ws > pts[0][1] && !spans.some(([c]) => c <= ymin)) { P += ws - pts[0][1]; out.flags.push('wall-left'); }
       if (key === 'rob' && ws > pts[pts.length - 1][1] && !spans.some(([, d]) => d >= ymax)) { P += ws - pts[pts.length - 1][1]; out.flags.push('wall-right'); }
@@ -4791,7 +4808,7 @@ const RFL = (() => {
   // Water level of least specific energy (critical depth).
   const criticalMemo = new Map();
   function criticalWS(prep, Q) {
-    const key = JSON.stringify([Q, prep.pts, prep.banks, prep.n, prep.excl, prep.ceil]);
+    const key = JSON.stringify([Q, prep.pts, prep.banks, prep.n, prep.excl, prep.ceil, prep.floats]);
     let wc = criticalMemo.get(key);
     if (wc === undefined) {
       if (criticalMemo.size > 20000) criticalMemo.clear();
@@ -4879,7 +4896,7 @@ const RFL = (() => {
   function blockages(model) {
     const list = [];
     for (const ob of model.obstructions || []) {
-      list.push({ kind: 'obstruction', id: ob.id, x0: ob.x0, x1: ob.x1, blocks: [{ y0: ob.y0, y1: ob.y1, top: ob.top }] });
+      list.push({ kind: 'obstruction', id: ob.id, x0: ob.x0, x1: ob.x1, blocks: [{ y0: ob.y0, y1: ob.y1, top: ob.top, noEddy: !!ob.noEddy }] });
     }
     for (const br of model.bridges || []) {
       const blocks = [{ y0: -Infinity, y1: br.openLeft, top: br.highChord }, { y0: br.openRight, y1: Infinity, top: br.highChord }];
@@ -4930,19 +4947,21 @@ const RFL = (() => {
     const addAt = x => { const s = sectionAt(secs, x); if (s && !extra.some(e => Math.abs(e.x - x) < 1e-6)) extra.push(s); };
     const walls = model.walls || [];
     for (const b of blk) {
-      const xs = b.kind === 'bridge' ? [b.x0, b.x1] : (secs.some(s => s.x >= b.x0 && s.x <= b.x1) ? [] : [(b.x0 + b.x1) / 2]);
+      const xs = b.kind === 'bridge' || b.blocks.some(k => k.noEddy) ? [b.x0, b.x1] : (secs.some(s => s.x >= b.x0 && s.x <= b.x1) ? [] : [(b.x0 + b.x1) / 2]);
       xs.forEach(addAt);
     }
     // An eddy zone acts only at the sections inside it, so a zone shorter than
     // the section spacing is given a section at its middle.
     if (eddy.on) for (const b of blk) for (const k of b.blocks) {
-      if (k.pier) continue;
+      if (k.pier || k.noEddy) continue;
       const ends = secs[0].pts, ymin = ends[0][0], ymax = ends[ends.length - 1][0];
       const covered = (lo, hi) => secs.concat(extra).some(s => s.x > lo + 1e-6 && s.x < hi - 1e-6);
       const dn = eddyLength(k, eddy.er, ymin, ymax), up = eddyLength(k, eddy.cr, ymin, ymax);
       if (dn > 0 && !covered(b.x0 - dn, b.x0)) addAt(b.x0 - dn / 2);
       if (up > 0 && !covered(b.x1, b.x1 + up)) addAt(b.x1 + up / 2);
     }
+    // A floating object acts along its whole length, so it has a section at each end.
+    for (const f of model.floats || []) { addAt(f.x0); addAt(f.x1); }
     // Extra chainages asked for, so two runs can be compared section by section.
     (model.stations || []).forEach(addAt);
     // A wall too short to reach a section gets one, as an obstruction does.
@@ -4957,6 +4976,7 @@ const RFL = (() => {
     const preps = secs.map(s => withWalls(s, walls)).map(s => ({
       id: s.id, x: s.x, interpolated: !!s.interpolated, raw: s.pts, pts: s.pts,
       banks: s.banks, n: s.n, lengths: s.lengths, ceil: undefined, bridge: null, eddies: [],
+      floats: (model.floats || []).filter(f => s.x >= f.x0 - 1e-6 && s.x <= f.x1 + 1e-6),
       excl: [
         ...(s.ineffective || []).map(e => ({ a: e.y0, b: e.y1, elev: e.elev, kind: 'ineffective' })),
         ...(s.levees && s.levees.left ? [{ a: -Infinity, b: s.levees.left.y, elev: s.levees.left.z, kind: 'levee' }] : []),
@@ -4972,6 +4992,7 @@ const RFL = (() => {
       }
       if (!eddy.on) continue;
       for (const k of b.blocks) {
+        if (k.noEddy) continue;
         const ref = preps.find(p => p.x >= b.x0 - 1e-6) || preps[0];
         const ymin = ref.raw[0][0], ymax = ref.raw[ref.raw.length - 1][0];
         const zone = { blockage: b.id, kind: b.kind, x0: b.x0, x1: b.x1, top: k.top,
@@ -4996,7 +5017,7 @@ const RFL = (() => {
 
   // ---------- the profile ----------
 
-  // model: { sections, obstructions, bridges, walls, stations, eddy:{on,cr,er},
+  // model: { sections, obstructions, bridges, walls, floats:[{x0,x1,y0,y1,draft}], stations, eddy:{on,cr,er},
   //          boundary:{type:'normal',slope} | {type:'ws',ws},
   //          coeff:{cc,ce,bridgeCc,bridgeCe} }
   function solve(model, Q) {
@@ -5162,6 +5183,8 @@ if (typeof module !== 'undefined') module.exports = RFL;
       eddy: { on: true, er: 2, cr: 1 },
       flow: { Q: 15, Qmax: 80, allowance: 0 },
       obstructions: [],
+      models: [],
+      floats: [],
       bridges: [{ id: 'B1', label: 'Example bridge', x: 150, length: 8, openLeft: 18, openRight: 33.2, lowChord: 2.7, highChord: 3.5, piers: '25.6:1', pierK: 0.9 }],
       walls: [],
       buildings: [],
@@ -5195,14 +5218,180 @@ if (typeof module !== 'undefined') module.exports = RFL;
       return isNum(y) && isNum(w) && w > 0 ? { y, width: w } : null;
     }).filter(Boolean);
   }
-  function hasDesign() { return S.obstructions.length + S.bridges.length + S.walls.length > 0; }
+  function hasDesign() { return S.obstructions.length + S.bridges.length + S.walls.length + S.models.length + S.floats.length > 0; }
+  const isFloating = m => m.floating === 'yes';
+  const solidBlocks = () => S.models.filter(m => !isFloating(m)).flatMap(modelBlocks);
+  const draftOf = m => m.draft > 0 ? m.draft : 0.5;
+  // Every floating thing as boxes: chainages, widths, draft and height above water.
+  function floatBoxes() {
+    return [
+      ...S.floats.map(f => ({ id: f.id, name: f.label || f.id, x0: Math.min(f.x0, f.x1), x1: Math.max(f.x0, f.x1), y0: Math.min(f.y0, f.y1), y1: Math.max(f.y0, f.y1), draft: f.draft > 0 ? f.draft : 0.01, height: Math.max(0, f.height) })),
+      ...S.models.filter(isFloating).flatMap(m => modelBlocks(m).map(b => ({ id: b.id, name: m.label || m.id, x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1, draft: draftOf(m), height: Math.max(0, modelGeo(m).size[2] - draftOf(m)) }))),
+    ];
+  }
+  // How far a floating model is lifted from its stored base to sit at the water.
+  function floatShift(m) {
+    if (!isFloating(m) || !RES || RES.error) return 0;
+    const ws = RFL.wsAt(RES, m.x);
+    return ws === null ? 0 : ws - draftOf(m) - m.base;
+  }
+
+  // ---------- imported 3D models ----------
+  // A model is { v: [x,y,z,...], f: [a,b,c,...], x, y, rot, scale, base, up }.
+  // Its footprint is centred on (x, y) and its lowest point sits at base.
+  // For the river it is solid from the ground to its top, cut along the
+  // river into strips, each with the widths it blocks and its own top level.
+  const modelCache = new WeakMap();
+  function modelGeo(m) {
+    const sig = [m.x, m.y, m.rot, m.scale, m.base, m.up, m.v.length].join();
+    const hit = modelCache.get(m);
+    if (hit && hit.sig === sig) return hit;
+    const n = m.v.length / 3, A = new Float64Array(n), B = new Float64Array(n), H = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      A[i] = m.v[i * 3];
+      if (m.up === 'z') { B[i] = m.v[i * 3 + 1]; H[i] = m.v[i * 3 + 2]; } else { B[i] = -m.v[i * 3 + 2]; H[i] = m.v[i * 3 + 1]; }
+    }
+    const span = a => { let lo = Infinity, hi = -Infinity; for (const v of a) { if (v < lo) lo = v; if (v > hi) hi = v; } return [lo, hi]; };
+    const [a0, a1] = span(A), [b0, b1] = span(B), [h0, h1] = span(H);
+    const sc = m.scale > 0 ? m.scale : 1, th = (m.rot || 0) * Math.PI / 180, co = Math.cos(th), si = Math.sin(th);
+    const pts = new Float64Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const a = A[i] - (a0 + a1) / 2, b = B[i] - (b0 + b1) / 2;
+      pts[i * 3] = m.x + sc * (a * co - b * si);
+      pts[i * 3 + 1] = m.y + sc * (a * si + b * co);
+      pts[i * 3 + 2] = m.base + sc * (H[i] - h0);
+    }
+    const g = { sig, pts, size: [sc * (a1 - a0), sc * (b1 - b0), sc * (h1 - h0)], blocks: modelStrips(m, pts) };
+    modelCache.set(m, g);
+    return g;
+  }
+  // The part of a triangle between two chainages, as a list of [x, y, z].
+  function clipToBand(tri, lo, hi) {
+    const cut = (poly, keep, at) => {
+      const out = [];
+      poly.forEach((p, i) => {
+        const q = poly[(i + 1) % poly.length], pIn = keep(p), qIn = keep(q);
+        if (pIn) out.push(p);
+        if (pIn !== qIn) { const t = (at - p[0]) / (q[0] - p[0]); out.push([at, p[1] + t * (q[1] - p[1]), p[2] + t * (q[2] - p[2])]); }
+      });
+      return out;
+    };
+    return cut(cut(tri, p => p[0] >= lo, lo), p => p[0] <= hi, hi);
+  }
+  function modelStrips(m, pts) {
+    let xlo = Infinity, xhi = -Infinity;
+    for (let i = 0; i < pts.length; i += 3) { if (pts[i] < xlo) xlo = pts[i]; if (pts[i] > xhi) xhi = pts[i]; }
+    const count = Math.min(16, Math.max(1, Math.ceil((xhi - xlo) / 2))), dx = (xhi - xlo) / count;
+    if (!(dx > 0)) return [];
+    // Strips about 2 m long, so a gap between parts of a building stays open.
+    const strips = [];
+    for (let s = 0; s < count; s++) {
+      const lo = xlo + s * dx, hi = lo + dx, spans = [], merged = [];
+      for (let k = 0; k < m.f.length; k += 3) {
+        const tri = [m.f[k], m.f[k + 1], m.f[k + 2]].map(v => [pts[v * 3], pts[v * 3 + 1], pts[v * 3 + 2]]);
+        if (Math.max(tri[0][0], tri[1][0], tri[2][0]) < lo || Math.min(tri[0][0], tri[1][0], tri[2][0]) > hi) continue;
+        const part = clipToBand(tri, lo, hi);
+        if (part.length) spans.push([Math.min(...part.map(p => p[1])), Math.max(...part.map(p => p[1])), Math.max(...part.map(p => p[2]))]);
+      }
+      spans.sort((p, q) => p[0] - q[0]);
+      for (const p of spans) {
+        const c = merged[merged.length - 1];
+        if (c && p[0] <= c[1] + 1e-6) { c[1] = Math.max(c[1], p[1]); c[2] = Math.max(c[2], p[2]); }
+        else merged.push(p.slice());
+      }
+      strips.push({ lo, hi, spans: merged.filter(p => p[1] - p[0] > 0.01) });
+    }
+    // Neighbouring strips of the same shape become one, so a plain block adds no sections.
+    const alike = (p, q) => p.spans.length === q.spans.length && p.spans.every((c, i) => Math.abs(c[0] - q.spans[i][0]) < 0.25 && Math.abs(c[1] - q.spans[i][1]) < 0.25 && Math.abs(c[2] - q.spans[i][2]) < 0.1);
+    const joined = [];
+    for (const s of strips) {
+      const last = joined[joined.length - 1];
+      if (last && alike(last, s)) { last.hi = s.hi; last.spans.forEach((c, i) => { c[0] = Math.min(c[0], s.spans[i][0]); c[1] = Math.max(c[1], s.spans[i][1]); c[2] = Math.max(c[2], s.spans[i][2]); }); }
+      else joined.push(s);
+    }
+    const out = [];
+    for (const s of joined) for (const c of s.spans) out.push({ id: `${m.id}.${out.length + 1}`, x0: s.lo, x1: s.hi, y0: c[0], y1: c[1], top: c[2], noEddy: true });
+    return out;
+  }
+  const modelBlocks = m => modelGeo(m).blocks;
+  // The true cut through a model at one chainage: closed outlines of [y, z] where
+  // the mesh is closed, and open lines where it is not.
+  function modelCut(m, x) {
+    const dz = floatShift(m), g = modelGeo(m), at = x + 1e-5, segs = [], pt = v => [g.pts[v * 3], g.pts[v * 3 + 1], g.pts[v * 3 + 2] + dz];
+    for (let k = 0; k < m.f.length; k += 3) {
+      const tri = [pt(m.f[k]), pt(m.f[k + 1]), pt(m.f[k + 2])], hit = [];
+      tri.forEach((p, i) => {
+        const q = tri[(i + 1) % 3];
+        if ((p[0] - at) * (q[0] - at) < 0) { const t = (at - p[0]) / (q[0] - p[0]); hit.push([p[1] + t * (q[1] - p[1]), p[2] + t * (q[2] - p[2])]); }
+      });
+      if (hit.length === 2) segs.push(hit);
+    }
+    if (!segs.length) return null;
+    const key = p => p[0].toFixed(3) + ',' + p[1].toFixed(3), ends = new Map();
+    segs.forEach((s, i) => s.forEach((p, e) => { const a = ends.get(key(p)) || []; a.push([i, e]); ends.set(key(p), a); }));
+    const used = new Array(segs.length).fill(false), loops = [];
+    for (let i = 0; i < segs.length; i++) {
+      if (used[i]) continue;
+      used[i] = true;
+      const path = [segs[i][0], segs[i][1]];
+      for (;;) {
+        const next = (ends.get(key(path[path.length - 1])) || []).find(([j]) => !used[j]);
+        if (!next) break;
+        used[next[0]] = true;
+        path.push(segs[next[0]][1 - next[1]]);
+      }
+      loops.push({ path, closed: key(path[0]) === key(path[path.length - 1]) });
+    }
+    let top = -Infinity, ya = Infinity, yb = -Infinity;
+    for (const s of segs) for (const p of s) { if (p[1] > top) top = p[1]; if (p[0] < ya) ya = p[0]; if (p[0] > yb) yb = p[0]; }
+    return { loops, top, mid: (ya + yb) / 2, name: m.label || m.id };
+  }
+  function parseObj(text) {
+    const v = [], f = [];
+    for (const raw of text.split('\n')) {
+      const t = raw.trim();
+      if (/^v\s/.test(t)) {
+        const p = t.split(/\s+/).slice(1, 4).map(Number);
+        if (p.length !== 3 || !p.every(isNum)) return { error: 'The file has a vertex that cannot be read.' };
+        v.push(+p[0].toFixed(4), +p[1].toFixed(4), +p[2].toFixed(4));
+      } else if (/^f\s/.test(t)) {
+        const nv = v.length / 3;
+        const ids = t.split(/\s+/).slice(1).map(w => { const k = parseInt(w, 10); return k < 0 ? nv + k : k - 1; });
+        if (ids.length < 3 || !ids.every(k => Number.isInteger(k) && k >= 0 && k < nv)) return { error: 'The file has a face that cannot be read.' };
+        for (let i = 1; i < ids.length - 1; i++) f.push(ids[0], ids[i], ids[i + 1]);
+      }
+    }
+    if (!f.length) return { error: 'No surfaces were found in that file. Export the model as a mesh OBJ.' };
+    return { v, f };
+  }
+  function importObj(file) {
+    const msg = $('rf-import-msg');
+    if (file.size > 40e6) { msg.textContent = 'That file is over 40 MB. Simplify the model and export it again.'; return; }
+    const r = new FileReader();
+    r.onerror = () => { msg.textContent = 'That file could not be read.'; };
+    r.onload = () => {
+      const o = parseObj(String(r.result));
+      if (o.error) { msg.textContent = o.error; return; }
+      if (o.f.length / 3 > 30000) { msg.textContent = `That model has ${Math.round(o.f.length / 3)} triangles; the limit is 30,000. Simplify it and export it again.`; return; }
+      const s = refSection(), y = (s.banks.left + s.banks.right) / 2;
+      const biggest = Math.max(...[0, 1, 2].map(c => { const a = o.v.filter((_, i) => i % 3 === c); return Math.max(...a.slice(0, 200000)) - Math.min(...a.slice(0, 200000)); }));
+      const inMm = biggest > 1000;
+      let id = 'M' + (S.models.length + 1); while (S.models.some(e => e.id === id)) id += "'";
+      S.models.push({ id, label: file.name.replace(/\.obj$/i, ''), v: o.v, f: o.f, x: s.x, y, rot: 0, scale: inMm ? 0.001 : 1, base: +groundAtLocal(s.pts, y).toFixed(2), up: 'y', floating: 'no', draft: 0.5 });
+      msg.textContent = `Imported ${Math.round(o.f.length / 3)} triangles.${inMm ? ' It looked like millimetres, so the scale is set to 0.001.' : ' Metres are assumed: check the size shown on its card.'} If it lies on its side, change Which way is up.`;
+      renderElements('models' + (S.models.length - 1)); schedule();
+    };
+    r.readAsText(file);
+  }
+
   function model(withDesign) {
     const sections = S.sections.map(s => ({ ...s, pts: s.pts, levees: null }));
     return {
       sections,
       boundary: S.boundary.type === 'ws' ? { type: 'ws', ws: S.boundary.ws } : { type: 'normal', slope: S.boundary.slope },
       eddy: S.eddy,
-      obstructions: withDesign ? S.obstructions.map(o => ({ ...o, x0: Math.min(o.x0, o.x1), x1: Math.max(o.x0, o.x1), y0: Math.min(o.y0, o.y1), y1: Math.max(o.y0, o.y1) })) : [],
+      floats: withDesign ? floatBoxes().map(({ x0, x1, y0, y1, draft }) => ({ x0, x1, y0, y1, draft })) : [],
+      obstructions: withDesign ? [...solidBlocks(), ...S.obstructions.map(o => ({ ...o, x0: Math.min(o.x0, o.x1), x1: Math.max(o.x0, o.x1), y0: Math.min(o.y0, o.y1), y1: Math.max(o.y0, o.y1) }))] : [],
       bridges: withDesign ? S.bridges.map(b => ({ ...b, piers: parsePiers(b.piers), pierK: +b.pierK || 1.25 })) : [],
       walls: withDesign ? S.walls : [],
     };
@@ -5226,7 +5415,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
   function renderActive() {
     if (!before()) return drawActive();
     const keep = [RES, BASE, S];
-    RES = BASE; BASE = null; S = { ...S, obstructions: [], bridges: [], walls: [] };
+    RES = BASE; BASE = null; S = { ...S, obstructions: [], bridges: [], walls: [], models: [], floats: [] };
     showingBefore = true;
     try { drawActive(); } finally { showingBefore = false; [RES, BASE, S] = keep; }
   }
@@ -5280,6 +5469,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     el('line', { x1: 0, y1: 0, x2: 0, y2: 5, stroke: C.deck, 'stroke-width': 1.5 }, pd);
     return svg;
   }
+  const FLOAT_COLOUR = '#0f8f7f';
   const lin = (d0, d1, r0, r1) => v => r0 + (v - d0) * (r1 - r0) / ((d1 - d0) || 1);
   function niceTicks(a, b, n) {
     const span = b - a, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
@@ -5373,10 +5563,11 @@ if (typeof module !== 'undefined') module.exports = RFL;
       }
     }
     // design elements
-    for (const o of S.obstructions) {
+    for (const o of [...solidBlocks(), ...S.obstructions]) {
       const xa = sx(Math.max(o.x0, o.x1)), xb = sx(Math.min(o.x0, o.x1));
       el('rect', { x: xa - (xb - xa < 3 ? 1.5 : 0), y: sy(Math.min(o.y0, o.y1)), width: Math.max(3, xb - xa), height: Math.max(1, sy(Math.max(o.y0, o.y1)) - sy(Math.min(o.y0, o.y1))), fill: C.block }, svg);
     }
+    for (const f of floatBoxes()) el('rect', { x: sx(f.x1), y: sy(f.y0), width: Math.max(3, sx(f.x0) - sx(f.x1)), height: Math.max(1, sy(f.y1) - sy(f.y0)), fill: FLOAT_COLOUR }, svg);
     for (const w of S.walls) el('line', { x1: sx(w.x0), x2: sx(w.x1), y1: sy(w.y), y2: sy(w.y), stroke: C.block, 'stroke-width': 3, 'stroke-linecap': 'round' }, svg);
     for (const b of S.bridges) {
       const xa = sx(b.x + b.length), xb = sx(b.x);
@@ -5403,6 +5594,65 @@ if (typeof module !== 'undefined') module.exports = RFL;
 
   // ---------- cross-section ----------
   function viewSection() { return RES && !RES.error ? RES.sections.find(s => s.id === viewId) : null; }
+  // What can be seen past the cut, looking downstream: every design element
+  // wholly on the downstream side, as outlines of { y0, y1, z0, z1 }.
+  function elementsBeyond(s) {
+    const out = [], past = x => x < s.x - 1e-6;
+    const secAt = x => RES.sections.reduce((m, q) => Math.abs(q.x - x) < Math.abs(m.x - x) ? q : m);
+    const low = (q, a, b) => Math.min(groundAtLocal(q.raw, a), groundAtLocal(q.raw, b));
+    const add = (name, far, boxes, smooth) => out.push({ name, away: s.x - far, boxes, top: Math.max(...boxes.map(b => b.z1)), smooth: !!smooth });
+    for (const b of S.bridges) {
+      if (!past(b.x + b.length)) continue;
+      const q = secAt(b.x), a = q.raw[0][0], z = q.raw[q.raw.length - 1][0], boxes = [{ y0: a, y1: z, z0: b.lowChord, z1: b.highChord }];
+      if (b.openLeft > a) boxes.push({ y0: a, y1: b.openLeft, z0: low(q, a, b.openLeft), z1: b.lowChord });
+      if (b.openRight < z) boxes.push({ y0: b.openRight, y1: z, z0: low(q, b.openRight, z), z1: b.lowChord });
+      for (const p of parsePiers(b.piers)) boxes.push({ y0: p.y - p.width / 2, y1: p.y + p.width / 2, z0: q.bed, z1: b.lowChord });
+      add(b.label || b.id, b.x + b.length, boxes);
+    }
+    for (const o of S.obstructions) {
+      const far = Math.max(o.x0, o.x1); if (!past(far)) continue;
+      const q = secAt((o.x0 + o.x1) / 2), a = Math.min(o.y0, o.y1), b = Math.max(o.y0, o.y1);
+      add(o.label || o.id, far, [{ y0: a, y1: b, z0: low(q, a, b), z1: o.top }]);
+    }
+    for (const w of S.walls) {
+      const far = Math.max(w.x0, w.x1); if (!past(far)) continue;
+      const q = secAt((w.x0 + w.x1) / 2);
+      add(w.label || 'Flood wall', far, [{ y0: w.y - 0.15, y1: w.y + 0.15, z0: groundAtLocal(q.raw, w.y), z1: w.z }]);
+    }
+    for (const b of S.buildings) {
+      const far = b.x + b.d / 2; if (!past(far)) continue;
+      const g = groundAtLocal(secAt(b.x).raw, b.y);
+      add(b.label || b.id, far, [{ y0: b.y - b.w / 2, y1: b.y + b.w / 2, z0: Math.min(g, b.floor), z1: Math.max(b.floor, g) + 3.5 }]);
+    }
+    for (const f of S.floats) {
+      const far = Math.max(f.x0, f.x1); if (!past(far)) continue;
+      const ws = RFL.wsAt(RES, (f.x0 + f.x1) / 2);
+      add(f.label || f.id, far, [{ y0: Math.min(f.y0, f.y1), y1: Math.max(f.y0, f.y1), z0: ws - f.draft, z1: ws + f.height }]);
+    }
+    for (const m of S.models) {
+      const strips = modelBlocks(m); if (!strips.length) continue;
+      const far = Math.max(...strips.map(b => b.x1)); if (!past(far)) continue;
+      const dz = floatShift(m), base = m.base + dz;
+      add(m.label || m.id, far, strips.map(b => ({ y0: b.y0, y1: b.y1, z0: base, z1: isFloating(m) ? base + modelGeo(m).size[2] : b.top })), true);
+    }
+    return out;
+  }
+  // One outline round a set of boxes, so a model's strips read as a single shape.
+  function envelopePath(boxes, sx, sy) {
+    const ys = [...new Set(boxes.flatMap(b => [b.y0, b.y1]))].sort((p, q) => p - q);
+    let d = '', up = [];
+    const close = () => { if (up.length) d += 'M' + up.map(p => p.join(' ')).join('L') + 'Z'; up = []; };
+    const low = [];
+    for (let i = 0; i < ys.length - 1; i++) {
+      const c = boxes.filter(b => b.y0 <= ys[i] && b.y1 >= ys[i + 1]);
+      if (!c.length) { up.push(...low.reverse()); low.length = 0; close(); continue; }
+      const top = sy(Math.max(...c.map(b => b.z1))).toFixed(1), bot = sy(Math.min(...c.map(b => b.z0))).toFixed(1);
+      up.push([sx(ys[i]).toFixed(1), top], [sx(ys[i + 1]).toFixed(1), top]);
+      low.push([sx(ys[i]).toFixed(1), bot], [sx(ys[i + 1]).toFixed(1), bot]);
+    }
+    up.push(...low.reverse()); close();
+    return d;
+  }
   function renderSection(target) {
     const host = target || $('rf-xs'), [W, H] = dims(host, 640, 320);
     const svg = svgRoot(host, W, H, 'Cross-section with water level and energy line');
@@ -5415,6 +5665,12 @@ if (typeof module !== 'undefined') module.exports = RFL;
     let zlo = Math.min(...raw.map(p => p[1])), zhi = Math.max(...gr.map(p => p[1]), s.egl, s.ws, baseWs || -Infinity);
     if (bridge) zhi = Math.max(zhi, bridge.highChord);
     zhi = Math.min(zhi, Math.max(s.egl, s.ws) + 3);
+    const cuts = S.models.map(m => modelCut(m, s.x)).filter(Boolean);
+    if (cuts.length) zhi = Math.max(zhi, ...cuts.map(c => c.top + 0.5));
+    const floatsHere = S.floats.filter(f => s.x >= Math.min(f.x0, f.x1) - 1e-6 && s.x <= Math.max(f.x0, f.x1) + 1e-6);
+    if (floatsHere.length) zhi = Math.max(zhi, ...floatsHere.map(f => s.ws + f.height + 0.5));
+    const beyond = elementsBeyond(s);
+    if (beyond.length) zhi = Math.max(zhi, ...beyond.map(e => e.top + 0.5));
     zlo -= 0.2; zhi += 0.3;
     const box = { l: 46, r: W - 10, t: 42 + stageTop(host), b: H - 38 - stageBottom(host) };
     box.sx = lin(ymin, ymax, box.l, box.r); box.sy = lin(zlo, zhi, box.b, box.t);
@@ -5423,17 +5679,25 @@ if (typeof module !== 'undefined') module.exports = RFL;
     const clipId = host.id + '-clip';
     el('rect', { x: box.l, y: box.t, width: box.r - box.l, height: box.b - box.t }, el('clipPath', { id: clipId }, svg));
     const g = el('g', { 'clip-path': `url(#${clipId})` }, svg);
+    // beyond the cut, in light lines: drawn first, so the cut water and ground stand in front
+    for (const e of beyond) {
+      const look = { class: 'rf-beyond', fill: 'none', stroke: C.muted, 'stroke-width': 1, opacity: 0.8 };
+      if (e.smooth) el('path', { ...look, d: envelopePath(e.boxes, sx, sy) }, g);
+      else for (const b of e.boxes) el('rect', { ...look, x: sx(b.y0), y: sy(b.z1), width: Math.max(0.5, sx(b.y1) - sx(b.y0)), height: Math.max(0.5, sy(b.z0) - sy(b.z1)) }, g);
+      const mid = (Math.min(...e.boxes.map(b => b.y0)) + Math.max(...e.boxes.map(b => b.y1))) / 2;
+      el('text', { x: sx(mid), y: sy(e.top) - 5, 'text-anchor': 'middle', fill: C.muted }, g).textContent = `${e.name}, ${Math.round(e.away)} m beyond`;
+    }
     // water, then the ground over it
     el('rect', { x: sx(ymin), y: sy(s.ws), width: sx(ymax) - sx(ymin), height: Math.max(0, sy(zlo) - sy(s.ws)), fill: C['water-fill'] }, g);
     const poly = pts => pts.map(p => `${sx(p[0])},${sy(p[1])}`).join(' ') + ` ${sx(ymax)},${sy(zlo)} ${sx(ymin)},${sy(zlo)}`;
-    el('polygon', { points: poly(gr), fill: C.block, opacity: 0.85 }, g);
-    el('polygon', { points: poly(raw), fill: C['ground-fill'] }, g);
-    el('polyline', { points: raw.map(p => `${sx(p[0])},${sy(p[1])}`).join(' '), fill: 'none', stroke: C.ground, 'stroke-width': 1.6 }, g);
-    // eddy zones at this section
+    // eddy zones at this section, under the ground so they show only in the water
     for (const [a, b] of s.eddies) {
       const top = Math.min(s.ws, zhi);
       el('rect', { x: sx(a), y: sy(top), width: Math.max(1, sx(b) - sx(a)), height: Math.max(0, sy(zlo) - sy(top)), fill: `url(#${host.id}-hatch)`, opacity: 0.55 }, g);
     }
+    el('polygon', { points: poly(gr), fill: C.block }, g);
+    el('polygon', { points: poly(raw), fill: C['ground-fill'] }, g);
+    el('polyline', { points: raw.map(p => `${sx(p[0])},${sy(p[1])}`).join(' '), fill: 'none', stroke: C.ground, 'stroke-width': 1.6 }, g);
     // bridge deck
     if (bridge) {
       el('rect', { x: sx(Math.max(ymin, bridge.openLeft)), y: sy(bridge.highChord), width: sx(Math.min(ymax, bridge.openRight)) - sx(Math.max(ymin, bridge.openLeft)), height: sy(bridge.lowChord) - sy(bridge.highChord), fill: `url(#${host.id}-deck)`, stroke: C.deck }, g);
@@ -5446,12 +5710,26 @@ if (typeof module !== 'undefined') module.exports = RFL;
     // banks
     for (const yb of [s.banks.left, s.banks.right]) el('line', { x1: sx(yb), x2: sx(yb), y1: sy(groundAtLocal(raw, yb)) - 6, y2: sy(groundAtLocal(raw, yb)) + 6, stroke: C.muted }, g);
     // lines
-    if (isNum(baseWs) && Math.abs(baseWs - s.ws) > 5e-4) el('line', { x1: box.l, x2: box.r, y1: sy(baseWs), y2: sy(baseWs), stroke: C.base, 'stroke-width': 1.4, 'stroke-dasharray': '6 4' }, g);
+    if (isNum(baseWs) && Math.abs(baseWs - s.ws) > 5e-4) for (const [p, q] of wetIntervals(raw, baseWs)) el('line', { x1: sx(p), x2: sx(q), y1: sy(baseWs), y2: sy(baseWs), stroke: C.base, 'stroke-width': 1.4, 'stroke-dasharray': '6 4' }, g);
     if (level === 'advanced') el('line', { x1: box.l, x2: box.r, y1: sy(s.egl), y2: sy(s.egl), stroke: C.egl, 'stroke-width': 1.2, 'stroke-dasharray': '2 3' }, g);
-    el('line', { x1: box.l, x2: box.r, y1: sy(s.ws), y2: sy(s.ws), stroke: C.water, 'stroke-width': 2 }, g);
-    if (ARROWS.n) { const cx = sx(s.banks.left + (s.banks.right - s.banks.left) * 0.25), cy = sy(s.ws) + 18, r = 9, k = r * 0.7;
+    const wetNow = wetIntervals(gr, s.ws);
+    for (const [p, q] of wetNow) el('line', { x1: sx(p), x2: sx(q), y1: sy(s.ws), y2: sy(s.ws), stroke: C.water, 'stroke-width': 2 }, g);
+    if (ARROWS.n && wetNow.length) { const open = wetNow.reduce((m, w) => w[1] - w[0] > m[1] - m[0] ? w : m), cx = sx((open[0] + open[1]) / 2), cy = sy(s.ws) + 18, r = 9, k = r * 0.7;
       el('circle', { class: 'rf-flow', cx, cy, r, fill: C.panel, stroke: C.water, 'stroke-width': 2 }, g);
       for (const q of [1, -1]) el('line', { x1: cx - k, x2: cx + k, y1: cy - q * k, y2: cy + q * k, stroke: C.water, 'stroke-width': 2 }, g); }
+    const stretch = ((box.b - box.t) / (zhi - zlo)) / ((box.r - box.l) / (ymax - ymin));
+    if (stretch > 1.25) el('text', { x: box.r, y: 30 + stageTop(host), 'text-anchor': 'end', fill: C.muted }, svg).textContent = `Not to scale: heights drawn ${stretch.toFixed(0)}× larger than widths`;
+    for (const f of floatsHere) {
+      const ya = Math.min(f.y0, f.y1), yb = Math.max(f.y0, f.y1);
+      el('rect', { class: 'rf-float', x: sx(ya), y: sy(s.ws + f.height), width: sx(yb) - sx(ya), height: sy(s.ws - f.draft) - sy(s.ws + f.height), fill: FLOAT_COLOUR, stroke: C.ink, 'stroke-width': 1.5 }, g);
+      el('text', { x: sx((ya + yb) / 2), y: sy(s.ws + f.height) - 6, 'text-anchor': 'middle', fill: C.ink, 'font-weight': 600 }, g).textContent = f.label || f.id;
+    }
+    // imported models: the real cut, drawn over everything, with the name above it
+    for (const c of cuts) {
+      const d = c.loops.map(l => 'M' + l.path.map(p => `${sx(p[0]).toFixed(1)} ${sy(p[1]).toFixed(1)}`).join('L') + (l.closed ? 'Z' : '')).join('');
+      el('path', { class: 'rf-model-cut', d, fill: C.deck, 'fill-rule': 'evenodd', stroke: C.ink, 'stroke-width': 1.8, 'stroke-linejoin': 'round' }, g);
+      el('text', { x: sx(c.mid), y: sy(c.top) - 6, 'text-anchor': 'middle', fill: C.ink, 'font-weight': 600 }, g).textContent = c.name;
+    }
     el('text', { x: box.l, y: 15 + stageTop(host), fill: C.ink, 'font-weight': 600 }, svg).textContent = T(`${s.id} at ${s.x.toFixed(1)} m`, `Section at ${s.x.toFixed(0)} m along the river`) + (showingBefore ? ' · without your design' : '') + (isNum(baseWs) && Math.abs(baseWs - s.ws) > 5e-4 ? ` · ${sgn(s.ws - baseWs)} m vs without design` : '');
     el('text', { x: box.l, y: 30 + stageTop(host), fill: C.muted }, svg).textContent = T(`water ${f2(s.ws)} m · depth ${f2(s.depth)} m · V ${f2(s.V)} m/s · Fr ${f2(s.Fr)} · ⊗ flow away from you`, `water level ${f2(s.ws)} m · depth ${f2(s.depth)} m · ⊗ the river flows away from you`);
     return svg;
@@ -5486,9 +5764,13 @@ if (typeof module !== 'undefined') module.exports = RFL;
       el('rect', { x: sx(b.x + b.length), y: sy(b.highChord), width: Math.max(2, sx(b.x) - sx(b.x + b.length)), height: sy(b.lowChord) - sy(b.highChord), fill: `url(#${host.id}-deck)`, stroke: C.deck }, svg);
       el('text', { x: sx(b.x + b.length / 2), y: sy(b.highChord) - 4, 'text-anchor': 'middle', fill: C.ink }, svg).textContent = b.id;
     }
-    for (const o of S.obstructions) {
+    for (const o of [...solidBlocks(), ...S.obstructions]) {
       const xa = sx(Math.max(o.x0, o.x1)), xb = sx(Math.min(o.x0, o.x1)), bed = RES.sections.reduce((m, s) => Math.abs(s.x - o.x0) < Math.abs(m.x - o.x0) ? s : m).bed;
       el('rect', { x: xa - (xb - xa < 3 ? 1.5 : 0), y: sy(Math.min(o.top, zhi)), width: Math.max(3, xb - xa), height: Math.max(0, sy(bed) - sy(Math.min(o.top, zhi))), fill: C.block, opacity: 0.7 }, svg);
+    }
+    for (const f of floatBoxes()) {
+      const ws = RFL.wsAt(RES, (f.x0 + f.x1) / 2);
+      el('rect', { x: sx(f.x1), y: sy(ws + f.height), width: Math.max(3, sx(f.x0) - sx(f.x1)), height: Math.max(1, sy(ws - f.draft) - sy(ws + f.height)), fill: FLOAT_COLOUR }, svg);
     }
     if (BASE && !BASE.error) line(BASE.sections, 'ws', { stroke: C.base, 'stroke-width': 1.4, 'stroke-dasharray': '6 4' });
     if (level === 'advanced') line(secs, 'egl', { stroke: C.egl, 'stroke-width': 1.2, 'stroke-dasharray': '2 3' });
@@ -5529,7 +5811,7 @@ onmessage = e => {
     const host = $('rf-rc'), [W, H] = dims(host, 300, 210);
     const s = viewSection();
     if (!s) { svgRoot(host, W, H, 'Water level against flow'); return; }
-    const key = JSON.stringify([S, s.x]);
+    const key = JSON.stringify([S, s.x], (k, v) => k === 'v' || k === 'f' ? undefined : v) + S.models.map(m => modelGeo(m).sig).join();
     if (level !== 'advanced') return;
     if (key === rcKey && host.firstChild) return markRating();
     if (V3.drag) { scheduleRating(); return; }
@@ -5804,7 +6086,8 @@ onmessage = e => {
       }
       // design elements in plan
       const poly = (pts, fill) => el('polygon', { points: pts.map(p => p.join(',')).join(' '), fill, stroke: halo, 'stroke-width': 1, opacity: 0.9 }, host);
-      for (const o of S.obstructions) poly([[o.x0, o.y0], [o.x1, o.y0], [o.x1, o.y1], [o.x0, o.y1]].map(([x, y]) => scr(x, y)), C.block);
+      for (const f of floatBoxes()) poly([[f.x0, f.y0], [f.x1, f.y0], [f.x1, f.y1], [f.x0, f.y1]].map(([x, y]) => scr(x, y)), FLOAT_COLOUR);
+      for (const o of [...solidBlocks(), ...S.obstructions]) poly([[o.x0, o.y0], [o.x1, o.y0], [o.x1, o.y1], [o.x0, o.y1]].map(([x, y]) => scr(x, y)), C.block);
       for (const b of S.bridges) { const s0 = RES.sections[0]; poly([[b.x, s0.raw[0][0]], [b.x + b.length, s0.raw[0][0]], [b.x + b.length, s0.raw[s0.raw.length - 1][0]], [b.x, s0.raw[s0.raw.length - 1][0]]].map(([x, y]) => scr(x, y)), C.deck); }
       for (const w of S.walls) line([scr(w.x0, w.y), scr(w.x1, w.y)], C.block, 3);
       const bres = RFL.buildings(RES, S.buildings);
@@ -6297,12 +6580,12 @@ onmessage = e => {
     if (el.k === 'bridges') {
       const d = shiftInside(was.x, was.x + was.length, xmin, xmax, dx), up = lift(was.x, was.x + d);
       it.x = round(was.x + d, 1); it.lowChord = round(was.lowChord + up, 2); it.highChord = round(was.highChord + up, 2);
-    } else if (el.k === 'obstructions') {
+    } else if (el.k === 'obstructions' || el.k === 'floats') {
       const d = shiftInside(Math.min(was.x0, was.x1), Math.max(was.x0, was.x1), xmin, xmax, dx);
       const mid = (was.x0 + was.x1) / 2, [a, b] = span(mid + d);
       const e = shiftInside(Math.min(was.y0, was.y1), Math.max(was.y0, was.y1), a, b, dy);
       it.x0 = round(was.x0 + d, 1); it.x1 = round(was.x1 + d, 1); it.y0 = round(was.y0 + e, 1); it.y1 = round(was.y1 + e, 1);
-      it.top = round(was.top + lift(mid, mid + d), 2);
+      if (el.k === 'obstructions') it.top = round(was.top + lift(mid, mid + d), 2);
     } else if (el.k === 'walls') {
       const d = shiftInside(Math.min(was.x0, was.x1), Math.max(was.x0, was.x1), xmin, xmax, dx);
       const mid = (was.x0 + was.x1) / 2, [a, b] = span(mid + d);
@@ -6311,7 +6594,7 @@ onmessage = e => {
     } else {
       const x = Math.min(xmax, Math.max(xmin, was.x + dx)), [a, b] = span(x);
       it.x = round(x, 1); it.y = round(Math.min(b, Math.max(a, was.y + dy)), 1);
-      it.floor = round(was.floor + lift(was.x, x), 2);
+      if (el.k === 'models') it.base = round(was.base + lift(was.x, x), 2); else it.floor = round(was.floor + lift(was.x, x), 2);
     }
     schedule();
   }
@@ -6331,17 +6614,25 @@ onmessage = e => {
   function onceAFrame(slot, fn) {
     return ev => {
       const pending = V3[slot]; V3[slot] = ev;
-      if (!pending) requestAnimationFrame(() => { const e = V3[slot]; V3[slot] = null; fn(e); });
+      if (!pending) requestAnimationFrame(() => { const e = V3[slot]; V3[slot] = null; if (e) fn(e); });
     };
   }
   function moveNow(ev) {
     const d = V3.drag; if (!d || !RES || RES.error) return;
+    // Shift and drag turns an imported model.
+    if (d.type === 'element' && d.el.k === 'models' && ev.shiftKey && V3.press) {
+      let a = Math.round(d.was.rot + (ev.clientX - V3.press.x) * 0.5);
+      a = ((a + 180) % 360 + 360) % 360 - 180;
+      S.models[d.el.i].rot = a; schedule(); return;
+    }
     const g = groundUnder(ray3D(ev)); if (!g) return;
     if (d.type === 'cut') { cutTo(g.x); return; }
     if (!d.start) { d.start = [g.x, g.y]; return; }
     moveElement(d.el, d.was, g.x - d.start[0], g.y - d.start[1]);
   }
   function up3D(ev) {
+    // A release can arrive before the frame that would apply the last movement.
+    if (V3.moveEv) { const last = V3.moveEv; V3.moveEv = null; moveNow(last); }
     const d = V3.drag, press = V3.press;
     V3.press = null;
     if (d) {
@@ -6502,6 +6793,18 @@ onmessage = e => {
       box(w.x0, w.x1, w.y - 0.15, w.y + 0.15, groundAtLocal(s.raw, w.y), w.z, 0x8c5a2b);
     }
     const bres = RFL.buildings(RES, S.buildings);
+    S.floats.forEach((f, i) => {
+      tag = { k: 'floats', i };
+      const lvl = RFL.wsAt(RES, (f.x0 + f.x1) / 2);
+      box(f.x0, f.x1, f.y0, f.y1, lvl - f.draft, lvl + f.height, 0x0f8f7f);
+    });
+    S.models.forEach((m, i) => {
+      const g = modelGeo(m), pos = [], dz = floatShift(m);
+      for (const k of m.f) pos.push(...P(g.pts[k * 3], g.pts[k * 3 + 1], g.pts[k * 3 + 2] + dz));
+      V3.pick.push({ el: { k: 'models', i }, pos });
+      const mg = new T.BufferGeometry(); mg.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); mg.computeVertexNormals();
+      V3.group.add(new T.Mesh(mg, new T.MeshLambertMaterial({ color: isFloating(m) ? 0x0f8f7f : 0xc98a4b, side: T.DoubleSide })));
+    });
     S.buildings.forEach((b, i) => {
       tag = { k: 'buildings', i };
       const s = nearest(b.x), g = groundAtLocal(s.raw, b.y), flooded = bres[i].depth > 0;
@@ -6688,11 +6991,11 @@ onmessage = e => {
     if (view === '3d' || view === 'plan') {
       host.innerHTML = `<div class="rf-kv"><span>Water depth</span><span class="rf-lab">m</span></div><div class="rf-ramp" style="${view === 'plan' ? 'background:var(--rf-water-fill)' : ''}"></div>` +
         (view === '3d' ? '<div class="rf-kv rf-lab rf-mono"><span>0</span><span>1.25</span><span>2.5+</span></div>' : '') +
-        line('var(--rf-eddy)', T('Eddy zone (separated flow, not computed)', 'Still water beside a blockage (not computed)')) + line('var(--rf-block)', 'Obstruction or flood wall') + line('var(--rf-deck)', 'Bridge') + line('var(--rf-bad)', 'Building with water over its floor') +
+        line('var(--rf-eddy)', T('Eddy zone (separated flow, not computed)', 'Still water beside a blockage (not computed)')) + line('var(--rf-block)', 'Obstruction or flood wall') + line('var(--rf-deck)', 'Bridge') + (S.floats.length || S.models.some(isFloating) ? line(FLOAT_COLOUR, 'Floating object') : '') + line('var(--rf-bad)', 'Building with water over its floor') +
         `<p class="rf-hint">${view === '3d' ? 'White arrows show which way the water flows. Drag a design element to move it. Drag the blue line, or click the ground, to choose where the section cuts. Levels are exaggerated vertically. Buildings are drawn 3.5 m above their floor as a placeholder height.' : 'Arrows show which way the water flows. Click a section line to choose it.'}</p>`;
     } else {
       host.innerHTML = line('var(--rf-water)', 'Water level') + (level === 'advanced' ? line('var(--rf-egl)', 'Energy line', true) : '') + line('var(--rf-base)', 'Without design elements', true) + line('var(--rf-ground)', 'Ground and bed') +
-        (view === 'section' ? line('var(--rf-eddy)', T('Eddy zone', 'Still water')) + line('var(--rf-block)', 'Blocked area') : line('var(--rf-deck)', 'Bridge deck'));
+        (view === 'section' ? line('var(--rf-eddy)', T('Eddy zone', 'Still water')) + line('var(--rf-block)', 'Blocked area') + (viewSection() && elementsBeyond(viewSection()).length ? line('var(--rf-muted)', 'Beyond the cut, in the view') : '') + (S.floats.length ? line(FLOAT_COLOUR, 'Floating object') : '') + (viewSection() && S.models.some(m => modelCut(m, viewSection().x)) ? line('var(--rf-deck)', 'Your model, cut at this section') : '') : line('var(--rf-deck)', 'Bridge deck'));
     }
   }
   function renderCaption() {
@@ -6732,6 +7035,13 @@ onmessage = e => {
       else if (r.depth > -0.3) chips.push(chip(`${name}: floor only ${f2(-r.depth)} m above the water`, 'rf-warn'));
       else chips.push(chip(`${name}: floor ${f2(-r.depth)} m above the water`, 'rf-good'));
     });
+    const aground = new Set();
+    for (const f of floatBoxes()) for (const s of RES.sections) {
+      if (s.x < f.x0 - 1e-6 || s.x > f.x1 + 1e-6) continue;
+      const high = Math.max(...[0, 0.25, 0.5, 0.75, 1].map(t => groundAtLocal(s.raw, f.y0 + t * (f.y1 - f.y0))));
+      if (s.ws - f.draft <= high) aground.add(f.name);
+    }
+    for (const name of aground) chips.push(chip(`${name} is touching the ground at this flow, so it is not floating freely. It blocks the water down to the bed there.`, 'rf-warn'));
     const dryZones = RES.eddyZones.filter(z => !z.pier && !zoneWet(z, RES.sections));
     if (dryZones.length) chips.push(chip(T('Eddy zones on dry ground have no effect at this flow. Raise the flow, or put a blockage in the river.', 'The still-water zones here are on dry ground, so they have no effect at this flow.')));
     const crit = RES.sections.filter(s => s.flags.includes('critical'));
@@ -6781,6 +7091,8 @@ onmessage = e => {
     walls: [['side', 'Bank', 'side'], ['along', 'Distance along river, m'], ['len', 'Length of wall, m'], ['y', 'Distance from left side, m'], ['z', 'Crest level, m']],
     buildings: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['w', 'Width across river, m'], ['d', 'Length along river, m'], ['floor', 'Floor level, m']],
   };
+  FIELDS.models = [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['rot', 'Rotation', 'rot'], ['scale', 'Scale (1 = metres)'], ['base', 'Base level, m'], ['up', 'Which way is up', 'axis'], ['floating', 'Floats on the water', 'float'], ['draft', 'Depth below the water, m']];
+  FIELDS.floats = [['label', 'Name', 'text'], ['along', 'Distance along river, m'], ['len', 'Length along river, m'], ['left', 'Distance from left side, m'], ['wid', 'Width across river, m'], ['draft', 'Depth below the water, m'], ['height', 'Height above the water, m']];
   // Form fields stated as position and size; the model keeps from/to values.
   const spanOf = (a, b) => ({
     start: it => Math.min(it[a], it[b]),
@@ -6797,6 +7109,8 @@ onmessage = e => {
   };
   const NOTES = {
     obstructions: 'A solid block in the channel or on the floodplain: a pier, debris, a building or a raised deck. It takes away flow area and raises the water upstream.',
+    models: 'Your model, treated as solid from the ground up to its top. Drag it in 3D to move it; hold Shift and drag to turn it. It makes no eddy zones of its own.',
+    floats: 'Moored in place: it rises and falls with the water and cannot drift. Only the part below the water blocks the flow, and water passes underneath.',
     plainBridges: 'The sides of the bridge block the river outside the opening, and piers block it inside. If the water reaches the underside, the opening runs full.',
     bridges: 'Abutments block the section outside the opening; piers block it inside. When the water reaches the soffit the opening runs full (pressure flow).',
     walls: 'A flood wall or embankment along a bank. The ground behind it carries no flow until the water overtops the crest.',
@@ -6810,14 +7124,15 @@ onmessage = e => {
   function newElement(kind) {
     const s = refSection(), bl = s.banks.left, br = s.banks.right, bank = Math.min(groundAtLocal(s.pts, bl), groundAtLocal(s.pts, br));
     const n = S[kind].length + 1;
-    const ids = { obstructions: 'O', bridges: 'B', walls: 'W', buildings: 'H' };
+    const ids = { obstructions: 'O', bridges: 'B', walls: 'W', buildings: 'H', floats: 'F' };
     let id = ids[kind] + n; while (S[kind].some(e => e.id === id)) id += "'";
+    if (kind === 'floats') return { id, label: `Floating object ${n}`, x0: s.x, x1: s.x + 10, y0: (bl + br) / 2 - 2, y1: (bl + br) / 2 + 2, draft: 0.5, height: 1 };
     if (kind === 'obstructions') return { id, x0: s.x, x1: s.x + 4, y0: (bl + br) / 2 - 1, y1: (bl + br) / 2 + 1, top: +(bank + 1).toFixed(2) };
     if (kind === 'bridges') return { id, label: `Bridge ${n}`, x: s.x, length: 8, openLeft: bl - 2, openRight: br + 2, lowChord: +(bank + 0.8).toFixed(2), highChord: +(bank + 1.6).toFixed(2), piers: '', pierK: 1.25 };
     if (kind === 'walls') return { id, side: 'left', x0: s.x - 30, x1: s.x + 30, y: bl - 2, z: +(bank + 1).toFixed(2) };
     return { id, label: `Building ${n}`, x: s.x, y: Math.max(2, bl - 10), w: 8, d: 12, floor: +(groundAtLocal(s.pts, Math.max(2, bl - 10)) + 0.15).toFixed(2) };
   }
-  const KIND = { obstructions: 'Obstruction', bridges: 'Bridge', walls: 'Flood wall', buildings: 'Building' };
+  const KIND = { obstructions: 'Obstruction', bridges: 'Bridge', walls: 'Flood wall', buildings: 'Building', models: 'Imported model', floats: 'Floating object' };
   function renderElements(openKey) {
     const host = $('rf-elements');
     const all = Object.keys(KIND).flatMap(k => S[k].map((it, i) => ({ k, it, i })));
@@ -6825,19 +7140,23 @@ onmessage = e => {
       FIELDS[k].map(([f, tech, type]) => {
         const lab = T(tech, PLAIN[tech] || tech);
         const wide = type === 'text' && f !== 'label' ? ' rf-wide2' : '';
+        if (type === 'float') return `<label>${lab}<select data-f="${f}"><option value="no"${it[f] !== 'yes' ? ' selected' : ''}>No, solid to the ground</option><option value="yes"${it[f] === 'yes' ? ' selected' : ''}>Yes, moored</option></select></label>`;
+        if (type === 'axis') return `<label>${lab}<select data-f="${f}"><option value="y"${it[f] !== 'z' ? ' selected' : ''}>Y is up (most exports)</option><option value="z"${it[f] === 'z' ? ' selected' : ''}>Z is up</option></select></label>`;
+        if (type === 'rot') return `<label class="rf-wide2">${lab}: <output>${it[f]}°</output><input type="range" min="-180" max="180" step="1" data-f="${f}" value="${it[f]}"></label>`;
         if (type === 'pier') return `<label>${lab}<select data-f="${f}">${PIER.map(([v, t]) => `<option value="${v}"${String(it[f]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`;
         if (type === 'side') return `<label>${lab}<select data-f="${f}"><option value="left"${it[f] === 'left' ? ' selected' : ''}>left</option><option value="right"${it[f] === 'right' ? ' selected' : ''}>right</option></select></label>`;
         return `<label class="${wide}" title="${esc(tech)}">${lab}<input type="${type === 'text' ? 'text' : 'number'}" step="0.1" data-f="${f}" value="${esc(SPAN[f] ? +SPAN[f].get(it).toFixed(2) : it[f] ?? '')}"></label>`;
-      }).join('') + `<p class="rf-hint rf-wide2">${k === 'bridges' ? T(NOTES.bridges, NOTES.plainBridges) : NOTES[k]}</p><button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-del>Remove ${esc(KIND[k].toLowerCase())}</button></div></details>`).join('');
+      }).join('') + `<p class="rf-hint rf-wide2">${k === 'bridges' ? T(NOTES.bridges, NOTES.plainBridges) : k === 'models' ? `${NOTES.models} Size: ${modelGeo(it).size.map(v => v.toFixed(1)).join(' × ')} m (height last).` : NOTES[k]}</p><button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-del>Remove ${esc(KIND[k].toLowerCase())}</button></div></details>`).join('');
     host.querySelectorAll('details.rf-el').forEach(d => {
       const k = d.dataset.k, it = S[k][+d.dataset.i];
-      d.querySelectorAll('[data-f]').forEach(inp => inp.addEventListener('change', () => {
+      d.querySelectorAll('[data-f]').forEach(inp => inp.addEventListener(inp.type === 'range' ? 'input' : 'change', () => {
         const f = inp.dataset.f, type = (FIELDS[k].find(x => x[0] === f) || [])[2];
-        if (type === 'text' || type === 'side') it[f] = inp.value;
+        if (type === 'text' || type === 'side' || type === 'axis' || type === 'float') it[f] = inp.value;
         else if (type === 'pier') it[f] = +inp.value;
         else if (SPAN[f]) { const v = parseFloat(inp.value); if (isNum(v) && (!SPAN[f].size || v > 0)) SPAN[f].set(it, v); else { inp.value = +SPAN[f].get(it).toFixed(2); return; } }
         else { const v = parseFloat(inp.value); if (isNum(v)) it[f] = v; else { inp.value = it[f]; return; } }
         if (f === 'label') d.querySelector('.rf-el-name').textContent = it.label;
+        if (type === 'rot') inp.parentElement.querySelector('output').textContent = it[f] + '°';
         schedule();
       }));
       d.querySelector('[data-del]').addEventListener('click', () => { S[k].splice(+d.dataset.i, 1); renderElements(); schedule(); });
@@ -6970,6 +7289,11 @@ onmessage = e => {
       if (!isNum(s.x) || !Array.isArray(s.pts) || s.pts.length < 3 || s.pts.some(p => !isNum(p[0]) || !isNum(p[1]))) return `Section ${s.id || '?'} is not readable.`;
       if (!s.banks || !isNum(s.banks.left) || !isNum(s.banks.right) || !s.n || !isNum(s.n.ch)) return `Section ${s.id || '?'} has no banks or roughness.`;
     }
+    for (const f of st.floats || []) if (![f.x0, f.x1, f.y0, f.y1, f.draft, f.height].every(isNum)) return `Floating object ${f.id || '?'} is not readable.`;
+    for (const m of st.models || []) {
+      const nv = Array.isArray(m.v) ? m.v.length / 3 : 0;
+      if (!nv || !Number.isInteger(nv) || !m.v.every(isNum) || !Array.isArray(m.f) || !m.f.length || m.f.length % 3 || !m.f.every(k => Number.isInteger(k) && k >= 0 && k < nv) || ![m.x, m.y, m.rot, m.scale, m.base].every(isNum)) return `Imported model ${m.id || '?'} is not readable.`;
+    }
     return null;
   }
   function open(file) {
@@ -6980,7 +7304,7 @@ onmessage = e => {
       const err = validState(st); if (err) { alert(err); return; }
       const d = defaultState();
       S = { ...d, ...st, flow: { ...d.flow, ...(st.flow || {}) }, eddy: { ...d.eddy, ...(st.eddy || {}) }, boundary: { ...d.boundary, ...(st.boundary || {}) },
-        obstructions: st.obstructions || [], bridges: st.bridges || [], walls: st.walls || [], buildings: st.buildings || [] };
+        obstructions: st.obstructions || [], bridges: st.bridges || [], walls: st.walls || [], buildings: st.buildings || [], models: st.models || [], floats: st.floats || [] };
       editIdx = 0; viewId = null; V3.fitted = false; renderEditor(); renderElements(); schedule();
     };
     r.readAsText(file);
@@ -7104,6 +7428,8 @@ onmessage = e => {
     $(id + '-out').textContent = key === 'n' ? (ARROWS.n || 'Off') : Math.round(ARROWS.size * 100) + '%';
     if (RES) renderActive();
   });
+  $('rf-import').addEventListener('click', () => $('rf-obj').click());
+  $('rf-obj').addEventListener('change', e => { if (e.target.files[0]) importObj(e.target.files[0]); e.target.value = ''; });
   $('rf-new').addEventListener('click', newReach);
   $('rf-new2').addEventListener('click', newReach);
   $('rf-save').addEventListener('click', save);

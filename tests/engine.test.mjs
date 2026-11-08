@@ -195,6 +195,28 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('an eddy zone shorter than the section spacing reaches a section', acting > 0, `${acting} sections`);
 }
 
+// 8f. A block marked noEddy (a strip of an imported model) makes no eddy zone
+{
+  const ob = { id: 'm', x0: 150, x1: 154, y0: 21, y1: 27, top: 9, noEddy: true };
+  const r = RFL.solve({ ...base, sections: vsecs(), obstructions: [ob], eddy: { on: true, er: 2, cr: 1 } }, 20);
+  check('a strip of an imported model makes no eddy zone', r.eddyZones.length === 0 && !r.sections.some(s => s.eddies.length));
+}
+
+// 8g. A floating object: area beneath its draft, wetted underside, flow passing under
+{
+  const pts = rect(10, 0), secs = [section(0, pts), section(100, pts)];
+  const float = { x0: 0, x1: 100, y0: 2, y1: 6, draft: 0.5 };
+  const h = RFL.hydraulics(RFL.prepare({ sections: secs, floats: [float] }).preps[0], 2, 10);
+  const h0 = RFL.hydraulics(RFL.prepare({ sections: secs }).preps[0], 2, 10);
+  check('a floating object removes only the water beneath its draft', near(h.A, 10 * 2 - 4 * 0.5, 1e-9) && near(h.P - h0.P, 4 + 2 * 0.5, 1e-9), `area ${h.A.toFixed(3)} m², perimeter +${(h.P - h0.P).toFixed(3)} m`);
+  const grounded = RFL.hydraulics(RFL.prepare({ sections: secs, floats: [{ ...float, draft: 5 }] }).preps[0], 2, 10);
+  check('a float deeper than the water blocks down to the bed', near(grounded.A, 10 * 2 - 4 * 2, 1e-9), `area ${grounded.A.toFixed(3)} m²`);
+  const f2 = { x0: 150, x1: 170, y0: 20, y1: 28, draft: 0.8 };
+  const clear = RFL.solve({ ...base, sections: vsecs() }, 20), held = RFL.solve({ ...base, sections: vsecs(), floats: [f2] }, 20);
+  const rise = RFL.wsAt(held, 200) - RFL.wsAt(clear, 200);
+  check('a floating object raises the water upstream', rise > 0.001 && held.sections.some(s => Math.abs(s.x - 170) < 1e-6), mm(rise));
+}
+
 // 9. Yarnell's pier equation against a hand calculation
 {
   // K 1.25, V 2 m/s, y 2 m, a 0.1: hv = 0.20387, w = 0.10194
