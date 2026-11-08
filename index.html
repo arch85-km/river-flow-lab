@@ -7787,6 +7787,15 @@ onmessage = e => {
     return { id, label: `Building ${n}`, x: s.x, y: Math.max(2, bl - 10), w: 8, d: 12, floor: +(groundAtLocal(s.pts, Math.max(2, bl - 10)) + 0.15).toFixed(2), height: 3.5 };
   }
   const KIND = { obstructions: 'Obstruction', bridges: 'Bridge', walls: 'Flood wall', buildings: 'Building', models: 'Imported model', floats: 'Floating object' };
+  // Put a wall just behind the top of the bank on its own side, tall enough to stand above the ground there.
+  function wallToBank(w) {
+    const lo = Math.min(w.x0, w.x1), hi = Math.max(w.x0, w.x1), mid = (lo + hi) / 2;
+    let secs = S.sections.filter(s => s.x >= lo - 1e-6 && s.x <= hi + 1e-6);
+    if (!secs.length) secs = [S.sections.reduce((m, q) => Math.abs(q.x - mid) < Math.abs(m.x - mid) ? q : m)];
+    w.y = +(wallSide(w) === 'left' ? Math.min(...secs.map(s => s.banks.left)) - 1 : Math.max(...secs.map(s => s.banks.right)) + 1).toFixed(1);
+    const ground = Math.max(...secs.map(s => groundAtLocal(s.pts, w.y)));
+    if (w.z < ground + 0.5) w.z = +(ground + 1).toFixed(2);
+  }
   function renderElements(openKey) {
     const host = $('rf-elements');
     const all = Object.keys(KIND).flatMap(k => S[k].map((it, i) => ({ k, it, i })));
@@ -7801,7 +7810,7 @@ onmessage = e => {
         if (type === 'pier') return `<label>${lab}<select data-f="${f}">${PIER.map(([v, t]) => `<option value="${v}"${String(it[f]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`;
         if (type === 'side') return `<label>${lab}<select data-f="${f}"><option value="left"${it[f] === 'left' ? ' selected' : ''}>left</option><option value="right"${it[f] === 'right' ? ' selected' : ''}>right</option></select></label>`;
         return `<label class="${wide}" title="${esc(tech)}">${lab}<input type="${type === 'text' ? 'text' : 'number'}" step="0.1" data-f="${f}" value="${esc(SPAN[f] ? +SPAN[f].get(it).toFixed(2) : it[f] ?? '')}"></label>`;
-      }).join('') + `<p class="rf-hint rf-wide2">${k === 'walls' ? `${NOTES.walls} It protects the land on the ${wallSide(it)}.` : k === 'bridges' ? T(NOTES.bridges, NOTES.plainBridges) : k === 'models' ? `${NOTES.models} Size: ${modelGeo(it).size.map(v => v.toFixed(1)).join(' × ')} m (height last).` : NOTES[k]}</p><button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-del>Remove ${esc(KIND[k].toLowerCase())}</button></div></details>`).join('');
+      }).join('') + `<p class="rf-hint rf-wide2">${k === 'walls' ? `${NOTES.walls} It protects the land on the ${wallSide(it)}.` : k === 'bridges' ? T(NOTES.bridges, NOTES.plainBridges) : k === 'models' ? `${NOTES.models} Size: ${modelGeo(it).size.map(v => v.toFixed(1)).join(' × ')} m (height last).` : NOTES[k]}</p>${k === 'walls' ? '<button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-bank>Move to bank</button>' : ''}<button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-del>Remove ${esc(KIND[k].toLowerCase())}</button></div></details>`).join('');
     host.querySelectorAll('details.rf-el').forEach(d => {
       const k = d.dataset.k, it = S[k][+d.dataset.i];
       d.querySelectorAll('[data-f]').forEach(inp => inp.addEventListener(inp.type === 'range' ? 'input' : 'change', () => {
@@ -7817,6 +7826,8 @@ onmessage = e => {
         if (type === 'hslide') { if (!(it[f] > 0)) it[f] = 3.5; d.querySelectorAll(`[data-f=${f}]`).forEach(o => { if (o !== inp) o.value = it[f]; }); }
         schedule();
       }));
+      const toBank = d.querySelector('[data-bank]');
+      if (toBank) toBank.addEventListener('click', () => { wallToBank(it); renderElements(k + d.dataset.i); schedule(); });
       d.querySelector('[data-del]').addEventListener('click', () => { S[k].splice(+d.dataset.i, 1); renderElements(); schedule(); });
     });
   }
