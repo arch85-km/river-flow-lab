@@ -281,8 +281,8 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
         <div class="rf-kv"><span class="rf-lab">Sections</span><span id="rf-river-n"></span></div>
         <div class="rf-kv"><span class="rf-lab">Length</span><span id="rf-river-len"></span></div>
         <p class="rf-hint">Draw the river's course on the map, from upstream to downstream. Sections are cut square to your line; their levels come from the template shape until surveyed levels are entered.</p>
-        <button class="rf-btn rf-sq" type="button" id="rf-terrain">Build from a terrain model (.obj)</button>
-        <input type="file" id="rf-terrain-file" accept=".obj" hidden>
+        <button class="rf-btn rf-sq" type="button" id="rf-terrain">Build from a terrain model (.obj or .asc)</button>
+        <input type="file" id="rf-terrain-file" accept=".obj,.asc" multiple hidden>
         <button class="rf-btn rf-sq" type="button" id="rf-map-osm">Find rivers here (OpenStreetMap)</button>
         <p class="rf-hint">Loads the rivers and streams in the map view (up to 3 km across). Click one, then click where your reach starts and ends; OpenStreetMap's direction of flow sets which end is upstream. Or draw the line yourself:</p>
         <div class="rf-grid2">
@@ -5989,50 +5989,150 @@ onmessage = e => {
     };
     return { E0, E1, N0, N1, zlo, zhi, at, up: 'XYZ'[up] };
   }
+  // British National Grid from and to WGS84, by Helmert shift and transverse
+  // Mercator (Ordnance Survey formulae). Good to a few metres, enough to mark a place.
+  const RAD = Math.PI / 180, SEC = RAD / 3600;
+  function helmert(lat, lon, from, to, t, s, r) {
+    const e2f = 1 - from.b * from.b / (from.a * from.a), sp = Math.sin(lat), cp = Math.cos(lat), nu = from.a / Math.sqrt(1 - e2f * sp * sp);
+    const x = nu * cp * Math.cos(lon), y = nu * cp * Math.sin(lon), z = (1 - e2f) * nu * sp, k = 1 + s * 1e-6;
+    const X = t[0] + k * x - r[2] * y + r[1] * z, Y = t[1] + r[2] * x + k * y - r[0] * z, Z = t[2] - r[1] * x + r[0] * y + k * z;
+    const e2t = 1 - to.b * to.b / (to.a * to.a), p = Math.hypot(X, Y);
+    let ph = Math.atan2(Z, p * (1 - e2t));
+    for (let i = 0; i < 8; i++) { const n = to.a / Math.sqrt(1 - e2t * Math.sin(ph) ** 2); ph = Math.atan2(Z + e2t * n * Math.sin(ph), p); }
+    return [ph, Math.atan2(Y, X)];
+  }
+  const WGS = { a: 6378137, b: 6356752.3142 }, AIRY = { a: 6377563.396, b: 6356256.909 };
+  const HT = [-446.448, 125.157, -542.060], HS = 20.4894, HR = [-0.1502 * SEC, -0.2470 * SEC, -0.8421 * SEC];
+  const TM = { F0: 0.9996012717, ph0: 49 * RAD, la0: -2 * RAD, E0: 400000, N0: -100000 };
+  function tmMeridian(ph) {
+    const { a, b } = AIRY, n = (a - b) / (a + b), n2 = n * n, n3 = n2 * n, d = ph - TM.ph0, s = ph + TM.ph0;
+    return b * TM.F0 * ((1 + n + 1.25 * n2 + 1.25 * n3) * d - (3 * n + 3 * n2 + 2.625 * n3) * Math.sin(d) * Math.cos(s) + (1.875 * n2 + 1.875 * n3) * Math.sin(2 * d) * Math.cos(2 * s) - (35 / 24) * n3 * Math.sin(3 * d) * Math.cos(3 * s));
+  }
+  function tmForward(ph, la) {
+    const { a, b } = AIRY, e2 = 1 - b * b / (a * a), s = Math.sin(ph), c = Math.cos(ph), t = Math.tan(ph), v = a * TM.F0 / Math.sqrt(1 - e2 * s * s), r = a * TM.F0 * (1 - e2) / Math.pow(1 - e2 * s * s, 1.5), h2 = v / r - 1, L = la - TM.la0;
+    const I = tmMeridian(ph) + TM.N0, II = v / 2 * s * c, III = v / 24 * s * c ** 3 * (5 - t * t + 9 * h2), IIIA = v / 720 * s * c ** 5 * (61 - 58 * t * t + t ** 4);
+    const IV = v * c, V = v / 6 * c ** 3 * (v / r - t * t), VI = v / 120 * c ** 5 * (5 - 18 * t * t + t ** 4 + 14 * h2 - 58 * t * t * h2);
+    return [TM.E0 + IV * L + V * L ** 3 + VI * L ** 5, I + II * L * L + III * L ** 4 + IIIA * L ** 6];
+  }
+  function tmInverse(E, N) {
+    const { a, b } = AIRY, e2 = 1 - b * b / (a * a);
+    let ph = TM.ph0, M = 0;
+    do { ph += (N - TM.N0 - M) / (a * TM.F0); M = tmMeridian(ph); } while (Math.abs(N - TM.N0 - M) >= 1e-5);
+    const s = Math.sin(ph), c = Math.cos(ph), t = Math.tan(ph), v = a * TM.F0 / Math.sqrt(1 - e2 * s * s), r = a * TM.F0 * (1 - e2) / Math.pow(1 - e2 * s * s, 1.5), h2 = v / r - 1, d = E - TM.E0, se = 1 / c;
+    const VII = t / (2 * r * v), VIII = t / (24 * r * v ** 3) * (5 + 3 * t * t + h2 - 9 * t * t * h2), IX = t / (720 * r * v ** 5) * (61 + 90 * t * t + 45 * t ** 4);
+    const X = se / v, XI = se / (6 * v ** 3) * (v / r + 2 * t * t), XII = se / (120 * v ** 5) * (5 + 28 * t * t + 24 * t ** 4), XIIA = se / (5040 * v ** 7) * (61 + 662 * t * t + 1320 * t ** 4 + 720 * t ** 6);
+    return [ph - VII * d * d + VIII * d ** 4 - IX * d ** 6, TM.la0 + X * d - XI * d ** 3 + XII * d ** 5 - XIIA * d ** 7];
+  }
+  function wgsToBng(latDeg, lonDeg) { const [ph, la] = helmert(latDeg * RAD, lonDeg * RAD, WGS, AIRY, HT, HS, HR); return tmForward(ph, la); }
+  function bngToWgs(E, N) {
+    const [ph, la] = tmInverse(E, N), [p2, l2] = helmert(ph, la, AIRY, WGS, HT.map(v => -v), -HS, HR.map(v => -v));
+    return [p2 / RAD, l2 / RAD];
+  }
+  // A place typed as "lat, lon" or pasted as a Google Maps link.
+  function parsePlace(text) {
+    const t = text.trim(); if (!t) return null;
+    let m = /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/.exec(t) || /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/.exec(t) || /^(-?\d+(?:\.\d+)?)[\s,;]+(-?\d+(?:\.\d+)?)$/.exec(t);
+    return m ? [+m[1], +m[2]] : null;
+  }
+  // One or more ESRI ASCII grids on the same cell size, joined into a height grid.
+  function parseAsc(text) {
+    let at = 0;
+    const next = () => { while (at < text.length && text.charCodeAt(at) <= 32) at++; const s = at; while (at < text.length && text.charCodeAt(at) > 32) at++; return text.slice(s, at); };
+    const head = {};
+    for (let i = 0; i < 6; i++) { const mark = at, key = next().toLowerCase(); if (!/^(ncols|nrows|xllcorner|yllcorner|xllcenter|yllcenter|cellsize|nodata_value)$/.test(key)) { at = mark; break; } head[key] = parseFloat(next()); }
+    const nx = head.ncols, ny = head.nrows, cell = head.cellsize;
+    if (!(nx > 0 && ny > 0 && cell > 0)) return { error: 'That is not a readable ASC grid.' };
+    if (nx * ny > 16e6) return { error: 'That grid is too large. Use tiles of 4 km across or less.' };
+    const x0 = head.xllcenter !== undefined ? head.xllcenter : head.xllcorner + cell / 2, y0 = head.yllcenter !== undefined ? head.yllcenter : head.yllcorner + cell / 2;
+    const nd = head.nodata_value, z = new Float32Array(nx * ny);
+    for (let j = ny - 1; j >= 0; j--) for (let i = 0; i < nx; i++) { const v = parseFloat(next()); z[j * nx + i] = !isFinite(v) || v === nd ? NaN : v; }
+    return { nx, ny, cell, x0, y0, z };
+  }
+  function gridTerrain(tiles) {
+    const cell = tiles[0].cell;
+    if (tiles.some(t => Math.abs(t.cell - cell) > 1e-6)) return { error: 'All the tiles need the same cell size.' };
+    const E0 = Math.min(...tiles.map(t => t.x0)), N0 = Math.min(...tiles.map(t => t.y0));
+    const nx = Math.round((Math.max(...tiles.map(t => t.x0 + (t.nx - 1) * t.cell)) - E0) / cell) + 1, ny = Math.round((Math.max(...tiles.map(t => t.y0 + (t.ny - 1) * t.cell)) - N0) / cell) + 1;
+    if (nx * ny > 25e6) return { error: 'Those tiles cover too large an area together. Choose fewer tiles.' };
+    const g = new Float32Array(nx * ny).fill(NaN);
+    let zlo = Infinity, zhi = -Infinity;
+    for (const t of tiles) {
+      const ox = Math.round((t.x0 - E0) / cell), oy = Math.round((t.y0 - N0) / cell);
+      for (let j = 0; j < t.ny; j++) for (let i = 0; i < t.nx; i++) { const v = t.z[j * t.nx + i]; if (v === v) { g[(j + oy) * nx + i + ox] = v; if (v < zlo) zlo = v; if (v > zhi) zhi = v; } }
+    }
+    if (!isFinite(zlo)) return { error: 'That grid has no ground levels in it.' };
+    const at = (e, m) => {
+      const fx = (e - E0) / cell, fy = (m - N0) / cell, i = Math.floor(fx), j = Math.floor(fy);
+      if (i < 0 || j < 0 || i >= nx - 1 || j >= ny - 1) return null;
+      const s = fx - i, t = fy - j, p = g[j * nx + i], q = g[j * nx + i + 1], r = g[(j + 1) * nx + i], w = g[(j + 1) * nx + i + 1];
+      if (p !== p || q !== q || r !== r || w !== w) return null;
+      return p * (1 - s) * (1 - t) + q * s * (1 - t) + r * (1 - s) * t + w * s * t;
+    };
+    return { E0, E1: E0 + (nx - 1) * cell, N0, N1: N0 + (ny - 1) * cell, zlo, zhi, at, georef: true, fine: true };
+  }
   // Sections square to the line (drawn upstream to downstream), from the terrain.
   function terrainReach(T, line, p) {
-    const toGeo = ([e, n]) => [n / M_LAT, e / 111320], origin = smoothLine(line).reverse()[0];
-    const down = smoothLine(line).reverse().map(toGeo), yc = p.half, g = { line: down, yc, local: true }, f = geoFrame(g);
+    const toGeo = ([e, n]) => [n / M_LAT, e / 111320], downEN = smoothLine(line).reverse(), origin = downEN[0];
+    const yc = p.half, g = { line: downEN.map(toGeo), yc, local: true }, f = geoFrame(g);
     if (f.length < 2 * p.spacing) return { error: `The line is ${f.length.toFixed(0)} m long: draw at least ${(2 * p.spacing).toFixed(0)} m.` };
     const xs = []; for (let x = 0; x <= f.length + 1e-6; x += p.spacing) xs.push(+x.toFixed(2));
     if (f.length - xs[xs.length - 1] > p.spacing / 3) xs.push(+f.length.toFixed(2));
-    const tw = p.bed / 2 + p.side * p.depth, yL = yc - tw, yR = yc + tw, cuts = [];
+    // Measured sizes, by distance from the upstream end, override the sliders.
+    const sizeAt = u => {
+      const m = p.measures;
+      if (!m.length) return { depth: p.depth, bed: p.bed };
+      let top, depth;
+      if (u <= m[0][0]) { top = m[0][1]; depth = m[0][2]; }
+      else if (u >= m[m.length - 1][0]) { top = m[m.length - 1][1]; depth = m[m.length - 1][2]; }
+      else { let i = 1; while (m[i][0] < u) i++; const t = (u - m[i - 1][0]) / ((m[i][0] - m[i - 1][0]) || 1); top = m[i - 1][1] + t * (m[i][1] - m[i - 1][1]); depth = m[i - 1][2] + t * (m[i][2] - m[i - 1][2]); }
+      return { depth, bed: Math.max(1, top - 2 * p.side * depth) };
+    };
+    const step = T.fine ? 2 : 4, cuts = [];
     for (const x of xs) {
-      const c = pointAlong(f, x), d = flowDir(f, x), left = [-d[1], d[0]];
+      const c = pointAlong(f, x), d = flowDir(f, x), left = [-d[1], d[0]], size = sizeAt(f.length - x), tw = size.bed / 2 + p.side * size.depth;
       const ground = y => T.at(origin[0] + c[0] + left[0] * (yc - y), origin[1] + c[1] + left[1] * (yc - y));
-      if (ground(yL) === null || ground(yR) === null) return { error: `The river runs off the edge of the terrain ${x.toFixed(0)} m from its downstream end. Keep the line further inside the model.` };
+      const yL = yc - tw, yR = yc + tw;
+      if (tw + 8 > p.half) return { error: 'Include more land each side of the river: the channel is too wide for it.' };
+      if (ground(yL) === null || ground(yR) === null) return { error: `The river runs off the edge of the terrain ${(f.length - x).toFixed(0)} m from its upstream end. Keep the line further inside the model.` };
       let a = yc, b = yc;
-      while (a - 4 >= 0 && ground(a - 4) !== null) a -= 4;
-      while (b + 4 <= 2 * yc && ground(b + 4) !== null) b += 4;
-      cuts.push({ x, ground, a, b, gL: ground(yL), gR: ground(yR) });
+      while (a - step >= 0 && ground(a - step) !== null) a -= step;
+      while (b + step <= 2 * yc && ground(b + step) !== null) b += step;
+      cuts.push({ x, ground, a, b, gL: ground(yL), gR: ground(yR), yL, yR, size });
     }
-    // The bed: the given depth below the lower bank, never rising on the way downstream.
-    const beds = cuts.map(q => Math.min(q.gL, q.gR) - p.depth);
-    const blocks = []; for (const b of beds) { blocks.push({ sum: b, n: 1 }); while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].n > blocks[blocks.length - 1].sum / blocks[blocks.length - 1].n) { const t = blocks.pop(), u = blocks[blocks.length - 1]; u.sum += t.sum; u.n += t.n; } } let bi = 0; for (const u of blocks) for (let c = 0; c < u.n; c++) beds[bi++] = Math.min(u.sum / u.n, Math.min(cuts[bi - 1].gL, cuts[bi - 1].gR) - 0.3); for (let i = beds.length - 2; i >= 0; i--) beds[i] = Math.min(beds[i], beds[i + 1]);
+    // Bank tops smoothed along the river, so one rough cell does not set the depth.
+    const smooth = key => cuts.map((_, i) => { const part = cuts.slice(Math.max(0, i - 3), i + 4).map(q => q[key]); return part.reduce((s, v) => s + v, 0) / part.length; });
+    const sL = smooth('gL'), sR = smooth('gR');
+    const beds = cuts.map((q, i) => Math.min(sL[i], sR[i]) - q.size.depth);
+    // best-fit bed that never rises going downstream, always below the banks
+    const blocks = [];
+    for (const b of beds) { blocks.push({ sum: b, n: 1 }); while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].n > blocks[blocks.length - 1].sum / blocks[blocks.length - 1].n) { const t = blocks.pop(), u = blocks[blocks.length - 1]; u.sum += t.sum; u.n += t.n; } }
+    let k = 0;
+    for (const u of blocks) for (let c = 0; c < u.n; c++, k++) beds[k] = Math.min(u.sum / u.n, Math.min(sL[k], sR[k]) - 0.3);
+    for (let i = beds.length - 2; i >= 0; i--) beds[i] = Math.min(beds[i], beds[i + 1]);
     const sections = cuts.map((q, i) => {
       const raw = [], put = (y, z) => raw.push([+y.toFixed(3), +z.toFixed(3)]);
-      for (let y = q.a; y <= q.b + 1e-9; y += 4) {
-        if (p.carve && y > yL - 0.5 && y < yR + 0.5) continue;
+      for (let y = q.a; y <= q.b + 1e-9; y += step) {
+        if (p.carve && y > q.yL - 0.5 && y < q.yR + 0.5) continue;
         put(y, q.ground(y));
       }
-      if (p.carve) { put(yL, q.gL); put(yc - p.bed / 2, beds[i]); put(yc + p.bed / 2, beds[i]); put(yR, q.gR); }
+      if (p.carve) { put(q.yL, sL[i]); put(yc - q.size.bed / 2, beds[i]); put(yc + q.size.bed / 2, beds[i]); put(q.yR, sR[i]); }
       raw.sort((u, v) => u[0] - v[0]);
-      // drop points on a straight run, to keep the sections light
-      const pts = raw.filter((t, k) => {
-        if (k === 0 || k === raw.length - 1) return true;
-        const u = raw[k - 1], v = raw[k + 1];
+      const keepBank = y => Math.abs(y - q.yL) < 1e-3 || Math.abs(y - q.yR) < 1e-3;
+      const pts = raw.filter((t, j) => {
+        if (j === 0 || j === raw.length - 1 || keepBank(t[0])) return true;
+        const u = raw[j - 1], v = raw[j + 1];
         return Math.abs(u[1] + (v[1] - u[1]) * (t[0] - u[0]) / ((v[0] - u[0]) || 1) - t[1]) > 0.03;
       });
-      return { id: `XS${String(i + 1).padStart(2, '0')}`, x: q.x, pts, banks: { left: yL, right: yR }, n: { lob: TEMPLATE.nFp, ch: TEMPLATE.nCh, rob: TEMPLATE.nFp } };
+      return { id: `XS${String(i + 1).padStart(2, '0')}`, x: q.x, pts, banks: { left: q.yL, right: q.yR }, n: { lob: TEMPLATE.nFp, ch: TEMPLATE.nCh, rob: TEMPLATE.nFp } };
     });
-    const bedOf = s => Math.min(...s.pts.map(t => t[1]));
-    const slope = Math.max(0.0005, (bedOf(sections[sections.length - 1]) - bedOf(sections[0])) / f.length);
-    return { g, sections, slope };
+    const bedOf = i => p.carve ? beds[i] : Math.min(...sections[i].pts.map(t => t[1]));
+    const slope = Math.max(0.0005, (bedOf(sections.length - 1) - bedOf(0)) / f.length);
+    return { g: T.georef ? { line: downEN.map(([e, n]) => bngToWgs(e, n)), yc } : g, sections, slope };
   }
-  function terrainDialog(o, fileName) {
+  function terrainDialog(o, fileName, ready) {
     const size = c => { let lo = Infinity, hi = -Infinity; for (let i = c; i < o.v.length; i += 3) { if (o.v[i] < lo) lo = o.v[i]; if (o.v[i] > hi) hi = o.v[i]; } return hi - lo; };
-    const biggest = Math.max(size(0), size(1), size(2));
-    let T = null, pts = [], base = null;
+    const biggest = ready ? 0 : Math.max(size(0), size(1), size(2));
+    let T = null, pts = [], base = null, view = null, marks = [];
     const dlg = document.createElement('dialog');
     dlg.className = 'rf-dlg';
     dlg.setAttribute('aria-labelledby', 'rf-dlg-h');
@@ -6041,97 +6141,147 @@ onmessage = e => {
       <p class="rf-dlg-intro">Click along the river from its upstream end to its downstream end. This replaces the current river and your design.</p>
       <canvas id="rf-t-map" width="552" height="360" style="width:100%;display:block;border:1px solid var(--rf-line);border-radius:8px;cursor:crosshair" role="img" aria-label="Terrain seen from above; click along the river"></canvas>
       <div class="rf-dlg-slide" style="margin:8px 0 14px;justify-content:space-between"><small id="rf-t-info"></small><span style="display:flex;gap:6px;flex:none"><button class="rf-btn rf-sq rf-small" type="button" id="rf-t-undo">Undo point</button><button class="rf-btn rf-sq rf-small" type="button" id="rf-t-clear">Clear line</button></span></div>
+      <fieldset${ready ? '' : ' hidden'}><legend>Mark places on the terrain</legend><div class="rf-dlg-grid rf-one">
+        <label>One per line: latitude, longitude, or a Google Maps link<textarea class="rf-pts" id="rf-t-marks" style="min-height:4rem" spellcheck="false"></textarea></label>
+        <span class="rf-dlg-slide" style="gap:6px"><button class="rf-btn rf-sq rf-small" type="button" id="rf-t-show">Show on the terrain</button><button class="rf-btn rf-sq rf-small" type="button" id="rf-t-zoom">Zoom to them</button><button class="rf-btn rf-sq rf-small" type="button" id="rf-t-full">Whole terrain</button></span>
+      </div></fieldset>
+      <fieldset${ready ? ' hidden' : ''}><div class="rf-dlg-grid rf-one"><label>Units of the model<select class="rf-select" id="rf-t-unit"><option value="1">Metres</option><option value="0.01">Centimetres</option><option value="0.001">Millimetres</option></select></label></div></fieldset>
       <fieldset><div class="rf-dlg-grid rf-one">
-        <label>Units of the model<select class="rf-select" id="rf-t-unit"><option value="1">Metres</option><option value="0.01">Centimetres</option><option value="0.001">Millimetres</option></select></label>
         <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="rf-t-own" style="width:auto"> The model already includes the real river bed</label>
         <small id="rf-t-note">Most terrain models record the water surface, not the river bed. The channel below is carved in as an estimate.</small>
         ${slider('depth', 'River depth, m', 'From the lower bank down to the bed', [0.5, 6, 0.1], 1.6)}
         ${slider('bed', 'Width of the river bed, m', '', [2, 40, 0.5], 8)}
         ${slider('side', 'Bank slope', 'Left is steep, right is gentle', [0.25, 4, 0.25], 1)}
+        <label>Measured on site (optional): one per line, distance from the upstream end, width between banks, depth, in metres<textarea class="rf-pts" id="rf-t-meas" style="min-height:4rem" spellcheck="false" placeholder="0, 11, 1.4&#10;120, 9.5, 1.2"></textarea><small>These replace the depth and width above, and are blended between the points you give.</small></label>
         ${slider('half', 'Land to include each side, m', 'Wide enough to hold the flood', [20, 200, 5], 60)}
         ${slider('spacing', 'Distance between sections, m', '', [5, 50, 1], 15)}
       </div></fieldset>
       <p class="rf-err" id="rf-t-msg" role="status" style="margin:0 0 10px"></p>
       <div class="rf-dlg-actions"><button class="rf-btn" type="button" id="rf-t-cancel">Cancel</button><button class="rf-btn rf-primary" type="button" id="rf-t-ok">Build the river</button></div>`;
     document.body.appendChild(dlg); dlg.showModal();
-    const canvas = dlg.querySelector('#rf-t-map'), g = canvas.getContext('2d'), info = dlg.querySelector('#rf-t-info'), msg = dlg.querySelector('#rf-t-msg');
-    const unit = dlg.querySelector('#rf-t-unit');
+    const $d = s => dlg.querySelector(s), canvas = $d('#rf-t-map'), g = canvas.getContext('2d'), info = $d('#rf-t-info'), msg = $d('#rf-t-msg'), unit = $d('#rf-t-unit');
     unit.value = biggest > 20000 ? '0.001' : '1';
+    const px = ([e, n]) => [(e - view.E0) / (view.E1 - view.E0) * canvas.width, (view.N1 - n) / (view.N1 - view.N0) * canvas.height];
     const paintLine = () => {
       if (base) g.putImageData(base, 0, 0);
-      if (!T) return;
-      const px = ([e, n]) => [(e - T.E0) / (T.E1 - T.E0) * canvas.width, (T.N1 - n) / (T.N1 - T.N0) * canvas.height];
+      if (!T || !view) return;
+      g.font = '600 12px system-ui, sans-serif';
+      marks.forEach((m, i) => { const [x, y] = px(m); g.fillStyle = '#e8590c'; g.beginPath(); g.arc(x, y, 7, 0, 7); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText(i + 1, x, y + 4); g.textAlign = 'start'; });
       g.strokeStyle = '#0a6ebd'; g.lineWidth = 3; g.lineJoin = 'round'; g.beginPath();
       pts.forEach((p, i) => { const [x, y] = px(p); if (i) g.lineTo(x, y); else g.moveTo(x, y); });
       g.stroke();
-      g.font = '600 12px system-ui, sans-serif';
-      pts.forEach((p, i) => { const [x, y] = px(p); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); g.fillStyle = '#0a6ebd'; g.beginPath(); g.arc(x, y, 3.5, 0, 7); g.fill(); });
+      pts.forEach(p => { const [x, y] = px(p); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); g.fillStyle = '#0a6ebd'; g.beginPath(); g.arc(x, y, 3.5, 0, 7); g.fill(); });
       const tag = (p, t) => { const [x, y] = px(p); g.fillStyle = '#fff'; g.fillRect(x + 8, y - 16, g.measureText(t).width + 8, 17); g.fillStyle = '#14202c'; g.fillText(t, x + 12, y - 3); };
       if (pts.length) tag(pts[0], 'Upstream');
       if (pts.length > 1) tag(pts[pts.length - 1], 'Downstream');
     };
-    const load = () => {
-      T = makeTerrain(o, +unit.value); pts = []; base = null; msg.textContent = '';
-      if (T.error) { msg.textContent = T.error; T = null; paintLine(); return; }
-      const W = T.E1 - T.E0, H = T.N1 - T.N0;
+    const paintGround = () => {
+      const W = view.E1 - view.E0, H = view.N1 - view.N0;
       canvas.height = Math.max(160, Math.min(420, Math.round(canvas.width * H / W)));
-      const img = g.createImageData(canvas.width, canvas.height), span = (T.zhi - T.zlo) || 1, stepE = W / canvas.width, stepN = H / canvas.height;
+      const img = g.createImageData(canvas.width, canvas.height), stepE = W / canvas.width, stepN = H / canvas.height;
+      // colour by the levels in this view, so a zoomed valley still shows its shape
+      let lo = Infinity, hi = -Infinity;
+      for (let j = 0; j < canvas.height; j += 6) for (let i = 0; i < canvas.width; i += 6) { const z = T.at(view.E0 + (i + 0.5) * stepE, view.N1 - (j + 0.5) * stepN); if (z !== null) { if (z < lo) lo = z; if (z > hi) hi = z; } }
+      const span = (hi - lo) || 1;
       for (let j = 0; j < canvas.height; j++) for (let i = 0; i < canvas.width; i++) {
-        const e = T.E0 + (i + 0.5) * stepE, n = T.N1 - (j + 0.5) * stepN, z = T.at(e, n), k = (j * canvas.width + i) * 4;
+        const e = view.E0 + (i + 0.5) * stepE, n = view.N1 - (j + 0.5) * stepN, z = T.at(e, n), k = (j * canvas.width + i) * 4;
         if (z === null) { img.data[k] = 225; img.data[k + 1] = 228; img.data[k + 2] = 232; img.data[k + 3] = 255; continue; }
-        const v = Math.pow((z - T.zlo) / span, 0.6), dz = (T.at(e + stepE * 2, n) ?? z) - (T.at(e - stepE * 2, n) ?? z), dn = (T.at(e, n + stepN * 2) ?? z) - (T.at(e, n - stepN * 2) ?? z);
+        const v = Math.pow(Math.max(0, Math.min(1, (z - lo) / span)), 0.6), dz = (T.at(e + stepE * 2, n) ?? z) - (T.at(e - stepE * 2, n) ?? z), dn = (T.at(e, n + stepN * 2) ?? z) - (T.at(e, n - stepN * 2) ?? z);
         const shade = Math.max(0.55, Math.min(1.25, 1 + (dn - dz) * 0.5 / Math.max(stepE * 4, 0.1)));
         img.data[k] = (70 + 170 * v) * shade; img.data[k + 1] = (125 + 95 * v) * shade; img.data[k + 2] = (120 + 40 * v) * shade; img.data[k + 3] = 255;
       }
       g.putImageData(img, 0, 0);
       base = g.getImageData(0, 0, canvas.width, canvas.height);
-      info.textContent = `${W.toFixed(0)} × ${H.toFixed(0)} m, ground ${T.zlo.toFixed(1)} to ${T.zhi.toFixed(1)} m. Darker is lower.`;
+      info.textContent = `${W.toFixed(0)} × ${H.toFixed(0)} m, ground ${lo.toFixed(1)} to ${hi.toFixed(1)} m. Darker is lower.`;
       paintLine();
     };
+    const full = () => { view = { E0: T.E0, E1: T.E1, N0: T.N0, N1: T.N1 }; paintGround(); };
+    const load = () => {
+      T = ready || makeTerrain(o, +unit.value); pts = []; base = null; msg.textContent = '';
+      if (T.error) { msg.textContent = T.error; T = null; return; }
+      full();
+    };
+    const readMarks = () => {
+      const lines = $d('#rf-t-marks').value.split('\n').filter(l => l.trim());
+      const out = [];
+      for (let i = 0; i < lines.length; i++) { const p = parsePlace(lines[i]); if (!p) { msg.textContent = `Line ${i + 1} is not a latitude and longitude or a map link.`; return null; } out.push(wgsToBng(p[0], p[1])); }
+      msg.textContent = '';
+      const off = out.filter(m => T.at(m[0], m[1]) === null).length;
+      if (off) msg.textContent = `${off} of the places ${off > 1 ? 'are' : 'is'} outside this terrain.`;
+      return out;
+    };
     canvas.addEventListener('click', ev => {
-      if (!T) return;
-      const r = canvas.getBoundingClientRect(), e = T.E0 + (ev.clientX - r.left) / r.width * (T.E1 - T.E0), n = T.N1 - (ev.clientY - r.top) / r.height * (T.N1 - T.N0);
+      if (!T || !view) return;
+      const r = canvas.getBoundingClientRect(), e = view.E0 + (ev.clientX - r.left) / r.width * (view.E1 - view.E0), n = view.N1 - (ev.clientY - r.top) / r.height * (view.N1 - view.N0);
       if (T.at(e, n) === null) return;
       pts.push([e, n]); msg.textContent = ''; paintLine();
     });
-    dlg.querySelector('#rf-t-undo').addEventListener('click', () => { pts.pop(); paintLine(); });
-    dlg.querySelector('#rf-t-clear').addEventListener('click', () => { pts = []; paintLine(); });
+    $d('#rf-t-undo').addEventListener('click', () => { pts.pop(); paintLine(); });
+    $d('#rf-t-clear').addEventListener('click', () => { pts = []; paintLine(); });
+    $d('#rf-t-show').addEventListener('click', () => { const m = readMarks(); if (m) { marks = m; paintLine(); } });
+    $d('#rf-t-zoom').addEventListener('click', () => {
+      const m = readMarks(); if (!m || !m.length) return;
+      marks = m;
+      const es = m.map(p => p[0]), ns = m.map(p => p[1]), pad = 120, E0 = Math.max(T.E0, Math.min(...es) - pad), E1 = Math.min(T.E1, Math.max(...es) + pad), N0 = Math.max(T.N0, Math.min(...ns) - pad), N1 = Math.min(T.N1, Math.max(...ns) + pad);
+      if (E1 > E0 && N1 > N0) { view = { E0, E1, N0, N1 }; paintGround(); }
+    });
+    $d('#rf-t-full').addEventListener('click', full);
     unit.addEventListener('change', load);
-    const own = dlg.querySelector('#rf-t-own');
-    own.addEventListener('change', () => { dlg.querySelector('#rf-t-note').textContent = own.checked ? 'The ground is used as it is. The depth and bank slope only set where the banks are.' : 'Most terrain models record the water surface, not the river bed. The channel below is carved in as an estimate.'; });
+    const own = $d('#rf-t-own');
+    own.addEventListener('change', () => { $d('#rf-t-note').textContent = own.checked ? 'The ground is used as it is. The depth and bank slope only set where the banks are.' : 'Most terrain models record the water surface, not the river bed. The channel below is carved in as an estimate.'; });
     dlg.querySelectorAll('[data-link]').forEach(r => r.addEventListener('input', () => { dlg.querySelector(`[data-k=${r.dataset.link}]`).value = r.value; }));
     dlg.querySelectorAll('[data-k]').forEach(n => n.addEventListener('input', () => { const r = dlg.querySelector(`[data-link=${n.dataset.k}]`); if (r) r.value = n.value; }));
     const close = () => { dlg.close(); dlg.remove(); };
-    dlg.querySelector('#rf-t-cancel').addEventListener('click', close);
+    $d('#rf-t-cancel').addEventListener('click', close);
     dlg.addEventListener('cancel', close);
-    dlg.querySelector('#rf-t-ok').addEventListener('click', () => {
-      const val = k => parseFloat(dlg.querySelector(`[data-k=${k}]`).value), p = { depth: val('depth'), bed: val('bed'), side: val('side'), half: val('half'), spacing: val('spacing'), carve: !own.checked };
+    $d('#rf-t-ok').addEventListener('click', () => {
+      const val = k => parseFloat($d(`[data-k=${k}]`).value), p = { depth: val('depth'), bed: val('bed'), side: val('side'), half: val('half'), spacing: val('spacing'), carve: !own.checked, measures: [] };
       if (!T) return;
       if (pts.length < 2) { msg.textContent = 'Click at least two points along the river.'; return; }
       if (![p.depth, p.bed, p.half, p.spacing].every(v => isNum(v) && v > 0) || !isNum(p.side) || p.side < 0) { msg.textContent = 'Check the values: they must be positive numbers.'; return; }
-      if (p.half < p.bed / 2 + p.side * p.depth + 8) { msg.textContent = 'Include more land each side of the river.'; return; }
+      const lines = $d('#rf-t-meas').value.split('\n').map(l => l.trim()).filter(Boolean);
+      for (let i = 0; i < lines.length; i++) {
+        const m = lines[i].split(/[\s,;]+/).map(Number);
+        if (m.length !== 3 || !m.every(isNum) || m[0] < 0 || !(m[1] > 0) || !(m[2] > 0)) { msg.textContent = `Measured line ${i + 1} needs three numbers: distance, width, depth.`; return; }
+        p.measures.push(m);
+      }
+      p.measures.sort((a, b) => a[0] - b[0]);
       const r = terrainReach(T, pts, p);
       if (r.error) { msg.textContent = r.error; return; }
-      const d = defaultState(), river = fileName.replace(/\.obj$/i, '');
-      S = { ...d, name: `${river} (${p.carve ? 'terrain from a 3D model; river channel estimated, not surveyed' : 'terrain from a 3D model, not surveyed'})`, geo: r.g, sections: r.sections, bridges: [], flow: { ...S.flow }, eddy: { ...S.eddy }, boundary: { ...d.boundary, slope: +r.slope.toFixed(5) } };
+      const d = defaultState(), river = fileName.replace(/\.(obj|asc)$/i, ''), note = !p.carve ? 'terrain from a 3D model, not surveyed' : p.measures.length ? 'terrain with a channel from site measurements, not surveyed' : 'terrain from a 3D model; river channel estimated, not surveyed';
+      S = { ...d, name: `${river} (${note})`, geo: r.g, sections: r.sections, bridges: [], flow: { ...S.flow }, eddy: { ...S.eddy }, boundary: { ...d.boundary, slope: +r.slope.toFixed(5) } };
       bendLengths();
-      editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = ''; compare = false;
+      editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = ''; compare = false; MAP.centred = false;
       close(); renderEditor(); renderElements(); setView('3d'); run();
-      $('rf-map-msg').textContent = `Built ${S.sections.length} sections over ${geoFrame(S.geo).length.toFixed(0)} m from the terrain model.` + (crossingSections().length ? ' Some sections cross on a bend: draw a gentler bend or use wider spacing.' : '');
+      $('rf-map-msg').textContent = `Built ${S.sections.length} sections over ${r.sections[r.sections.length - 1].x.toFixed(0)} m from the terrain.` + (crossingSections().length ? ' Some sections cross on a bend: draw a gentler bend or use wider spacing.' : '');
     });
     load();
   }
-  function importTerrain(file) {
-    const msg = $('rf-map-msg');
-    if (file.size > 80e6) { msg.textContent = 'That file is over 80 MB. Simplify the model and export it again.'; return; }
+  function importTerrain(files) {
+    const msg = $('rf-map-msg'), asc = files.filter(f => /\.asc$/i.test(f.name));
+    if (files.reduce((s, f) => s + f.size, 0) > 400e6) { msg.textContent = 'Those files are over 400 MB together. Choose fewer tiles.'; return; }
+    if (asc.length) {
+      if (asc.length !== files.length) { msg.textContent = 'Choose either ASC tiles or one OBJ file, not both.'; return; }
+      msg.textContent = 'Reading the terrain…';
+      Promise.all(asc.map(f => f.text())).then(texts => {
+        const tiles = [];
+        for (const t of texts) { const p = parseAsc(t); if (p.error) { msg.textContent = p.error; return; } tiles.push(p); }
+        const T = gridTerrain(tiles);
+        if (T.error) { msg.textContent = T.error; return; }
+        msg.textContent = '';
+        terrainDialog(null, asc.length > 1 ? 'LIDAR terrain.asc' : asc[0].name, T);
+      }).catch(() => { msg.textContent = 'Those files could not be read.'; });
+      return;
+    }
+    if (files.length !== 1) { msg.textContent = 'Choose one OBJ file at a time.'; return; }
     const r = new FileReader();
     r.onerror = () => { msg.textContent = 'That file could not be read.'; };
     r.onload = () => {
       const o = parseObj(String(r.result));
       if (o.error) { msg.textContent = o.error; return; }
-      terrainDialog(o, file.name);
+      terrainDialog(o, files[0].name, null);
     };
-    r.readAsText(file);
+    r.readAsText(files[0]);
   }
 
   // On a bend the overbanks travel different distances from the channel;
@@ -7705,7 +7855,7 @@ onmessage = e => {
     if (RES) renderActive();
   });
   $('rf-terrain').addEventListener('click', () => $('rf-terrain-file').click());
-  $('rf-terrain-file').addEventListener('change', e => { if (e.target.files[0]) importTerrain(e.target.files[0]); e.target.value = ''; });
+  $('rf-terrain-file').addEventListener('change', e => { if (e.target.files.length) importTerrain([...e.target.files]); e.target.value = ''; });
   $('rf-import').addEventListener('click', () => $('rf-obj').click());
   $('rf-obj').addEventListener('change', e => { if (e.target.files[0]) importObj(e.target.files[0]); e.target.value = ''; });
   $('rf-new').addEventListener('click', newReach);
@@ -7738,7 +7888,7 @@ onmessage = e => {
   renderEditor(); renderElements(); setView('3d'); run();
   document.documentElement.classList.add('rf-ready');
   // Hook for the browser checks.
-  window.RFL_UI = { get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, setView, get view() { return view; },
+  window.RFL_UI = { bng: { wgsToBng, bngToWgs, tmForward }, get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, setView, get view() { return view; },
     // screen position (in the map) of the middle of a section, for the checks
     get rivers() { return MAP.rivers ? MAP.rivers.chains.map(c => ({ name: c.name, kind: c.kind, length: Math.round(c.length), points: c.pts.length, culvert: c.culvert })) : null; },
     chainScreen: (i, f) => { const c = MAP.rivers.chains[i]; const q = chainPart(c, 0, c.length * f); return toScreen(...q[q.length - 1]); },

@@ -39,11 +39,14 @@ idealised channel with floodplains, not a survey) with one example bridge.
   imported model can be set to float. It rises and falls with the water; only
   the part below the water blocks the flow, and water passes underneath. It
   cannot drift, because the model is steady.
-- **River from a terrain model:** *Build from a terrain model (.obj)* in River
+- **River from a terrain model:** *Build from a terrain model (.obj or .asc)* in River
   shows the model from above. Click along the river from upstream to
   downstream; sections are cut square to the line. Most terrain models do not
   record the river bed, so a channel of the depth and width given is carved in
   and the reach is labelled as estimated. The file stays in the browser.
+  ASC tiles in British National Grid, such as the Environment Agency 1 m LIDAR
+  DTM, keep their real position, so places can be marked by coordinates or a
+  map link. Widths and depths measured on site can replace the estimates.
 - **River** (left): the active reach, a new template reach, and the
   cross-section editor.
 - **Map** (middle): find a place (or type coordinates), press *Draw the
