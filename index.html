@@ -310,7 +310,7 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
           </div>
         </details>
         <details class="rf-adv">
-          <summary class="rf-lab" style="cursor:pointer">Edit a cross-section</summary>
+          <summary class="rf-lab" style="cursor:pointer">Fine-tune one section (optional)</summary>
           <div class="rf-body" style="padding:8px 0 0">
             <div class="rf-field"><label for="rf-sec-pick">Section</label><select class="rf-select" id="rf-sec-pick"></select></div>
             <div class="rf-grid2">
@@ -7932,8 +7932,9 @@ onmessage = e => {
     if (bad >= 0) { refuse(`Line ${bad + 1} needs two numbers.`); return; }
     if (pts.length < 3) { refuse('At least three points are needed.'); return; }
     for (let i = 1; i < pts.length; i++) if (pts[i][0] < pts[i - 1][0]) { refuse(`Offsets must run left to right (line ${i + 1}).`); return; }
-    const x = +$('rf-sec-x').value, bl = +$('rf-sec-bl').value, br = +$('rf-sec-br').value;
-    const n = ['nl', 'nc', 'nr'].map(k => +$('rf-sec-' + k).value);
+    const entry = id => { const v = $(id).value.trim(); return v === '' ? NaN : Number(v); };   // a blank field is not 0
+    const x = entry('rf-sec-x'), bl = entry('rf-sec-bl'), br = entry('rf-sec-br');
+    const n = ['nl', 'nc', 'nr'].map(k => entry('rf-sec-' + k));
     if (!isNum(x)) { refuse('Chainage must be a number.'); return; }
     const taken = S.sections.find((q, i) => i !== editIdx && Math.abs(q.x - x) < 1e-6);
     if (taken) { refuse(`Another section (${taken.id}) is already at ${x} m. Choose a different chainage, or delete that section first.`); return; }

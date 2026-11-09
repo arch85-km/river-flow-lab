@@ -180,6 +180,21 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await page.click('[data-add=walls]'); await settle(page);
 
   // section editor validates
+  // a blank field is refused, not read as 0
+  const before05 = await page.evaluate(() => { const u = window.RFL_UI, s = u.state.sections[0]; return { left: s.banks.left, x: s.x }; });
+  await page.selectOption('#rf-sec-pick', { index: 0 });
+  const blLeft = await page.inputValue('#rf-sec-bl'), secX = await page.inputValue('#rf-sec-x');
+  await page.fill('#rf-sec-bl', '');
+  await page.click('#rf-sec-apply');
+  const leftAfter = await page.evaluate(() => window.RFL_UI.state.sections[0].banks.left);
+  check('editor refuses a blank bank', /Banks must/.test(await page.textContent('#rf-sec-msg')) && leftAfter === before05.left, `left bank ${leftAfter}`);
+  await page.fill('#rf-sec-bl', blLeft);
+  await page.fill('#rf-sec-x', '');
+  await page.click('#rf-sec-apply');
+  check('editor refuses a blank chainage', /Chainage must/.test(await page.textContent('#rf-sec-msg')));
+  await page.fill('#rf-sec-x', secX);
+  const basicPanel = await page.evaluate(() => { const root = document.getElementById('rf-root'), was = root.dataset.level; root.dataset.level = 'basic'; const shown = document.getElementById('rf-sec-pts').closest('details').offsetParent !== null; root.dataset.level = was; return shown; });
+  check('the section editor is for Advanced only', basicPanel === false);
   await page.fill('#rf-sec-pts', '0 5\n10 x\n20 5');
   await page.click('#rf-sec-apply');
   check('editor refuses a bad line', /Line 2/.test(await page.textContent('#rf-sec-msg')));
