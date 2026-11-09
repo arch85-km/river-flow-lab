@@ -5124,7 +5124,7 @@ const RFL = (() => {
     // the bridge, so the bridge-free profile is solved alongside.
     const noBridge = blk.some(b => b.kind === 'bridge') ? solve({ ...model, bridges: [], stations: [...(model.stations || []), ...results.map(r => r.x)] }, Q) : null;
     const bridges = blk.filter(b => b.kind === 'bridge').map(b => bridgeReport(b.bridge, preps, results, Q, noBridge));
-    return { Q, sections: results, eddyZones: zones, bridges };
+    return { Q, sections: results, eddyZones: zones, bridges, walls: model.walls || [] };
   }
 
   function pack(prep, h, wc) {
@@ -5194,6 +5194,25 @@ const RFL = (() => {
     return s[s.length - 1].ws;
   }
 
+  function isCutOff(sec, y) {
+    return cutOff(sec.raw, sec.ws, sec.banks.left, sec.banks.right).some(([p, q]) => y > p && y < q);
+  }
+
+  // The wall holding the water back from a building at its own chainage, and
+  // whether water can come round an open end: the 1D model cannot follow that
+  // flow, so a wet floodplain just past the end counts as reaching the building.
+  function wallGuard(result, b, ws) {
+    const walls = result.walls || [], s = result.sections;
+    const span = w => [Math.min(w.x0, w.x1), Math.max(w.x0, w.x1)];
+    const holds = (w, x, level) => { const [lo, hi] = span(w); return x >= lo - 1e-6 && x <= hi + 1e-6 && !(level > w.z) && (w.side === 'right' ? b.y > w.y : b.y < w.y); };
+    const wall = walls.find(w => holds(w, b.x, ws));
+    if (!wall) return null;
+    const [lo, hi] = span(wall);
+    const below = s.filter(q => q.x < lo - 1e-6).pop(), above = s.find(q => q.x > hi + 1e-6);
+    const wetRound = q => !!q && q.ws > groundAt(q.raw, b.y) && !isCutOff(q, b.y) && !walls.some(w => holds(w, q.x, q.ws));
+    return { wall, open: wetRound(below) || wetRound(above) };
+  }
+
   // Depth over each building's floor (negative = freeboard).
   function buildings(result, list) {
     return list.map(b => {
@@ -5202,9 +5221,13 @@ const RFL = (() => {
       const ws = inReach ? wsAt(result, b.x) : null;
       // A building on low ground behind a ridge is not reached by the river.
       const near = inReach ? s.reduce((m, q) => Math.abs(q.x - b.x) < Math.abs(m.x - b.x) ? q : m) : null;
-      const isolated = !!near && isNum(b.y) && (cutOff(near.raw, near.ws, near.banks.left, near.banks.right).some(([p, q]) => b.y > p && b.y < q) || (near.levee || []).some(e => !(near.ws > e.elev) && b.y > e.a && b.y < e.b));
+      const natural = !!near && isNum(b.y) && isCutOff(near, b.y);
+      const guard = ws !== null && isNum(b.y) ? wallGuard(result, b, ws) : null;
+      const flanked = !natural && !!guard && guard.open;
+      const levee = !(result.walls || []).length && !!near && isNum(b.y) && (near.levee || []).some(e => !(near.ws > e.elev) && b.y > e.a && b.y < e.b);
+      const isolated = natural || levee || (!!guard && !guard.open);
       const depth = ws === null || !isNum(b.floor) ? null : isolated ? Math.min(ws - b.floor, 0) : ws - b.floor;
-      return { id: b.id, ws, floor: b.floor, depth, cutOff: isolated };
+      return { id: b.id, ws, floor: b.floor, depth, cutOff: isolated, flanked };
     });
   }
 
@@ -7701,6 +7724,7 @@ onmessage = e => {
     RFL.buildings(RES, S.buildings).forEach((r, i) => {
       const name = S.buildings[i].label || r.id;
       if (r.cutOff) { chips.push(chip(`${name}: dry, cut off from the river`, 'rf-good')); return; }
+      if (r.flanked) chips.push(chip(`${name}: water can come round the open end of the flood wall`, 'rf-warn'));
       if (r.ws === null) { chips.push(chip(`${name} is outside the river reach, so it has no water level. Change its chainage.`, 'rf-warn')); return; }
       if (!isNum(r.depth)) return;
       if (r.depth > 0) chips.push(chip(`${name}: ${f2(r.depth)} m of water over the floor`, 'rf-bad'));
@@ -7799,7 +7823,7 @@ onmessage = e => {
     floats: 'Moored in place: it rises and falls with the water and cannot drift. Only the part below the water blocks the flow, and water passes underneath.',
     plainBridges: 'The sides of the bridge block the river outside the opening, and piers block it inside. If the water reaches the underside, the opening runs full.',
     bridges: 'Abutments block the section outside the opening; piers block it inside. When the water reaches the soffit the opening runs full (pressure flow).',
-    walls: 'A flood wall or embankment along a bank. The ground behind it carries no flow until the water overtops the crest.',
+    walls: 'A flood wall or embankment along a bank. The ground behind it carries no flow until the water overtops the crest. Water can still come round an open end, so tie the ends into high ground.',
     buildings: 'Floor level is checked against the water level at the building’s chainage. Buildings do not affect the flow unless you also add them as obstructions.',
   };
   function refSection() {

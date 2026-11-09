@@ -124,7 +124,10 @@ Manual, ch. 2 and 5):
   inside them is not computed.
 - Levees and ineffective areas carry no flow until overtopped. Low ground cut
   off from the channel by higher natural ground carries no flow either, and is
-  shown dry, until the water rises over the ground between.
+  shown dry, until the water rises over the ground between. A flood wall
+  protects a building only at the wall's own chainage; where the floodplain
+  just past an open end of the wall is wet, the building counts as reached,
+  as a 1D model cannot follow water round the end.
 
 ## three.js
 
@@ -148,7 +151,7 @@ The licence notice is in `NOTICE`.
 npm test
 ```
 
-`tests/engine.test.mjs` (47 checks), `tests/overpass-proxy.mjs` (19 checks;
+`tests/engine.test.mjs` (53 checks), `tests/overpass-proxy.mjs` (19 checks;
 skipped where PHP is not installed) and `tests/ui.test.mjs` (184 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused, except map tiles, place search and Overpass, which are

@@ -318,5 +318,37 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
     `area ${RFL.hydraulics(full, ws, Q).A.toFixed(1)} m2`);
 }
 
+// A wall protects a building only at the wall's own chainage, and water can
+// come round an open end across a wet floodplain.
+{
+  const sec = (x, high) => {
+    const b = 100 - 0.001 * x, f = high ? 20 : 2;
+    return { id: 's' + x, x, pts: [[0, b + f + 1], [100, b + f], [101, b], [121, b], [122, b + f], [222, b + f + 1]],
+      banks: { left: 101, right: 121 }, n: { lob: 0.06, ch: 0.035, rob: 0.06 } };
+  };
+  const secs = high => { const a = []; for (let x = 0; x <= 1000; x += 100) a.push(sec(x, high(x))); return a; };
+  const run = (walls, high = () => false) => RFL.solve({ sections: secs(high), boundary: { type: 'normal', slope: 0.001 }, walls, obstructions: [], bridges: [] }, 1500);
+  const house = (x, y = 50) => ({ id: 'H', x, y, floor: 101 });
+  const wall = (x0, x1, side = 'left') => ({ side, x0, x1, y: side === 'left' ? 95 : 128, z: 115 });
+
+  const pastEnd = RFL.buildings(run([wall(90, 110)]), [house(145)])[0];
+  check('a building past the end of a wall is not protected by it', !pastEnd.cutOff && pastEnd.depth > 1, `depth ${pastEnd.depth.toFixed(2)} m`);
+
+  const round = RFL.buildings(run([wall(350, 650)]), [house(500)])[0];
+  check('water comes round the open end of a short wall', !round.cutOff && round.flanked && round.depth > 1, `depth ${round.depth.toFixed(2)} m`);
+
+  const tied = RFL.buildings(run([wall(130, 1000)], x => x <= 100), [house(140)])[0];
+  check('a wall tied into high ground protects a building nearer the section beyond its end', tied.cutOff && !tied.flanked && tied.depth <= 0, `depth ${tied.depth.toFixed(2)} m`);
+
+  const whole = RFL.buildings(run([wall(0, 1000)]), [house(500)])[0];
+  check('a wall along the whole reach still protects the building behind it', whole.cutOff && !whole.flanked && whole.depth <= 0, `depth ${whole.depth.toFixed(2)} m`);
+
+  const otherBank = RFL.buildings(run([wall(0, 1000, 'right')]), [house(500)])[0];
+  check('a wall on the other bank does not protect the building', !otherBank.cutOff && otherBank.depth > 1, `depth ${otherBank.depth.toFixed(2)} m`);
+
+  const joined = RFL.buildings(run([wall(0, 450), wall(450, 1000)]), [house(200)])[0];
+  check('walls joined end to end have no open end between them', joined.cutOff && !joined.flanked, `depth ${joined.depth.toFixed(2)} m`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
