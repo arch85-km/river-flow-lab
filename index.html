@@ -5107,7 +5107,7 @@ const RFL = (() => {
     }
     // Afflux is the rise above the level the same river would have without
     // the bridge, so the bridge-free profile is solved alongside.
-    const noBridge = blk.some(b => b.kind === 'bridge') ? solve({ ...model, bridges: [] }, Q) : null;
+    const noBridge = blk.some(b => b.kind === 'bridge') ? solve({ ...model, bridges: [], stations: [...(model.stations || []), ...results.map(r => r.x)] }, Q) : null;
     const bridges = blk.filter(b => b.kind === 'bridge').map(b => bridgeReport(b.bridge, preps, results, Q, noBridge));
     return { Q, sections: results, eddyZones: zones, bridges };
   }
@@ -5133,6 +5133,16 @@ const RFL = (() => {
     return 2 * K * (K + 10 * w - 0.6) * (a + 15 * Math.pow(a, 4)) * hv;
   }
 
+  // The biggest rise above the bridge-free level, from the bridge's upstream
+  // face to the next bridge. The section just above the bridge can sit in the
+  // drawdown as the flow speeds up into the opening, so it is not read alone.
+  function affluxAbove(iUp, preps, results, noBridge) {
+    const rise = r => r.ws - wsAt(noBridge, r.x);
+    let peak = rise(results[iUp + 1] || results[iUp]);
+    for (let i = iUp + 1; i < results.length && !preps[i].bridge; i++) peak = Math.max(peak, rise(results[i]));
+    return peak;
+  }
+
   function bridgeReport(br, preps, results, Q, noBridge) {
     const iDn = preps.findIndex(p => p.bridge === br);
     const iUp = preps.length - 1 - [...preps].reverse().findIndex(p => p.bridge === br);
@@ -5141,7 +5151,7 @@ const RFL = (() => {
     const highest = Math.max(...results.slice(iDn, iUp + 1).map(r => r.ws));
     const rep = { id: br.id, lowChord: br.lowChord, highChord: br.highChord,
       wsDownstream: below ? below.ws : null, wsUpstream: above.ws,
-      afflux: noBridge && !noBridge.error ? above.ws - wsAt(noBridge, above.x) : null,
+      afflux: noBridge && !noBridge.error ? affluxAbove(iUp, preps, results, noBridge) : null,
       freeboard: br.lowChord - highest,
       flow: highest > br.highChord ? 'overtopping' : highest > br.lowChord ? 'pressure' : 'low' };
     if (below && (br.piers || []).length) {
@@ -7665,7 +7675,7 @@ onmessage = e => {
       if (b.flow === 'overtopping') chips.push(chip(T(`${name}: water over the deck — weir flow is not modelled; levels here are unreliable`, `${name}: water over the top. The model cannot follow this, so these levels are unreliable`), 'rf-bad'));
       else if (b.flow === 'pressure') chips.push(chip(T(`${name}: water reaches the soffit — pressure flow`, `${name}: water reaches the underside, so the opening runs full`), 'rf-bad'));
       else chips.push(chip(T(`${name}: soffit clear of the water by ${f2(b.freeboard)} m`, `${name}: underside is ${f2(b.freeboard)} m above the water`), b.freeboard < 0.6 ? 'rf-warn' : 'rf-good'));
-      if (isNum(b.afflux)) chips.push(chip(T(`${name}: afflux ${sgn(b.afflux)} m (energy method)` + (b.yarnell ? ` · piers alone ${sgn(b.yarnell.rise)} m (Yarnell)` : ''), `${name}: water just upstream changes by ${sgn(b.afflux)} m`)));
+      if (isNum(b.afflux)) chips.push(chip(T(`${name}: afflux ${sgn(b.afflux)} m (energy method)` + (b.yarnell ? ` · piers alone ${sgn(b.yarnell.rise)} m (Yarnell)` : ''), `${name}: the biggest change upstream is ${sgn(b.afflux)} m`)));
     }
     RFL.buildings(RES, S.buildings).forEach((r, i) => {
       const name = S.buildings[i].label || r.id;

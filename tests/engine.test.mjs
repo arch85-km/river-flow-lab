@@ -273,5 +273,28 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('buildings: depth over floor', near(RFL.buildings(r, [{ id: 'b', x: 150, floor: 1 }])[0].depth, RFL.wsAt(r, 150) - 1, 1e-12));
 }
 
+// Afflux is the biggest rise upstream of a bridge, not the level at the next
+// section, which can sit in the drawdown as the flow speeds up into the opening.
+{
+  const sec = x => {
+    const b = 100 - 0.001 * x;
+    return { id: 's' + x, x, pts: [[0, b + 3], [100, b + 2], [101, b], [121, b], [122, b + 2], [222, b + 3]],
+      banks: { left: 101, right: 121 }, n: { lob: 0.06, ch: 0.035, rob: 0.06 } };
+  };
+  const sections = []; for (let x = 0; x <= 1000; x += 15) sections.push(sec(x));
+  const model = { sections, boundary: { type: 'normal', slope: 0.001 }, obstructions: [], walls: [] };
+  const bridge = { id: 'A', x: 495, length: 10, lowChord: 104, highChord: 105, openLeft: 101, openRight: 121, piers: [{ y: 111, width: 2 }] };
+  const Q = 150;
+  const withBridge = RFL.solve({ ...model, bridges: [bridge] }, Q);
+  const without = RFL.solve({ ...model, bridges: [], stations: withBridge.sections.map(s => s.x) }, Q);
+  const peak = Math.max(...withBridge.sections.filter(s => s.x > 505).map(s => s.ws - RFL.wsAt(without, s.x)));
+  check('afflux is the biggest rise upstream of the bridge', Math.abs(withBridge.bridges[0].afflux - peak) < 1e-6,
+    `afflux ${mm(withBridge.bridges[0].afflux)}, biggest rise ${mm(peak)}`);
+  const second = { ...bridge, id: 'B', x: 800, lowChord: 103, highChord: 104 };
+  const both = RFL.solve({ ...model, bridges: [bridge, second] }, Q);
+  const a = both.bridges.find(b => b.id === 'A').afflux;
+  check('a second bridge upstream does not add to this bridge\'s afflux', Math.abs(a - peak) < 0.02, `afflux ${mm(a)}, alone ${mm(peak)}`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
