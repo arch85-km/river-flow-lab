@@ -129,8 +129,10 @@ Manual, ch. 2 and 5):
   Afflux is measured against the same river without the bridge.
 - **Eddy zones**: the dead water beside and behind an obstruction or
   bridge, sized by the expansion (1:ER) and contraction (1:CR) ratios and
-  carrying no flow until the water rises above the blockage. The swirl
-  inside them is not computed.
+  carrying no flow below the top of the blockage. When the water rises
+  above it, the dead water stays still and only the layer above it flows,
+  as its own part of the section, so the zone clears gradually rather than
+  all at once. The swirl inside them is not computed.
 - Levees and ineffective areas carry no flow until overtopped. Low ground cut
   off from the channel by higher natural ground carries no flow either, and is
   shown dry, until the water rises over the ground between. A flood wall
@@ -160,7 +162,7 @@ The licence notice is in `NOTICE`.
 npm test
 ```
 
-`tests/engine.test.mjs` (60 checks), `tests/overpass-proxy.mjs` (19 checks;
+`tests/engine.test.mjs` (62 checks), `tests/overpass-proxy.mjs` (19 checks;
 skipped where PHP is not installed) and `tests/ui.test.mjs` (198 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused, except map tiles, place search and Overpass, which are

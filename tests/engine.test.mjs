@@ -384,6 +384,12 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('the level does not jump when the deck starts to overtop', jump < 0.3, `largest step ${jump.toFixed(3)} m for 10 m3/s, at ${100 + 10 * at} m3/s`);
   const dip = levels.findIndex((v, i) => i > 0 && v < levels[i - 1] - 1e-6);
   check('the level rises steadily with the flow', dip < 0, dip < 0 ? '' : `falls at ${100 + 10 * dip} m3/s: ${levels[dip - 1].toFixed(3)} to ${levels[dip].toFixed(3)} m`);
+  // with eddy zones on: the dead water below the bridge clears gradually as the water rises over the deck
+  const withEddies = []; for (let Q = 100; Q <= 700; Q += 20) withEddies.push(run(Q).bridges[0].wsUpstream);
+  const eddyJump = Math.max(...withEddies.slice(1).map((v, i) => Math.abs(v - withEddies[i])));
+  const eddyDip = withEddies.findIndex((v, i) => i > 0 && v < withEddies[i - 1] - 1e-6);
+  check('with eddy zones on the level rises steadily with the flow', eddyDip < 0, eddyDip < 0 ? '' : `falls at ${100 + 20 * eddyDip} m3/s: ${withEddies[eddyDip - 1].toFixed(3)} to ${withEddies[eddyDip].toFixed(3)} m`);
+  check('with eddy zones on the level does not jump', eddyJump < 0.25, `largest step ${eddyJump.toFixed(3)} m for 20 m3/s`);
   const free = big, highTail = bigRun.sections[0].ws + 1.5;
   const drowned = run(1600, { type: 'ws', ws: highTail }).bridges[0];
   const freeFormula = handWeir(crest + drowned.weirHead, -Infinity);

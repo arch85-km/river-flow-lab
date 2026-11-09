@@ -4810,8 +4810,22 @@ const RFL = (() => {
     const pts = prep.pts, ymin = pts[0][0], ymax = pts[pts.length - 1][0];
     const bl = Math.min(Math.max(prep.banks.left, ymin), ymax);
     const br = Math.min(Math.max(prep.banks.right, bl), ymax);
-    const spans = prep.excl.filter(e => !(ws > e.elev)).map(e => [e.a, e.b]);
-    spans.push(...cutOff(prep.raw || pts, ws, bl, br));
+    // Levees and ineffective areas carry no flow until overtopped, then all of it.
+    const hard = prep.excl.filter(e => e.kind !== 'eddy' && !(ws > e.elev)).map(e => [e.a, e.b]);
+    hard.push(...cutOff(prep.raw || pts, ws, bl, br));
+    // In an eddy zone the dead water below the blockage's top stays still and
+    // only the layer above it flows, so the zone clears gradually as the water rises.
+    const eddies = prep.excl.filter(e => e.kind === 'eddy');
+    const spans = hard.concat(eddies.map(e => [e.a, e.b]));
+    const closed = hard.concat(eddies.filter(e => !(ws > e.elev)).map(e => [e.a, e.b]));
+    const layers = [];
+    const ends = [...new Set(eddies.flatMap(e => [e.a, e.b]))].sort((u, v) => u - v);
+    for (let k = 0; k < ends.length - 1; k++) {
+      const p = ends[k], q = ends[k + 1], mid = (p + q) / 2, cover = eddies.filter(e => e.a < mid && e.b > mid);
+      if (!cover.length || cover.some(e => !(ws > e.elev))) continue;
+      const dead = Math.max(...cover.map(e => e.elev));
+      for (const [l, r] of subtractSpans(p, q, hard)) layers.push({ a: l, b: r, dead });
+    }
     const subs = [['lob', ymin, bl, prep.n.lob], ['ch', bl, br, prep.n.ch], ['rob', br, ymax, prep.n.rob]];
     const out = { ws, sub: {}, A: 0, P: 0, T: 0, K: 0, flags: [] };
     let sumK3A2 = 0;
@@ -4832,12 +4846,24 @@ const RFL = (() => {
           if (f.y1 > l && f.y1 <= r) P += side(f.y1);
         }
       }
+      // The flowing layer above dead water, its floor the dead water's surface.
+      // Its conveyance is its own, as a subdivision, so it starts from nothing.
+      let LA = 0, LP = 0, LT = 0, KL = 0;
+      if (b > a) for (const s of layers) {
+        const l = Math.max(a, s.a), r = Math.min(b, s.b);
+        if (!(r > l)) continue;
+        const whole = wettedAtDeck(prep, ws, l, r), still = wettedAtDeck(prep, s.dead, l, r);
+        const la = whole.A - still.A, lp = still.T + Math.max(0, whole.P - still.P);
+        if (la > 0 && lp > 0) KL += la * Math.pow(la / lp, 2 / 3) / n;
+        LA += Math.max(0, la); LP += lp; LT += whole.T;
+      }
       if (A < 0) A = 0;
       if (T < 0) T = 0;
       // Water above an end of the ground line is held by a vertical wall.
-      if (key === 'lob' && ws > pts[0][1] && !spans.some(([c]) => c <= ymin)) { P += ws - pts[0][1]; out.flags.push('wall-left'); }
-      if (key === 'rob' && ws > pts[pts.length - 1][1] && !spans.some(([, d]) => d >= ymax)) { P += ws - pts[pts.length - 1][1]; out.flags.push('wall-right'); }
-      const K = A > 0 && P > 0 ? A * Math.pow(A / P, 2 / 3) / n : 0;
+      if (key === 'lob' && ws > pts[0][1] && !closed.some(([c]) => c <= ymin)) { P += ws - pts[0][1]; out.flags.push('wall-left'); }
+      if (key === 'rob' && ws > pts[pts.length - 1][1] && !closed.some(([, d]) => d >= ymax)) { P += ws - pts[pts.length - 1][1]; out.flags.push('wall-right'); }
+      const K = (A > 0 && P > 0 ? A * Math.pow(A / P, 2 / 3) / n : 0) + KL;
+      A += LA; P += LP; T += LT;
       out.sub[key] = { A, P, T, K, n };
       out.A += A; out.P += P; out.T += T; out.K += K;
       if (A > 0) sumK3A2 += K * K * K / (A * A);
@@ -4966,8 +4992,8 @@ const RFL = (() => {
   // Eddy zones: the separated, dead-water areas beside and behind a
   // blockage. Flow re-expands downstream at 1:ER and contracts upstream at
   // 1:CR (HEC-RAS Hydraulic Reference Manual, ch. 5, contraction and
-  // expansion reach lengths). The zones carry no flow in the calculation
-  // until the water rises above the blockage; the swirl inside them is not
+  // expansion reach lengths). Below the top of the blockage the zones carry no
+  // flow; above it only the layer over the dead water flows. The swirl inside them is not
   // computed.
   function eddySpan(block, d, R, ymin, ymax) {
     const leftEdge = block.y0 <= ymin, rightEdge = block.y1 >= ymax;
