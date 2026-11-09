@@ -44,6 +44,9 @@ idealised channel with floodplains, not a survey) with one example bridge.
   downstream; sections are cut square to the line. Most terrain models do not
   record the river bed, so a channel of the depth and width given is carved in
   and the reach is labelled as estimated. The file stays in the browser.
+  A terrain file in another grid is not placed on the map. An ASC file cannot
+  say which grid it uses, so British National Grid is assumed and the window
+  says so.
   GeoTIFF and ASC tiles in British National Grid, such as the Environment Agency 1 m LIDAR
   DTM, keep their real position, so places can be marked by coordinates or a
   map link. Widths and depths measured on site can replace the estimates.
@@ -152,7 +155,7 @@ npm test
 ```
 
 `tests/engine.test.mjs` (53 checks), `tests/overpass-proxy.mjs` (19 checks;
-skipped where PHP is not installed) and `tests/ui.test.mjs` (189 checks,
+skipped where PHP is not installed) and `tests/ui.test.mjs` (198 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused, except map tiles, place search and Overpass, which are
 answered from local fixtures in `tests/fixtures/`; the Overpass fixture is

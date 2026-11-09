@@ -202,6 +202,30 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await page.click('#rf-sec-apply');
   check('editor refuses offsets out of order', /left to right/.test(await page.textContent('#rf-sec-msg')));
 
+  // distances on the ground, and which grid a terrain file is in
+  const geo = await page.evaluate(() => {
+    const t = window.RFL_UI.terrain, tile = (x0, y0, grid) => ({ nx: 3, ny: 3, cell: 1, x0, y0, z: new Float32Array(9).fill(10), grid });
+    const flat = { at: () => 10, georef: false, fine: true };
+    const eastWest = t.terrainReach(flat, [[400000, 386000], [402000, 386000]], { half: 50, spacing: 100, depth: 1, bed: 5, side: 1, carve: true, measures: [] });
+    const northSouth = t.geoFrame({ line: [[53, -1.5], [53 + 1000 / 111286, -1.5]], yc: 0 }).length;
+    const eastDrawn = t.geoFrame({ line: [[53, -1.5], [53, -1.5 + 1000 / 67137]], yc: 0 }).length;
+    const tags = code => t.gridFromTiffTags ? t.gridFromTiffTags({ 34735: [1, 1, 0, 1, 3072, 0, 1, code] }) : null;
+    const citation = t.gridFromTiffTags ? t.gridFromTiffTags({ 34735: [1, 1, 0, 1, 3072, 0, 1, 32767], 34737: 'OSGB 1936 / British National Grid|' }) : null;
+    const none = t.gridFromTiffTags ? t.gridFromTiffTags({}) : null;
+    const utm = t.gridTerrain([tile(430000, 5900000, 'unknown')]), plain = t.gridTerrain([tile(430000, 386000, 'unknown')]), said = t.gridTerrain([tile(430000, 386000, 'other')]);
+    return { eastWest: eastWest.sections[eastWest.sections.length - 1].x, northSouth, eastDrawn, bng: tags(27700), compound: tags(7405), other: tags(32630), citation, none,
+      utmGeoref: utm.georef, utmGrid: utm.grid, plainGeoref: plain.georef, plainGrid: plain.grid, saidGeoref: said.georef };
+  });
+  check('a 2 km east-west BNG line measures 2 km', Math.abs(geo.eastWest - 2000) < 1, `${geo.eastWest} m`);
+  check('1 km north at 53 degrees measures 1 km', Math.abs(geo.northSouth - 1000) < 1, `${geo.northSouth.toFixed(1)} m`);
+  check('1 km east at 53 degrees measures 1 km', Math.abs(geo.eastDrawn - 1000) < 1, `${geo.eastDrawn.toFixed(1)} m`);
+  check('a GeoTIFF declared as British National Grid is read as that', geo.bng === 'bng' && geo.compound === 'bng' && geo.citation === 'bng', JSON.stringify([geo.bng, geo.compound, geo.citation]));
+  check('a GeoTIFF in another grid is recognised', geo.other === 'other', String(geo.other));
+  check('a GeoTIFF that names no grid is unknown', geo.none === 'unknown', String(geo.none));
+  check('terrain outside the British National Grid range is not placed as BNG', geo.utmGeoref === false && geo.utmGrid === 'other', `${geo.utmGeoref} ${geo.utmGrid}`);
+  check('a declared other grid is not placed as BNG', geo.saidGeoref === false);
+  check('an undeclared grid in range is assumed to be BNG and says so', geo.plainGeoref === true && geo.plainGrid === 'unknown', `${geo.plainGeoref} ${geo.plainGrid}`);
+
   // exports from the File menu
   const text = (await download(page, 'rf-csv')).toString('utf8');
   check('CSV carries the caution', text.includes('not a flood risk assessment'));
