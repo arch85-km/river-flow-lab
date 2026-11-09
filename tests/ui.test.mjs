@@ -161,11 +161,12 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   const after = await ws(page, 240), without = await baseAt(page, 240);
   check('obstruction raises the water upstream', after > without, `${after.toFixed(3)} m with it, ${without.toFixed(3)} m without`);
   await page.click('.rf-views [data-view="plan"]'); await settle(page);
-  const eddies = await page.locator('#rf-plan polygon').count();
+  // the flow-direction arrow is a polygon too, so count only the eddy zones
+  const eddies = await page.locator('#rf-plan polygon:not(.rf-flow)').count();
   check('eddy zones drawn in plan', eddies >= 2, `${eddies} polygons`);
   check('table shows change against no design', (await page.textContent('#rf-table')).includes('Change, m'));
   await page.uncheck('#rf-eddy-on'); await settle(page);
-  check('turning eddy zones off removes them', (await page.locator('#rf-plan polygon').count()) === 0);
+  check('turning eddy zones off removes them', (await page.locator('#rf-plan polygon:not(.rf-flow)').count()) === 0);
   await page.check('#rf-eddy-on'); await settle(page);
 
   // wall and building
@@ -285,11 +286,14 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await page.selectOption('#rf-vex', '10'); await settle(page);
   check('vertical exaggeration applies', (await page.evaluate(() => window.RFL_UI.view3d)).vex === 10);
   await page.click('#rf-3d-reset');
+  // a higher flow can draw more objects, so compare at the same flow after the rebuilds
+  const q0 = await page.evaluate(() => window.RFL_UI.state.flow.Q);
   const g0 = (await page.evaluate(() => window.RFL_UI.view3d)).geometries;
   for (let i = 0; i < 30; i++) await page.evaluate(i => { window.RFL_UI.state.flow.Q = 10 + i; window.RFL_UI.run(); }, i);
+  await page.evaluate(q => { window.RFL_UI.state.flow.Q = q; window.RFL_UI.run(); }, q0);
   await settle(page);
-  const g1 = (await page.evaluate(() => window.RFL_UI.view3d)).geometries;
-  check('30 rebuilds of the 3D view leak no geometry', g1 <= g0, `${g0} → ${g1} geometries held`);
+  const v1 = await page.evaluate(() => window.RFL_UI.view3d);
+  check('30 rebuilds of the 3D view leak no geometry', v1.geometries <= g0 && v1.geometries <= v1.meshes, `${g0} → ${v1.geometries} geometries held, ${v1.meshes} objects`);
 
   // theme switch
   await page.click('#rf-theme'); await page.click('#rf-theme');
@@ -352,7 +356,9 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   const target = await page.evaluate(() => { const r = window.RFL_UI.result; return r.sections[5].id; });
   await page.evaluate(id => window.RFL_UI.setView('map'), target);
   const pt = await page.evaluate(id => window.RFL_UI.screenOf(id), target);
-  await page.mouse.click(box.x + pt[0], box.y + pt[1]); await settle(page);
+  // measure the map where it is now: building the reach changes the panel around it
+  const mapNow = await page.locator('#rf-map').boundingBox();
+  await page.mouse.click(mapNow.x + pt[0], mapNow.y + pt[1]); await settle(page);
   check('map: clicking a section chooses it', (await page.inputValue('#rf-view-sec')) === target, `${await page.inputValue('#rf-view-sec')} vs ${target}`);
   await page.click('.rf-views [data-view="3d"]'); await settle(page);
   const v3m = await page.evaluate(() => window.RFL_UI.view3d);
