@@ -36,8 +36,8 @@ idealised channel with floodplains, not a survey) with one example bridge.
   off.
 - **Your own model:** *Import a 3D model (.obj)* in Design brings in a mesh, up
   to 30,000 triangles. It is treated as solid from the ground up to its top.
-  Drag it in 3D to move it; hold Shift and drag, or use its Rotation slider, to
-  turn it. The file stays in the browser and is kept in a saved project.
+  Drag it in 3D to move it, and use its Rotation slider to turn it. The file
+  stays in the browser and is kept in a saved project.
 - **Floating objects:** *+ Floating object* in Design adds a moored box, and an
   imported model can be set to float. It rises and falls with the water; only
   the part below the water blocks the flow, and water passes underneath. It
