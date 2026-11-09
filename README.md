@@ -118,8 +118,14 @@ Manual, ch. 2 and 5):
 - **Obstructions** as blocked areas: the ground under them is raised, so
   the section loses area and gains wetted perimeter.
 - **Bridges** by the energy method through the opening, with the soffit
-  closing the section when the water reaches it (pressure flow) and
-  overtopping flagged. Yarnell's pier equation is reported as a check.
+  closing the section when the water reaches it (pressure flow), and the
+  soffit acting only where the deck is. When the water above the bridge is
+  higher than the deck, the flow divides between the opening and a
+  broad-crested weir over the deck (coefficient 1.44, drowned by the level
+  below as Villemonte, 1947) until both give the same level upstream. The
+  weir head is the depth of water over the deck, without the approach
+  velocity head, which errs towards a higher level. Yarnell's pier equation
+  is reported as a check.
   Afflux is measured against the same river without the bridge.
 - **Eddy zones**: the dead water beside and behind an obstruction or
   bridge, sized by the expansion (1:ER) and contraction (1:CR) ratios and
@@ -154,7 +160,7 @@ The licence notice is in `NOTICE`.
 npm test
 ```
 
-`tests/engine.test.mjs` (53 checks), `tests/overpass-proxy.mjs` (19 checks;
+`tests/engine.test.mjs` (60 checks), `tests/overpass-proxy.mjs` (19 checks;
 skipped where PHP is not installed) and `tests/ui.test.mjs` (198 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused, except map tiles, place search and Overpass, which are

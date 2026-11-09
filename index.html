@@ -5094,14 +5094,14 @@ const RFL = (() => {
     let h = hydraulics(first, ws0, Q);
     h.flags.push(...flags0);
     results.push(pack(first, h, wc0));
-    for (let i = 1; i < preps.length; i++) {
-      const dn = preps[i - 1], up = preps[i], hdn = h;
+    // One step upstream, carrying flow q.
+    const stepUp = (dn, up, hdn, q) => {
       const nearBridge = !!(dn.bridge || up.bridge);
       const cc = nearBridge ? coeff.bridgeCc : coeff.cc, ce = nearBridge ? coeff.bridgeCe : coeff.ce;
       const dx = up.x - dn.x;
       const f = ws => {
-        const hu = hydraulics(up, ws, Q);
-        const Sf = Math.pow(2 * Q / (hdn.K + hu.K), 2);
+        const hu = hydraulics(up, ws, q);
+        const Sf = Math.pow(2 * q / (hdn.K + hu.K), 2);
         const qs = ['lob', 'ch', 'rob'].map(k => (hdn.sub[k].Q + hu.sub[k].Q) / 2);
         const tot = qs[0] + qs[1] + qs[2];
         // Discharge-weighted reach length; overbank lengths differ on a bend.
@@ -5110,20 +5110,59 @@ const RFL = (() => {
         const C = hdn.hv > hu.hv ? cc : ce;
         return hu.E - (hdn.E + L * Sf + C * Math.abs(hu.hv - hdn.hv));
       };
-      const wc = criticalWS(up, Q);
+      const wc = criticalWS(up, q);
       const flags = [];
       let ws;
       if (f(wc) > 0) { ws = wc; flags.push('critical'); }
       else ws = bisect(f, wc, wc + 1);
       if (ws === null) { ws = wc; flags.push('no-solution'); }
-      h = hydraulics(up, ws, Q);
-      h.flags.push(...flags);
-      results.push(pack(up, h, wc));
+      const hu = hydraulics(up, ws, q);
+      hu.flags.push(...flags);
+      return { h: hu, wc };
+    };
+    const weirs = new Map();
+    for (let i = 1; i < preps.length; i++) {
+      const up = preps[i];
+      if (!up.bridge || preps[i - 1].bridge === up.bridge) {
+        const s = stepUp(preps[i - 1], up, h, Q);
+        h = s.h; results.push(pack(up, h, s.wc));
+        continue;
+      }
+      // Across a bridge: the flow through the opening and over the deck must
+      // give the same energy upstream.
+      let j = i; while (j + 1 < preps.length && preps[j + 1].bridge === up.bridge) j++;
+      const below = h;
+      // q goes through the opening; the whole flow meets again at the section
+      // above, whose level drives the weir (as HEC-RAS uses the section
+      // upstream of the bridge).
+      const top = j + 1 < preps.length ? j + 1 : j;
+      const through = q => {
+        const out = []; let cur = below;
+        for (let k = i; k <= j; k++) { const s = stepUp(preps[k - 1], preps[k], cur, q); out.push(s); cur = s.h; }
+        if (top > j) out.push(stepUp(preps[j], preps[top], cur, Q));
+        return out;
+      };
+      const upstreamWs = run => run[run.length - 1].h.ws;
+      let run = through(Q);
+      if (weirFlow(preps[j], upstreamWs(run), below.ws) > 0) {
+        let lo = 0, hi = Q * 0.999;
+        for (let n = 0; n < 60 && hi - lo > Q * 1e-5; n++) {
+          const m = (lo + hi) / 2;
+          if (m - weirFlow(preps[j], upstreamWs(through(Q - m)), below.ws) < 0) lo = m; else hi = m;
+        }
+        const over = (lo + hi) / 2;
+        run = through(Q - over);
+        weirs.set(up.bridge, { flow: over, head: upstreamWs(run) - up.bridge.highChord });
+        for (const s of run) if (!s.h.flags.includes('overtopping')) s.h.flags.push('overtopping');
+      }
+      run.forEach((s, n) => results.push(pack(preps[i + n], s.h, s.wc)));
+      h = run[run.length - 1].h;
+      i = i + run.length - 1;
     }
     // Afflux is the rise above the level the same river would have without
     // the bridge, so the bridge-free profile is solved alongside.
     const noBridge = blk.some(b => b.kind === 'bridge') ? solve({ ...model, bridges: [], stations: [...(model.stations || []), ...results.map(r => r.x)] }, Q) : null;
-    const bridges = blk.filter(b => b.kind === 'bridge').map(b => bridgeReport(b.bridge, preps, results, Q, noBridge));
+    const bridges = blk.filter(b => b.kind === 'bridge').map(b => bridgeReport(b.bridge, preps, results, Q, noBridge, weirs.get(b.bridge)));
     return { Q, sections: results, eddyZones: zones, bridges, walls: model.walls || [] };
   }
 
@@ -5158,7 +5197,31 @@ const RFL = (() => {
     return peak;
   }
 
-  function bridgeReport(br, preps, results, Q, noBridge) {
+  // Flow over a bridge deck, as a broad-crested weir in strips across the
+  // deck, for water level E upstream and `tail` downstream. The head is the
+  // depth of water over the deck: the approach velocity head is left out, so
+  // no water crosses a deck it does not cover and the level rises without a
+  // jump as overtopping starts; this errs towards a higher level. Discharge
+  // coefficient 1.44 m^0.5/s (HEC-RAS Hydraulic Reference Manual, ch. 5, for
+  // bridge decks); drowning by Villemonte (1947).
+  const WEIR_C = 1.44;
+  function weirFlow(prep, E, tail) {
+    const crest = prep.bridge.highChord;
+    if (!(E > crest)) return 0;
+    const raw = prep.raw, a = Math.max(prep.deck[0], raw[0][0]), b = Math.min(prep.deck[1], raw[raw.length - 1][0]);
+    if (!(b > a)) return 0;
+    const n = 400, dy = (b - a) / n;
+    let q = 0;
+    for (let i = 0; i < n; i++) {
+      const z = Math.max(crest, groundAt(raw, a + (i + 0.5) * dy)), H = E - z;
+      if (H <= 0) continue;
+      const d = tail - z, drown = d <= 0 ? 1 : d >= H ? 0 : Math.pow(1 - Math.pow(d / H, 1.5), 0.385);
+      q += WEIR_C * Math.pow(H, 1.5) * drown * dy;
+    }
+    return q;
+  }
+
+  function bridgeReport(br, preps, results, Q, noBridge, weir) {
     const iDn = preps.findIndex(p => p.bridge === br);
     const iUp = preps.length - 1 - [...preps].reverse().findIndex(p => p.bridge === br);
     const below = results[iDn - 1], above = results[iUp + 1] || results[iUp];
@@ -5168,7 +5231,8 @@ const RFL = (() => {
       wsDownstream: below ? below.ws : null, wsUpstream: above.ws,
       afflux: noBridge && !noBridge.error ? affluxAbove(iUp, preps, results, noBridge) : null,
       freeboard: br.lowChord - highest,
-      flow: highest > br.highChord ? 'overtopping' : highest > br.lowChord ? 'pressure' : 'low' };
+      flow: weir || highest > br.highChord ? 'overtopping' : highest > br.lowChord ? 'pressure' : 'low',
+      weirFlow: weir ? weir.flow : 0, weirHead: weir ? weir.head : 0, openingFlow: weir ? Q - weir.flow : Q };
     if (below && (br.piers || []).length) {
       const p = preps[iDn];
       let open = p.raw;
@@ -7660,7 +7724,7 @@ onmessage = e => {
     if (homes.length) { more.push(wet ? `${wet} of ${homes.length} building${homes.length > 1 ? 's' : ''} flooded` : `${homes.length > 1 ? 'All buildings stay' : 'The building stays'} dry`); if (wet) tone = 'rf-bad'; }
     for (const b of RES.bridges) {
       const name = (S.bridges.find(q => q.id === b.id) || {}).label || b.id;
-      if (b.flow === 'overtopping') { more.push(`${name}: water over the top, levels unreliable`); tone = 'rf-bad'; }
+      if (b.flow === 'overtopping') { more.push(`${name}: water over the top`); tone = 'rf-bad'; }
       else if (b.flow === 'pressure') { more.push(`${name}: opening is full`); tone = 'rf-bad'; }
       else more.push(`${name}: ${f2(b.freeboard)} m clear of the water`);
     }
@@ -7731,7 +7795,7 @@ onmessage = e => {
     }
     for (const b of RES.bridges) {
       const name = (S.bridges.find(q => q.id === b.id) || {}).label || b.id;
-      if (b.flow === 'overtopping') chips.push(chip(T(`${name}: water over the deck — weir flow is not modelled; levels here are unreliable`, `${name}: water over the top. The model cannot follow this, so these levels are unreliable`), 'rf-bad'));
+      if (b.flow === 'overtopping') chips.push(chip(T(`${name}: ${b.weirFlow.toFixed(1)} of ${(b.weirFlow + b.openingFlow).toFixed(1)} m³/s goes over the deck (weir flow, ${b.weirHead.toFixed(2)} m head)`, `${name}: water is going over the top of the bridge`), 'rf-bad'));
       else if (b.flow === 'pressure') chips.push(chip(T(`${name}: water reaches the soffit — pressure flow`, `${name}: water reaches the underside, so the opening runs full`), 'rf-bad'));
       else chips.push(chip(T(`${name}: soffit clear of the water by ${f2(b.freeboard)} m`, `${name}: underside is ${f2(b.freeboard)} m above the water`), b.freeboard < 0.6 ? 'rf-warn' : 'rf-good'));
       if (isNum(b.afflux)) chips.push(chip(T(`${name}: afflux ${sgn(b.afflux)} m (energy method)` + (b.yarnell ? ` · piers alone ${sgn(b.yarnell.rise)} m (Yarnell)` : ''), `${name}: the biggest change upstream is ${sgn(b.afflux)} m`)));

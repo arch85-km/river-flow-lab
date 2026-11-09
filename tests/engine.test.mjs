@@ -260,8 +260,8 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('bridge reports a Yarnell check', b.yarnell && b.yarnell.rise > 0, b.yarnell ? `Yarnell rise ${mm(b.yarnell.rise)}` : 'missing');
   const clear = RFL.solve({ ...base, sections: vsecs(), bridges: [{ ...br, openLeft: 0, openRight: 50, lowChord: 9, highChord: 10, piers: [] }] }, 20);
   check('a bridge that touches nothing has no afflux', Math.abs(clear.bridges[0].afflux) < 1e-4, `${mm(clear.bridges[0].afflux)}`);
-  const hi = RFL.solve({ ...base, sections: vsecs(), bridges: [{ ...br, lowChord: 1.6, highChord: 4 }] }, 60);
-  check('soffit below the water is flagged as pressure flow', hi.bridges[0].flow === 'pressure', hi.bridges[0].flow);
+  const hi = RFL.solve({ ...base, sections: vsecs(), bridges: [{ ...br, lowChord: 1.6, highChord: 6 }] }, 60);
+  check('soffit below the water is flagged as pressure flow', hi.bridges[0].flow === 'pressure', `${hi.bridges[0].flow}; upstream ${hi.bridges[0].wsUpstream.toFixed(3)} m, deck ${hi.bridges[0].highChord} m, weir ${(hi.bridges[0].weirFlow || 0).toFixed(2)} of 60 m3/s`);
 }
 
 // 11. Bad input fails loudly
@@ -348,6 +348,46 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
 
   const joined = RFL.buildings(run([wall(0, 450), wall(450, 1000)]), [house(200)])[0];
   check('walls joined end to end have no open end between them', joined.cutOff && !joined.flanked, `depth ${joined.depth.toFixed(2)} m`);
+}
+
+// Water over a bridge deck flows as a broad-crested weir, sharing the flow
+// with the opening (HEC-RAS Hydraulic Reference Manual, ch. 5).
+{
+  // a valley whose sides stand well above any flood here
+  const ground = [[0, 12], [10, 3], [100, 2], [101, 0], [121, 0], [122, 2], [212, 3], [222, 12]];
+  const sec = x => {
+    const b = 100 - 0.001 * x;
+    return { id: 's' + x, x, pts: ground.map(([y, z]) => [y, b + z]), banks: { left: 101, right: 121 }, n: { lob: 0.06, ch: 0.035, rob: 0.06 } };
+  };
+  const sections = []; for (let x = 0; x <= 1000; x += 20) sections.push(sec(x));
+  const deck = { id: 'W', x: 500, length: 10, lowChord: 103.5, highChord: 104.5, openLeft: 101, openRight: 121, piers: [] };
+  const run = (Q, boundary = { type: 'normal', slope: 0.001 }, eddy = { on: true }) => RFL.solve({ sections, boundary, bridges: [deck], walls: [], obstructions: [], eddy }, Q);
+  const bigRun = run(1600), big = bigRun.bridges[0];
+  const C = 1.44, crest = 104.5;
+  // Villemonte (1947), and the weir summed over 0.01 m strips across the
+  // natural ground at the bridge, written out here independently of the engine.
+  const drowning = (head, tailOver) => tailOver <= 0 ? 1 : tailOver >= head ? 0 : Math.pow(1 - Math.pow(tailOver / head, 1.5), 0.385);
+  const handWeir = (level, tail) => {
+    const b = 100 - 0.001 * 510, z = y => { for (let i = 1; i < ground.length; i++) if (y <= ground[i][0]) { const [y0, z0] = ground[i - 1], [y1, z1] = ground[i]; return b + z0 + (z1 - z0) * (y - y0) / (y1 - y0); } return b + 12; };
+    let q = 0; for (let y = 0.005; y < 222; y += 0.01) { const top = Math.max(crest, z(y)), H = level - top; if (H > 0) q += C * Math.pow(H, 1.5) * drowning(H, tail - top) * 0.01; }
+    return q;
+  };
+  check('a flood over a deck reaches a plausible level', big.flow === 'overtopping' && big.wsUpstream < 109, `upstream ${big.wsUpstream.toFixed(2)} m, deck 104.5 m`);
+  const expected = handWeir(crest + big.weirHead, big.wsDownstream);
+  check('flow over the deck follows the weir equation', big.weirFlow > 0 && Math.abs(big.weirFlow - expected) < 0.01 * expected, `${big.weirFlow.toFixed(1)} m3/s, hand ${expected.toFixed(1)}, head ${big.weirHead.toFixed(3)} m, water below ${(big.wsDownstream - crest).toFixed(3)} m over the deck`);
+  check('opening and weir share the whole flow', Math.abs(big.weirFlow + big.openingFlow - 1600) < 1e-6, `${big.openingFlow.toFixed(1)} + ${big.weirFlow.toFixed(1)}`);
+  check('a bridge not overtopped has no weir flow', run(100).bridges[0].weirFlow === 0);
+  // eddy zones off: they switch on and off as the deck is reached, a separate effect
+  const levels = []; for (let Q = 100; Q <= 700; Q += 10) levels.push(run(Q, undefined, { on: false }).bridges[0].wsUpstream);
+  const jump = Math.max(...levels.slice(1).map((v, i) => Math.abs(v - levels[i])));
+  const at = levels.findIndex((v, i) => i > 0 && Math.abs(v - levels[i - 1]) === jump);
+  check('the level does not jump when the deck starts to overtop', jump < 0.3, `largest step ${jump.toFixed(3)} m for 10 m3/s, at ${100 + 10 * at} m3/s`);
+  const dip = levels.findIndex((v, i) => i > 0 && v < levels[i - 1] - 1e-6);
+  check('the level rises steadily with the flow', dip < 0, dip < 0 ? '' : `falls at ${100 + 10 * dip} m3/s: ${levels[dip - 1].toFixed(3)} to ${levels[dip].toFixed(3)} m`);
+  const free = big, highTail = bigRun.sections[0].ws + 1.5;
+  const drowned = run(1600, { type: 'ws', ws: highTail }).bridges[0];
+  const freeFormula = handWeir(crest + drowned.weirHead, -Infinity);
+  check('a higher water level below the bridge drowns the weir', drowned.weirFlow < freeFormula - 1 && drowned.wsUpstream > free.wsUpstream, `${drowned.weirFlow.toFixed(1)} against ${freeFormula.toFixed(1)} m3/s free; upstream ${drowned.wsUpstream.toFixed(2)} against ${free.wsUpstream.toFixed(2)} m`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
