@@ -149,7 +149,7 @@ npm test
 ```
 
 `tests/engine.test.mjs` (47 checks), `tests/overpass-proxy.mjs` (19 checks;
-skipped where PHP is not installed) and `tests/ui.test.mjs` (181 checks,
+skipped where PHP is not installed) and `tests/ui.test.mjs` (184 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused, except map tiles, place search and Overpass, which are
 answered from local fixtures in `tests/fixtures/`; the Overpass fixture is

@@ -6067,12 +6067,12 @@ onmessage = e => {
     }
     return pts;
   }
-  function reachFromLine(line, spacing) {
+  function reachFromLine(line, spacing, shape) {
     const down = smoothLine(line).reverse();           // drawn upstream → downstream; stored downstream first
     const g = { line: down, yc: 0 };
     const f = geoFrame(g);
     if (f.length < 2 * spacing) return { error: `The line is ${f.length.toFixed(0)} m long: draw at least ${(2 * spacing).toFixed(0)} m for sections every ${spacing} m.` };
-    const p = { ...TEMPLATE, length: f.length, spacing };
+    const p = { ...TEMPLATE, ...shape, length: f.length, spacing };
     const xs = []; for (let x = 0; x <= f.length + 1e-6; x += spacing) xs.push(+x.toFixed(2));
     if (f.length - xs[xs.length - 1] > spacing / 3) xs.push(+f.length.toFixed(2));
     const proto = templateSections({ ...p, length: 0 })[0];
@@ -6755,12 +6755,18 @@ onmessage = e => {
     const sp = parseFloat($('rf-map-spacing').value);
     const msg = $('rf-map-msg');
     if (!(sp >= 5 && sp <= 100)) { msg.textContent = 'Section spacing must be between 5 and 100 m.'; return; }
-    const r = reachFromLine(MAP.draft, sp);
+    const check = reachFromLine(MAP.draft, sp);
+    if (check.error) { msg.textContent = check.error; return; }
+    shapeDialog(shape => buildDraftReach(sp, shape));
+  }
+  function buildDraftReach(sp, shape) {
+    const msg = $('rf-map-msg');
+    const r = reachFromLine(MAP.draft, sp, shape);
     if (r.error) { msg.textContent = r.error; return; }
     const d = defaultState();
     const osm = MAP.fromOsm;
     if (osm) { r.g.osm = true; r.g.river = osm.name; r.g.culverts = osm.culverts; }
-    S = { ...d, name: osm ? `${osm.name} (line from OpenStreetMap; template levels, not surveyed)` : 'Drawn river (template levels, not surveyed)', geo: r.g, sections: r.sections, bridges: [], flow: { ...S.flow }, eddy: { ...S.eddy } };
+    S = { ...d, name: osm ? `${osm.name} (line from OpenStreetMap; template levels, not surveyed)` : 'Drawn river (template levels, not surveyed)', geo: r.g, sections: r.sections, bridges: [], flow: { ...S.flow }, eddy: { ...S.eddy }, boundary: { ...d.boundary, slope: shape.slope } };
     MAP.fromOsm = null; MAP.pick = null;
     bendLengths();
     MAP.draft = []; MAP.drawing = false; MAP.centred = true;
@@ -8047,7 +8053,11 @@ onmessage = e => {
   }
 
   // ---------- new reach dialog ----------
-  function newReach() {
+  function newReach() { shapeDialog(); }
+  // The river's shape. With `fromLine` the shape goes along a line already
+  // drawn, so the line sets the length and the map sets the section spacing.
+  function shapeDialog(fromLine) {
+    const notAsked = fromLine ? ['length', 'spacing'] : [];
     const dlg = document.createElement('dialog');
     dlg.setAttribute('aria-labelledby', 'rf-dlg-h');
     dlg.className = 'rf-dlg';
@@ -8059,7 +8069,7 @@ onmessage = e => {
       ['Surface roughness (Manning’s n)', [['nCh', 'River channel', ''], ['nFp', 'Floodplain', '']], true],
     ];
     const field = ([k, l, note, r]) => `<label>${l}${r ? `<span class="rf-dlg-slide"><input type="range" data-link="${k}" min="${r[0]}" max="${r[1]}" step="${r[2]}" value="${TEMPLATE[k]}" aria-label="${l}"><input type="number" step="any" data-k="${k}" value="${TEMPLATE[k]}"></span>` : `<input type="number" step="any" data-k="${k}" value="${TEMPLATE[k]}">`}${note ? `<small>${note}</small>` : ''}</label>`;
-    dlg.innerHTML = `<h2 id="rf-dlg-h">Shape a new river</h2><p class="rf-dlg-intro">Move the sliders and watch the river change. This replaces the current river and your design.</p><svg class="rf-dlg-preview" id="rf-dlg-draw" viewBox="0 0 540 190" role="img" aria-label="The river's shape across its width"></svg>${groups.map(([title, items, adv]) => `<fieldset${adv && level !== 'advanced' ? ' hidden' : ''}>${title ? `<legend>${title}</legend>` : ''}<div class="rf-dlg-grid${adv ? '' : ' rf-one'}">${items.map(field).join('')}</div></fieldset>`).join('')}<div class="rf-dlg-actions"><button class="rf-btn" type="button" id="rf-dlg-cancel">Cancel</button><button class="rf-btn rf-primary" value="ok" type="button" id="rf-dlg-ok">Create river</button></div>`;
+    dlg.innerHTML = `<h2 id="rf-dlg-h">${fromLine ? 'Shape your river' : 'Shape a new river'}</h2><p class="rf-dlg-intro">${fromLine ? 'These values apply along the whole line you drew. They are a template shape, not a survey. This replaces the current river and your design.' : 'Move the sliders and watch the river change. This replaces the current river and your design.'}</p><svg class="rf-dlg-preview" id="rf-dlg-draw" viewBox="0 0 540 190" role="img" aria-label="The river's shape across its width"></svg>${groups.map(([title, items, adv]) => `<fieldset${adv && level !== 'advanced' ? ' hidden' : ''}>${title ? `<legend>${title}</legend>` : ''}<div class="rf-dlg-grid${adv ? '' : ' rf-one'}">${items.filter(i => !notAsked.includes(i[0])).map(field).join('')}</div></fieldset>`).join('')}<div class="rf-dlg-actions"><button class="rf-btn" type="button" id="rf-dlg-cancel">Cancel</button><button class="rf-btn rf-primary" value="ok" type="button" id="rf-dlg-ok">${fromLine ? 'Build river' : 'Create river'}</button></div>`;
     document.body.appendChild(dlg); dlg.showModal();
     // The shape drawn to true scale, so the slope on screen is the real slope.
     const val = k => parseFloat(dlg.querySelector(`[data-k=${k}]`).value);
@@ -8088,6 +8098,7 @@ onmessage = e => {
       const p = {}; for (const inp of dlg.querySelectorAll('[data-k]')) p[inp.dataset.k] = parseFloat(inp.value);
       if (Object.values(p).some(v => !isNum(v) || v < 0) || p.length < 2 * p.spacing || p.spacing <= 0 || p.chW <= 0 || p.chD <= 0 || p.slope <= 0 || p.nCh <= 0 || p.nFp <= 0) { alert('Check the values: all must be positive, with at least three sections.'); return; }
       const d = defaultState();
+      if (fromLine) { close(); fromLine(p); return; }
       S = { ...d, name: 'Template reach (idealised channel, not surveyed)', sections: templateSections(p), boundary: { ...d.boundary, slope: p.slope }, bridges: [] };
       editIdx = 0; viewId = null; V3.fitted = false; close(); renderEditor(); renderElements(); schedule();
     });

@@ -269,7 +269,14 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await page.click('#rf-map-undo');
   check('map: undo removes the last point', (await page.locator('#rf-map-svg circle').count()) === clicks.length - 1);
   await page.mouse.click(box.x + 0.9 * box.width, box.y + 0.6 * box.height);
-  await page.click('#rf-map-build'); await settle(page);
+  await page.click('#rf-map-build');
+  check('map: building asks for the river shape', await page.locator('dialog #rf-dlg-ok').isVisible());
+  check('map: the shape dialog does not ask for a length, as the line sets it', (await page.locator('dialog [data-k=length]').count()) === 0);
+  await page.fill('dialog [data-k=chD]', '2.5');
+  await page.fill('dialog [data-k=chW]', '12');
+  await page.click('#rf-dlg-ok'); await settle(page);
+  const shaped = await page.evaluate(() => { const s = window.RFL_UI.state.sections[3]; return { across: s.banks.right - s.banks.left, depth: s.pts[2][1] - s.pts[3][1], bed: s.pts[4][0] - s.pts[3][0] }; });
+  check('map: the sliders shape the drawn river', Math.abs(shaped.across - 17) < 1e-6 && Math.abs(shaped.depth - 2.5) < 1e-3 && Math.abs(shaped.bed - 12) < 1e-6, JSON.stringify(shaped));
   const built = await page.evaluate(() => { const S = window.RFL_UI.state; return { n: S.sections.length, geo: !!S.geo, name: S.name,
     bends: S.sections.filter(s => s.lengths && Math.abs(s.lengths.lob - s.lengths.rob) > 1).length, design: S.bridges.length + S.obstructions.length }; });
   check('map: a reach is built from the line', built.geo && built.n > 20, JSON.stringify(built));
@@ -342,7 +349,7 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await at(0.7); await at(0.3);
   check('rivers: the part between the two clicks becomes the line', /taken from OpenStreetMap, upstream end first/.test(await page.textContent('#rf-map-msg')));
   await page.fill('#rf-map-spacing', '10');
-  await page.click('#rf-map-build'); await settle(page);
+  await page.click('#rf-map-build'); await page.click('#rf-dlg-ok'); await settle(page);
   const g = await page.evaluate(() => { const S = window.RFL_UI.state; return { name: S.name, osm: S.geo && S.geo.osm, first: S.geo.line[0], last: S.geo.line[S.geo.line.length - 1], n: S.sections.length }; });
   check('rivers: the reach is named after the river and its source', /^River Sheaf \(line from OpenStreetMap; template levels, not surveyed\)$/.test(g.name), g.name);
   // the Sheaf flows north in the fixture: chainage 0 (downstream) must be the northern end, whatever order the ends were clicked
