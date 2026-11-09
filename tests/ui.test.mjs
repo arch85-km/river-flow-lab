@@ -276,6 +276,27 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await page.setInputFiles('#rf-file', await sv.path()); await page.waitForFunction(() => window.RFL_UI.state.obstructions.length === 1);
   check('project reopens with its elements listed', (await page.locator('details.rf-el').count()) === 4);
 
+  // a damaged project file is refused whole, and the open project stays as it was
+  const alerts = [], onDialog = d => { alerts.push(d.message()); d.accept(); };
+  page.on('dialog', onDialog);
+  const damaged = {
+    'flow as text': s => { s.flow = { ...s.flow, Q: '15' }; },
+    'walls not a list': s => { s.walls = {}; },
+    'empty river line': s => { s.geo = { line: [], yc: 0 }; },
+    'wall set-back as text': s => { s.walls = s.walls.map(w => ({ ...w, setback: '2' })); },
+    'boundary without a slope': s => { s.boundary = { type: 'normal' }; },
+  };
+  const keep = await page.evaluate(() => JSON.stringify(window.RFL_UI.state.sections));
+  for (const [what, spoil] of Object.entries(damaged)) {
+    const bad = JSON.parse(JSON.stringify(saved)); spoil(bad.state);
+    const n0 = alerts.length, errs0 = errors.length;
+    await page.setInputFiles('#rf-file', { name: 'damaged.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bad)) });
+    await page.waitForTimeout(300); await settle(page);
+    const same = (await page.evaluate(() => JSON.stringify(window.RFL_UI.state.sections))) === keep && (await page.evaluate(() => window.RFL_UI.state.obstructions.length)) === 1;
+    check(`a project with ${what} is refused`, alerts.length === n0 + 1 && same && errors.length === errs0, `${alerts.length - n0} message(s): ${alerts.slice(n0).join(' | ')}; project kept: ${same}; errors: ${errors.slice(errs0).join(' | ')}`);
+  }
+  page.off('dialog', onDialog);
+
   // 3D view
   const shot = await page.locator('#rf-3d').screenshot();
   check('3D canvas is not blank', shot.length > 20000, `${shot.length} bytes`);
@@ -373,6 +394,15 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   check('map: a new template reach clears the drawn river', (await page.evaluate(() => window.RFL_UI.state.geo)) === null);
   await page.setInputFiles('#rf-file', await sv.path()); await page.waitForFunction(() => !!window.RFL_UI.state.geo);
   check('map: a drawn river reopens from its project file', true);
+  // opening a project somewhere else moves the map to it
+  const elsewhere = JSON.parse(readFileSync(await sv.path(), 'utf8'));
+  elsewhere.state.geo.line = elsewhere.state.geo.line.map(([la, lo]) => [la + 0.05, lo]);
+  await page.evaluate(() => window.RFL_UI.setView('map')); await settle(page);
+  await page.setInputFiles('#rf-file', { name: 'elsewhere.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(elsewhere)) });
+  await page.waitForFunction(la => Math.abs(window.RFL_UI.state.geo.line[0][0] - la) < 1e-9, elsewhere.state.geo.line[0][0]); await settle(page);
+  await page.evaluate(() => window.RFL_UI.setView('map')); await settle(page);
+  const seen = await page.evaluate(() => { const u = window.RFL_UI, r = u.result.sections, el = document.getElementById('rf-map').getBoundingClientRect(); const p = u.screenOf(r[Math.floor(r.length / 2)].id); return { p, w: el.width, h: el.height }; });
+  check('map: opening a project elsewhere moves the map to it', seen.p[0] > 0 && seen.p[0] < seen.w && seen.p[1] > 0 && seen.p[1] < seen.h, JSON.stringify(seen));
 
   // custom tile service: validated, and its credit is required
   await page.click('.rf-views [data-view="map"]'); await settle(page);

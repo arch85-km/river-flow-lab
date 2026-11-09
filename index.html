@@ -8158,6 +8158,16 @@ onmessage = e => {
       if (!isNum(s.n.lob) || !isNum(s.n.rob) || !(s.n.lob > 0 && s.n.ch > 0 && s.n.rob > 0)) return `Section ${s.id || '?'} has no usable roughness.`;
       for (let i = 1; i < s.pts.length; i++) if (s.pts[i][0] < s.pts[i - 1][0]) return `Section ${s.id || '?'}: ground points must run left to right.`;
     }
+    for (const k of ['obstructions', 'bridges', 'walls', 'buildings', 'models', 'floats']) if (st[k] !== undefined && !Array.isArray(st[k])) return `The project's list of ${k} is not readable.`;
+    const f = st.flow;
+    if (f !== undefined && (!f || typeof f !== 'object' || ['Q', 'Qmax', 'allowance'].some(k => f[k] !== undefined && !isNum(f[k])) || (f.Q !== undefined && !(f.Q > 0)))) return 'The flow settings are not readable.';
+    const bd = st.boundary;
+    if (bd !== undefined && (!bd || typeof bd !== 'object' || (bd.type === 'ws' ? !isNum(bd.ws) : !(isNum(bd.slope) && bd.slope > 0)))) return 'The downstream boundary is not readable.';
+    const ed = st.eddy;
+    if (ed !== undefined && (!ed || typeof ed !== 'object' || ['er', 'cr'].some(k => ed[k] !== undefined && !(isNum(ed[k]) && ed[k] > 0)))) return 'The eddy zone settings are not readable.';
+    const g = st.geo;
+    if (g !== undefined && g !== null && (typeof g !== 'object' || !Array.isArray(g.line) || g.line.length < 2 || g.line.some(p => !Array.isArray(p) || !isNum(p[0]) || !isNum(p[1])) || !isNum(g.yc))) return 'The river’s line on the map is not readable.';
+    for (const w of st.walls || []) if (w.setback !== undefined && w.setback !== null && !isNum(w.setback)) return `Flood wall ${w.id || '?'} is not readable.`;
     const numeric = (list, keys, what) => { for (const e of list || []) if (!keys.every(k => isNum(e[k]))) return `${what} ${e.id || '?'} is not readable.`; return null; };
     const badElement = numeric(st.obstructions, ['x0', 'x1', 'y0', 'y1', 'top'], 'Obstruction') || numeric(st.bridges, ['x', 'length', 'openLeft', 'openRight', 'lowChord', 'highChord'], 'Bridge') || numeric(st.walls, ['x0', 'x1', 'y', 'z'], 'Flood wall') || numeric(st.buildings, ['x', 'y', 'w', 'd', 'floor'], 'Building');
     if (badElement) return badElement;
@@ -8174,10 +8184,18 @@ onmessage = e => {
       let st;
       try { const j = JSON.parse(r.result); st = j.state || j; } catch { alert('That file is not a River Flood Lab project.'); return; }
       const err = validState(st); if (err) { alert(err); return; }
-      const d = defaultState();
-      S = { ...d, ...st, flow: { ...d.flow, ...(st.flow || {}) }, eddy: { ...d.eddy, ...(st.eddy || {}) }, boundary: { ...d.boundary, ...(st.boundary || {}) },
-        obstructions: st.obstructions || [], bridges: st.bridges || [], walls: st.walls || [], buildings: st.buildings || [], models: st.models || [], floats: st.floats || [] };
-      editIdx = 0; viewId = null; V3.fitted = false; renderEditor(); renderElements(); schedule();
+      const d = defaultState(), old = S;
+      // If anything the checks missed still fails, the open project is put back.
+      try {
+        S = { ...d, ...st, flow: { ...d.flow, ...(st.flow || {}) }, eddy: { ...d.eddy, ...(st.eddy || {}) }, boundary: { ...d.boundary, ...(st.boundary || {}) },
+          obstructions: st.obstructions || [], bridges: st.bridges || [], walls: st.walls || [], buildings: st.buildings || [], models: st.models || [], floats: st.floats || [] };
+        editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = ''; compare = false; MAP.centred = false;
+        renderEditor(); renderElements(); run();
+      } catch (e) {
+        S = old; editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = ''; MAP.centred = false;
+        renderEditor(); renderElements(); schedule();
+        alert('That project could not be opened: part of it is not readable.');
+      }
     };
     r.readAsText(file);
   }
