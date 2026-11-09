@@ -11,8 +11,11 @@ Sheaf site data follows.
 
 ## Using it
 
-Open `index.html` in a browser; it needs no installation, account or
-network. The layout follows Urban Wind Lab: controls on the left, one large
+Open `index.html` in a browser; it needs no installation or account. The
+calculation, the views and loading your own files work with no network;
+the map, place search and finding rivers on OpenStreetMap need one, and
+only ask for it when used. The layout follows Urban Wind Lab: controls on
+the left, one large
 view in the middle, results on the right. It starts on a template reach (an
 idealised channel with floodplains, not a survey) with one example bridge.
 
