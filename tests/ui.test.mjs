@@ -227,6 +227,20 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   check('a declared other grid is not placed as BNG', geo.saidGeoref === false);
   check('an undeclared grid in range is assumed to be BNG and says so', geo.plainGeoref === true && geo.plainGrid === 'unknown', `${geo.plainGeoref} ${geo.plainGrid}`);
 
+  // terrain with no data along the river itself, as where LIDAR masks the water
+  const gap = await page.evaluate(() => {
+    const t = window.RFL_UI.terrain, at = (e, n) => Math.abs(n - 386000) < 3 ? null : 10 + Math.abs(n - 386000) * 0.05;
+    const T = { at, georef: true, fine: true }, line = [[400000, 386000], [400400, 386000]];
+    const p = carve => ({ half: 50, spacing: 50, depth: 1, bed: 5, side: 1, carve, measures: [] });
+    let carved = null, own = null, thrown = '';
+    try { carved = t.terrainReach(T, line, p(true)); own = t.terrainReach(T, line, p(false)); } catch (e) { thrown = String(e); }
+    const span = r => r && r.sections ? Math.min(...r.sections.map(s => s.pts[s.pts.length - 1][0] - s.pts[0][0])) : null;
+    return { thrown, carvedSpan: span(carved), ownAnswer: !!own && (!!own.sections || !!own.error), ownError: own && own.error };
+  });
+  check('terrain with no data at the river keeps its floodplains', gap.carvedSpan > 90, `narrowest section ${gap.carvedSpan} m of 100 m${gap.thrown ? '; ' + gap.thrown : ''}`);
+  check('terrain with no data at the river never stops the build without a message', !gap.thrown && gap.ownAnswer, gap.thrown || gap.ownError || 'built');
+  check('a model said to include the river bed, with no levels there, says to carve one', /Untick/.test(gap.ownError || ''), gap.ownError || 'built with no bed');
+
   // exports from the File menu
   const text = (await download(page, 'rf-csv')).toString('utf8');
   check('CSV carries the caution', text.includes('not a flood risk assessment'));

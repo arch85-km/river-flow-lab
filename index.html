@@ -6452,9 +6452,10 @@ onmessage = e => {
       const yL = yc - tw, yR = yc + tw;
       if (tw + 8 > p.half) return { error: 'Include more land each side of the river: the channel is too wide for it.' };
       if (ground(yL) === null || ground(yR) === null) return { error: `The river runs off the edge of the terrain ${(f.length - x).toFixed(0)} m from its upstream end. Keep the line further inside the model.` };
-      let a = yc, b = yc;
-      while (a - step >= 0 && ground(a - step) !== null) a -= step;
-      while (b + step <= 2 * yc && ground(b + step) !== null) b += step;
+      // Out to each side as far as there is ground, across short gaps such as
+      // water masked out of LIDAR, stopping at a gap wider than 10 m.
+      const reach = dir => { let y = yc, last = yc, gap = 0; for (;;) { const n = y + dir * step; if (n < 0 || n > 2 * yc) break; y = n; if (ground(y) === null) { gap += step; if (gap > 10) break; } else { gap = 0; last = y; } } return last; };
+      const a = reach(-1), b = reach(1);
       let low = Infinity; for (let y = yL; y <= yR; y += 1) low = Math.min(low, ground(y) ?? low);
       cuts.push({ x, ground, a, b, gL: ground(yL), gR: ground(yR), yL, yR, size, low });
     }
@@ -6473,7 +6474,8 @@ onmessage = e => {
       const raw = [], put = (y, z) => raw.push([+y.toFixed(3), +z.toFixed(3)]);
       for (let y = q.a; y <= q.b + 1e-9; y += step) {
         if (p.carve && y > q.yL - 0.5 && y < q.yR + 0.5) continue;
-        put(y, q.ground(y));
+        const z = q.ground(y);
+        if (z !== null) put(y, z);
       }
       if (p.carve) { put(q.yL, sL[i]); put(yc - q.size.bed / 2, beds[i]); put(yc + q.size.bed / 2, beds[i]); put(q.yR, sR[i]); }
       raw.sort((u, v) => u[0] - v[0]);
@@ -6485,6 +6487,10 @@ onmessage = e => {
       });
       return { id: `XS${String(i + 1).padStart(2, '0')}`, x: q.x, pts, banks: { left: q.yL, right: q.yR }, n: { lob: TEMPLATE.nFp, ch: TEMPLATE.nCh, rob: TEMPLATE.nFp } };
     });
+    const thin = sections.find(s => s.pts.length < 3);
+    if (thin) return { error: `The terrain has too few levels to cut a section ${(f.length - thin.x).toFixed(0)} m from the upstream end. Move the line onto ground the model covers, or leave "The model already includes the real river bed" unticked so a channel is carved in.` };
+    const bare = p.carve ? -1 : cuts.findIndex((q, i) => !sections[i].pts.some(t => t[0] >= q.yL && t[0] <= q.yR));
+    if (bare >= 0) return { error: `The terrain has no levels across the river ${(f.length - cuts[bare].x).toFixed(0)} m from the upstream end, so it does not hold the real river bed there. Untick "The model already includes the real river bed" so a channel is carved in.` };
     const bedOf = i => p.carve ? beds[i] : Math.min(...sections[i].pts.map(t => t[1]));
     const slope = Math.max(0.0005, (bedOf(sections.length - 1) - bedOf(0)) / f.length);
     return { g: T.georef ? { line: downEN.map(([e, n]) => bngToWgs(e, n)), yc, aod: true } : g, sections, slope };
