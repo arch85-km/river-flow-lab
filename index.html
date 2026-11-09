@@ -8063,14 +8063,16 @@ onmessage = e => {
   }
   const RIVER_CREDIT = 'River line © OpenStreetMap contributors, ODbL';
   const creditLine = () => S.geo && S.geo.osm ? RIVER_CREDIT : '';
-  function settingsLine() {
-    return `Flow ${flowQ().toFixed(2)} m3/s (set ${S.flow.Q} m3/s, climate allowance ${S.flow.allowance}%); downstream boundary ${S.boundary.type === 'ws' ? 'fixed level ' + S.boundary.ws + ' m' : 'normal depth, slope ' + S.boundary.slope}; eddy zones ${S.eddy.on ? `on (ER ${S.eddy.er}, CR ${S.eddy.cr})` : 'off'}; steady 1D standard step (${APP} ${VERSION})` + (before() ? '; shown without design elements' : '') + (creditLine() ? '; ' + creditLine() : '');
+  // `forData`: for a CSV, which always holds the run with the design, whichever view is shown.
+  function settingsLine(forData) {
+    return `Flow ${flowQ().toFixed(2)} m3/s (set ${S.flow.Q} m3/s, climate allowance ${S.flow.allowance}%); downstream boundary ${S.boundary.type === 'ws' ? 'fixed level ' + S.boundary.ws + ' m' : 'normal depth, slope ' + S.boundary.slope}; eddy zones ${S.eddy.on ? `on (ER ${S.eddy.er}, CR ${S.eddy.cr})` : 'off'}; steady 1D standard step (${APP} ${VERSION})` + (before() && !forData ? '; shown without design elements' : '') + (creditLine() ? '; ' + creditLine() : '');
   }
   function csv() {
     if (!RES || RES.error) return;
     const q = v => `"${String(v).replace(/"/g, '""')}"`;
-    const lines = [`# ${APP} ${VERSION} — ${S.name}`, `# ${CAUTION}`, `# ${settingsLine()}`];
     const base = BASE && !BASE.error;
+    const lines = [`# ${APP} ${VERSION} — ${S.name}`, `# ${CAUTION}`, `# ${settingsLine(true)}`,
+      `# Results with the design elements${base ? '; change_vs_no_design_m compares them with the same river without the design' : ''}.`];
     lines.push(['section', 'chainage_m', 'bed_m', 'water_level_m', 'depth_m', 'energy_level_m', ...(base ? ['change_vs_no_design_m'] : []), 'v_channel_ms', 'v_mean_ms', 'froude', 'notes'].join(','));
     for (const s of RES.sections) lines.push([q(s.id), s.x.toFixed(2), s.bed.toFixed(3), s.ws.toFixed(3), s.depth.toFixed(3), s.egl.toFixed(3), ...(base ? [(s.ws - RFL.wsAt(BASE, s.x)).toFixed(3)] : []), s.sub.ch.V.toFixed(3), s.V.toFixed(3), s.Fr.toFixed(3), q([...s.flags, ...(s.eddies.length ? ['eddy zone'] : [])].join(' '))].join(','));
     if (RES.bridges.length) {

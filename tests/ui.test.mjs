@@ -247,6 +247,12 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   check('CSV carries the settings', /Flow [\d.]+ m3\/s/.test(text) && /eddy zones on/.test(text));
   check('CSV lists bridges and buildings', /\nbridge,/.test(text) && /\nbuilding,/.test(text));
 
+  // a CSV saved while showing "Without" says what it holds: the run with the design
+  await page.click('[data-compare="before"]'); await settle(page);
+  const withoutCsv = (await download(page, 'rf-csv')).toString('utf8');
+  await page.click('[data-compare="with"]'); await settle(page);
+  check('a CSV saved in the Without view is labelled as what it holds', !/shown without design elements/.test(withoutCsv) && /Results with the design elements/.test(withoutCsv), withoutCsv.split('\n').slice(0, 4).join(' / '));
+
   // a building behind a wall reads the same in the Section view and the CSV
   const savedDesign = await page.evaluate(() => JSON.stringify({ walls: window.RFL_UI.state.walls, buildings: window.RFL_UI.state.buildings }));
   await page.click('[data-add=walls]'); await settle(page);
