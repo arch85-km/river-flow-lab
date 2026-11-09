@@ -296,5 +296,27 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('a second bridge upstream does not add to this bridge\'s afflux', Math.abs(a - peak) < 0.02, `afflux ${mm(a)}, alone ${mm(peak)}`);
 }
 
+// A bridge deck limits the water only where the deck is: past short
+// abutments the floodplain is open to the sky.
+{
+  const sec = x => ({ id: 's' + x, x, pts: [[0, 103], [100, 102], [101, 100], [121, 100], [122, 102], [222, 103]],
+    banks: { left: 101, right: 121 }, n: { lob: 0.06, ch: 0.035, rob: 0.06 } });
+  const sections = [sec(0), sec(100), sec(200)];
+  const deck = { id: 'D', x: 100, length: 10, lowChord: 103.5, highChord: 104.5, openLeft: 101, openRight: 121, piers: [] };
+  const atBridge = abut => RFL.prepare({ sections, bridges: [{ ...deck, abut }] }).preps.find(p => p.bridge);
+  const ws = 104, Q = 300;
+  const short = atBridge(5), open = RFL.hydraulics({ ...short, ceil: undefined, bridge: null }, ws, Q);
+  const under = RFL.hydraulics(short, ws, Q);
+  check('the deck does not limit water beyond short abutments',
+    Math.abs(under.sub.lob.A - open.sub.lob.A) < 1e-6 && Math.abs(under.sub.rob.A - open.sub.rob.A) < 1e-6,
+    `left floodplain ${under.sub.lob.A.toFixed(1)} m2, open ${open.sub.lob.A.toFixed(1)} m2`);
+  check('the deck still limits water over the opening', under.sub.ch.A < open.sub.ch.A - 1,
+    `channel ${under.sub.ch.A.toFixed(1)} m2, open ${open.sub.ch.A.toFixed(1)} m2`);
+  const full = atBridge(undefined);
+  check('with full-width abutments only the opening carries water',
+    Math.abs(RFL.hydraulics(full, ws, Q).A - RFL.hydraulics(full, 103.6, Q).A) < 1e-6 && RFL.hydraulics(full, ws, Q).sub.lob.A === 0,
+    `area ${RFL.hydraulics(full, ws, Q).A.toFixed(1)} m2`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -4757,6 +4757,21 @@ const RFL = (() => {
     return { A, P, T };
   }
 
+  // wetted(), with the bridge soffit acting only under the deck: beyond short
+  // abutments the water is open to the sky.
+  function wettedAtDeck(prep, ws, a, b) {
+    const [dl, dr] = prep.deck || [-Infinity, Infinity], sum = { A: 0, P: 0, T: 0 };
+    const add = (p, q, ceil) => {
+      if (!(q > p)) return;
+      const w = wetted(prep.pts, ws, p, q, ceil);
+      sum.A += w.A; sum.P += w.P; sum.T += w.T;
+    };
+    add(a, Math.min(b, dl));
+    add(Math.max(a, dl), Math.min(b, dr), prep.ceil);
+    add(Math.max(a, dr), b);
+    return sum;
+  }
+
   // Offsets [a,b] minus a list of excluded spans.
   function subtractSpans(a, b, spans) {
     let parts = [[a, b]];
@@ -4803,14 +4818,14 @@ const RFL = (() => {
     for (const [key, a, b, n] of subs) {
       let A = 0, P = 0, T = 0;
       if (b > a) for (const [p, q] of subtractSpans(a, b, spans)) {
-        const w = wetted(pts, ws, p, q, prep.ceil);
+        const w = wettedAtDeck(prep, ws, p, q);
         A += w.A; P += w.P; T += w.T;
         // A floating object: the water above its underside is gone, and its
         // underside and sides become wetted perimeter. Flow passes beneath it.
         for (const f of prep.floats || []) {
           const l = Math.max(p, f.y0), r = Math.min(q, f.y1);
           if (!(r > l)) continue;
-          const whole = wetted(pts, ws, l, r, prep.ceil), under = wetted(pts, ws - f.draft, l, r, prep.ceil);
+          const whole = wettedAtDeck(prep, ws, l, r), under = wettedAtDeck(prep, ws - f.draft, l, r);
           A -= whole.A - under.A; P += under.T; T -= whole.T;
           const side = y => Math.min(f.draft, Math.max(0, ws - groundAt(pts, y)));
           if (f.y0 >= l && f.y0 < r) P += side(f.y0);
@@ -4849,7 +4864,7 @@ const RFL = (() => {
   // Water level of least specific energy (critical depth).
   const criticalMemo = new Map();
   function criticalWS(prep, Q) {
-    const key = JSON.stringify([Q, prep.pts, prep.banks, prep.n, prep.excl, prep.ceil, prep.floats, prep.raw]);
+    const key = JSON.stringify([Q, prep.pts, prep.banks, prep.n, prep.excl, prep.ceil, prep.deck, prep.floats, prep.raw]);
     let wc = criticalMemo.get(key);
     if (wc === undefined) {
       if (criticalMemo.size > 20000) criticalMemo.clear();
@@ -5030,7 +5045,7 @@ const RFL = (() => {
       for (const p of preps) {
         if (p.x < b.x0 - 1e-6 || p.x > b.x1 + 1e-6) continue;
         for (const k of b.blocks) p.pts = applyBlock(p.pts, k.y0, k.y1, k.top);
-        if (b.kind === 'bridge') { p.ceil = b.bridge.lowChord; p.bridge = b.bridge; }
+        if (b.kind === 'bridge') { p.ceil = b.bridge.lowChord; p.bridge = b.bridge; p.deck = [b.blocks[0].y0, b.blocks[1].y1]; }
       }
       if (!eddy.on) continue;
       for (const k of b.blocks) {
