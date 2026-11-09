@@ -5867,7 +5867,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     if (stretch > 1.25) el('text', { x: box.r, y: 30 + stageTop(host), 'text-anchor': 'end', fill: C.muted }, svg).textContent = `Not to scale: heights drawn ${stretch.toFixed(0)}× larger than widths`;
     else if (Math.abs(stretch - 1) < 0.05) el('text', { x: W - 10, y: 30 + stageTop(host), 'text-anchor': 'end', fill: C.muted }, svg).textContent = 'True scale: heights and widths match';
     for (const { b, z0, z1 } of buildingsHere) {
-      const ya = b.y - b.w / 2, yb = b.y + b.w / 2, wet = s.ws > b.floor;
+      const ya = b.y - b.w / 2, yb = b.y + b.w / 2, verdict = RFL.buildings(before() ? BASE : RES, [b])[0], wet = isNum(verdict.depth) ? verdict.depth > 0 : s.ws > b.floor;
       el('rect', { class: 'rf-cut-building', x: sx(ya), y: sy(z1), width: sx(yb) - sx(ya), height: sy(z0) - sy(z1), fill: wet ? C.bad : C.deck, stroke: C.ink, 'stroke-width': 1.5 }, g);
       el('line', { x1: sx(ya), x2: sx(yb), y1: sy(b.floor), y2: sy(b.floor), stroke: C.panel, 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }, g);
       el('text', { x: sx(b.y), y: sy(z1) - 6, 'text-anchor': 'middle', fill: C.ink, 'font-weight': 600 }, g).textContent = b.label || b.id;
@@ -6484,7 +6484,7 @@ onmessage = e => {
     $d('#rf-t-full').addEventListener('click', full);
     unit.addEventListener('change', load);
     const own = $d('#rf-t-own');
-    own.addEventListener('change', () => { $d('#rf-t-note').textContent = own.checked ? 'The ground is used as it is. The depth and bank slope only set where the banks are.' : 'Most terrain models record the water surface, not the river bed. The channel below is carved in as an estimate.'; });
+    own.addEventListener('change', () => { $d('#rf-t-note').textContent = own.checked ? 'The ground is used as it is. The depth, width and bank slope only set where the banks are.' : 'Most terrain models record the water surface, not the river bed. The channel below is carved in as an estimate.'; });
     dlg.querySelectorAll('[data-link]').forEach(r => r.addEventListener('input', () => { dlg.querySelector(`[data-k=${r.dataset.link}]`).value = r.value; }));
     dlg.querySelectorAll('[data-k]').forEach(n => n.addEventListener('input', () => { const r = dlg.querySelector(`[data-link=${n.dataset.k}]`); if (r) r.value = n.value; }));
     const close = () => { dlg.close(); dlg.remove(); };
@@ -7966,8 +7966,8 @@ onmessage = e => {
       for (const b of RES.bridges) lines.push([q(b.id), b.lowChord, b.highChord, b.wsUpstream.toFixed(3), isNum(b.afflux) ? b.afflux.toFixed(3) : '', b.yarnell ? b.yarnell.rise.toFixed(3) : '', b.freeboard.toFixed(3), b.flow].join(','));
     }
     if (S.buildings.length) {
-      lines.push('', 'building,chainage_m,floor_m,water_level_m,water_over_floor_m');
-      RFL.buildings(RES, S.buildings).forEach((r, i) => lines.push([q(S.buildings[i].label || r.id), S.buildings[i].x, r.floor, isNum(r.ws) ? r.ws.toFixed(3) : '', isNum(r.depth) ? r.depth.toFixed(3) : ''].join(',')));
+      lines.push('', 'building,chainage_m,floor_m,water_level_m,water_over_floor_m,status');
+      RFL.buildings(RES, S.buildings).forEach((r, i) => lines.push([q(S.buildings[i].label || r.id), S.buildings[i].x, r.floor, isNum(r.ws) ? r.ws.toFixed(3) : '', isNum(r.depth) ? r.depth.toFixed(3) : '', q(r.cutOff ? 'cut off from the river' : r.flanked ? 'water can come round the wall end' : '')].join(',')));
     }
     download('river-flood-lab.csv', new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
   }

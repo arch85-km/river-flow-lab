@@ -192,6 +192,30 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   check('CSV carries the caution', text.includes('not a flood risk assessment'));
   check('CSV carries the settings', /Flow [\d.]+ m3\/s/.test(text) && /eddy zones on/.test(text));
   check('CSV lists bridges and buildings', /\nbridge,/.test(text) && /\nbuilding,/.test(text));
+
+  // a building behind a wall reads the same in the Section view and the CSV
+  const savedDesign = await page.evaluate(() => JSON.stringify({ walls: window.RFL_UI.state.walls, buildings: window.RFL_UI.state.buildings }));
+  await page.click('[data-add=walls]'); await settle(page);
+  const secId = await page.evaluate(() => {
+    const u = window.RFL_UI, s = u.result.sections[5], last = u.result.sections[u.result.sections.length - 1];
+    Object.assign(u.state.walls[u.state.walls.length - 1], { side: 'left', x0: u.result.sections[0].x, x1: last.x, y: s.banks.left - 2, z: s.ws + 20 });
+    Object.assign(u.state.buildings[0], { x: s.x, y: s.banks.left - 12, floor: s.ws - 0.5 });
+    u.run();
+    return s.id;
+  });
+  await settle(page);
+  await page.evaluate(() => window.RFL_UI.setView('section'));
+  await page.selectOption('#rf-view-sec', secId); await settle(page);
+  const dryFill = await page.locator('.rf-cut-building').first().getAttribute('fill');
+  const behindCsv = (await download(page, 'rf-csv')).toString('utf8');
+  check('CSV says when a building is cut off from the river', /\nbuilding,.*,status\n[^\n]*cut off from the river/.test(behindCsv));
+  await page.evaluate(() => { const u = window.RFL_UI; u.state.walls.pop(); u.run(); });
+  await settle(page);
+  const wetFill = await page.locator('.rf-cut-building').first().getAttribute('fill');
+  check('Section view shows a building behind a wall as dry', dryFill !== wetFill, `${dryFill} behind the wall, ${wetFill} without it`);
+  await page.evaluate(d => { const u = window.RFL_UI, o = JSON.parse(d); u.state.walls = o.walls; u.state.buildings = o.buildings; u.run(); }, savedDesign);
+  await settle(page);
+  await page.evaluate(() => window.RFL_UI.setView('3d'));
   for (const v of ['plan', 'section', 'profile']) {
     await page.click(`.rf-views [data-view="${v}"]`); await settle(page);
     const buf = await download(page, 'rf-png');
