@@ -95,18 +95,24 @@ idealised channel with floodplains, not a survey) with one example bridge.
   element to move it (its levels move with the river bed), and drag the
   blue section line, or click the ground, to choose where the section cuts.
   Plan has a true-scale option, zoom and pan, like Section and Profile.
-  In 3D and Plan the legend switches the water's colour between depth and
-  speed. A 1D model has one mean speed in the channel and one on each
+  In 3D and Plan the legend switches the water's colour between depth,
+  speed and, once a bed material is chosen, the bed: red where the water moves
+  it, blue where material carried down from upstream builds up, and grey
+  where it is stable. A 1D model has one mean speed in the channel and one on each
   floodplain at a section, so the colour changes along the river and at the
   banks, not around a pier.
 - **Results** (right): the legend for the view, tiles for the chosen
   section, the effect of the design (afflux, soffit clearance, floor levels,
   choking), water level against flow, and every section in a table.
   The effect of the design also names where scour and settling are most
-  likely, from the channel speeds alone: sections 1.5 times faster or 0.6
-  times slower than the reach's typical speed, places where the design
-  changes the speed by 10% or more, and wet eddy zones. Sediment itself is
-  not modelled, and the app says so.
+  likely. Choose what the river bed is made of in River (fine sand to
+  cobbles, or a grain size of your own) and it compares the force of the
+  flow on the bed with the force needed to move its grains (Shields'
+  threshold), and names where the design starts or stops the bed moving.
+  Without a bed material it hints from the channel speeds alone: sections
+  1.5 times faster or 0.6 times slower than the reach's typical speed,
+  places where the design changes the speed by 10% or more, and wet eddy
+  zones. How deep the bed scours is not modelled, and the app says so.
 - **File** menu: export the view as PNG, the results as CSV, and save or
   open a project. Every export carries the caution and the settings.
 
@@ -203,8 +209,8 @@ and the DOI to one value across `CITATION.cff`, `.zenodo.json`,
 `package.json`, `package-lock.json`, the app (`VERSION`, `RELEASED`, its
 citation) and both method-notes pages. `tests/release-guard.test.mjs` (25
 checks) proves each of its checks by breaking it. Then
-`tests/engine.test.mjs` (65 checks), `tests/overpass-proxy.mjs` (19 checks;
-skipped where PHP is not installed) and `tests/ui.test.mjs` (252 checks,
+`tests/engine.test.mjs` (69 checks), `tests/overpass-proxy.mjs` (19 checks;
+skipped where PHP is not installed) and `tests/ui.test.mjs` (276 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused, except map tiles, place search and Overpass, which are
 answered from local fixtures in `tests/fixtures/`; the Overpass fixture is

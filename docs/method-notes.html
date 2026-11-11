@@ -620,13 +620,46 @@ h_d = downstream level − max(deck top, ground)                  <em>drowning, 
           <tr><td><b>Buildings as obstacles</b></td><td>Not modelled</td><td>Add an obstruction or import the model</td></tr>
           <tr><td><b>Swirl inside an eddy zone</b></td><td>Not modelled</td><td>The zone's extent is set by ratios, its flow by a dead-water rule</td></tr>
           <tr><td><b>Culverts, sluices, weirs in the river</b></td><td>Not modelled</td><td>A culvert in OpenStreetMap is drawn and named in the status, not computed</td></tr>
-          <tr><td><b>Sediment and scour</b></td><td>Not modelled; hints only</td><td>Places are named from the channel speed alone: 1.5 times faster or 0.6 times slower than the reach's median, changed by the design by 10% or more, and wet eddy zones. Whether a bed scours depends on its material, which the tool does not know</td></tr>
+          <tr><td><b>Sediment and scour</b></td><td>Partly: whether the bed can move</td><td>With the bed's material set, the force of the flow on the bed is compared with the force needed to move its grains (below). Without it, places are named from the channel speed alone. How deep the bed scours, and how it changes over time, are not modelled</td></tr>
           <tr><td><b>Debris blocking a bridge</b></td><td>Not modelled</td><td>A blocked opening can be imitated with an obstruction</td></tr>
           <tr><td><b>Rain on the site, drains, groundwater</b></td><td>Not modelled</td><td>River flooding only</td></tr>
           <tr><td><b>Wind, waves, ice</b></td><td>Not modelled</td><td>&ndash;</td></tr>
           <tr><td><b>Velocity across a part of the section</b></td><td>Not modelled</td><td>One mean velocity per part, so water coloured by speed changes along the river and at the banks, not around a pier</td></tr>
         </tbody>
       </table></div>
+    
+      <h3>Where the flow can move the bed</h3>
+      <p>The tool does not model sediment, but it can say where the flow is strong enough to move the
+        bed. Choose what the bed is made of in River: fine sand (0.2&nbsp;mm), coarse sand (0.7&nbsp;mm),
+        fine gravel (4&nbsp;mm), coarse gravel (30&nbsp;mm), cobbles (100&nbsp;mm) or a grain size of
+        your own. At every section the force of the flow on the channel bed is compared with the force
+        needed to start its grains moving, Shields' threshold, with the threshold parameter from
+        Soulsby's fit to Shields' curve:</p>
+<pre class="rf-formula">τ    = ρ · g · R · S_f                          <em>force on the bed, N/m²; R and S_f of the channel</em>
+D*   = d · ( (s − 1) · g / ν² )^(1/3)            <em>s 2.65 (quartz), ν 1.0 × 10⁻⁶ m²/s (water at about 20 °C)</em>
+θ_cr = 0.30 / (1 + 1.2 D*) + 0.055 · (1 − e^(−0.020 D*))
+τ_cr = θ_cr · (s − 1) · ρ · g · d                 <em>force needed to start the grains moving</em></pre>
+      <p>Each section of the channel bed is then in one of three states, read from the upstream end
+        down:</p>
+      <ul>
+        <li><b>Moving</b> (red): τ exceeds τ_cr, so the water carries the bed along.</li>
+        <li><b>Building up</b> (blue): τ is below τ_cr, but the bed moves just upstream, so material
+          carried down is dropped here. The whole still stretch below a moving one is counted.</li>
+        <li><b>Stable</b> (grey): τ is below τ_cr here and upstream, so nothing is worn away and
+          nothing arrives. At the top of the reach what arrives from further upstream is not known, so
+          a still stretch there counts as stable.</li>
+      </ul>
+      <p>Moving shows where the bed can move, not how much: it wears away most where the water
+        speeds up, as through a bridge opening, and builds up most where the water first slows. With a
+        design, the places it starts the bed moving, or makes material build up, are named. In 3D and
+        Plan the water can be coloured by these states; the floodplains, whose ground is not the river
+        bed, are not judged. On the template reach with its example bridge, at a major flood, coarse
+        gravel moves through the bridge opening and builds up in the backwater upstream of it.</p>
+      <p class="rf-note"><b>A threshold, not a sediment model.</b> It is for a loose bed of one grain
+        size. Silt and clay hold together and are not covered, and the tool refuses a grain size finer
+        than sand. How deep the bed scours, local scour round piers and abutments, a coarse surface
+        layer that shields the finer bed beneath, plants on the bed, and how much sediment moves are
+        not modelled. The CSV gives the force on the bed at every section.</p>
     </div>
   </div>
 
@@ -689,6 +722,7 @@ h_d = downstream level − max(deck top, ground)                  <em>drowning, 
           <tr><td><b>Eddy zones</b></td><td>On, ER 2, CR 1</td><td>Turning them off lets the flow re-expand at once behind a blockage</td></tr>
           <tr><td><b>Manning's <i>n</i></b>, per section</td><td>0.035 channel, 0.06 floodplain</td><td>The single largest unknown in any real reach</td></tr>
           <tr><td><b>Section spacing</b></td><td>15&nbsp;m</td><td>See section 09</td></tr>
+          <tr><td><b>River bed</b> material or grain size</td><td>Not set</td><td>Whether the flow can move the bed (section 08); without it, scour and settling are hinted from the speed alone</td></tr>
           <tr><td><b>Floating object</b>: weight or depth below the water, hull roughness</td><td>0.5&nbsp;m deep, <i>n</i>&nbsp;0.013</td><td>Weight and depth are the same setting; height above the water changes nothing</td></tr>
           <tr><td><b>Pier shape</b></td><td>Square nose, <i>K</i> 1.25, for a new bridge</td><td>Yarnell's check only</td></tr>
           <tr><td><b>Abutment length</b></td><td>15&nbsp;m for a new bridge; left blank, to the valley sides</td><td>A short abutment lets the flood pass round the bridge</td></tr>
@@ -808,6 +842,16 @@ h_d = downstream level − max(deck top, ground)                  <em>drowning, 
       Series No. 1, 2nd edition, revised. Washington, DC: Federal Highway Administration.
       <span style="color:var(--rf-ink3)">&mdash; The submergence curve HEC-RAS uses for an overtopped
       deck. Not used by this tool.</span></p>
+
+    <h4>Where the flow can move the bed</h4>
+    <p class="rf-ref">Shields, A. (1936). <i>Anwendung der Ähnlichkeitsmechanik und der Turbulenzforschung auf
+      die Geschiebebewegung</i>. Mitteilungen der Preußischen Versuchsanstalt für Wasserbau und Schiffbau,
+      26. Berlin.
+      <span style="color:var(--rf-ink3)">&mdash; The threshold of motion for grains on a bed.</span></p>
+    <p class="rf-ref">Soulsby, R. L. (1997). <i>Dynamics of Marine Sands: A Manual for Practical
+      Applications</i>. London: Thomas Telford.
+      <span style="color:var(--rf-ink3)">&mdash; The fit to Shields' curve that gives the threshold
+      parameter from the grain size (with Whitehouse).</span></p>
 
     <h4>Places and data</h4>
     <p class="rf-ref">Ordnance Survey (2020). <i>A Guide to Coordinate Systems in Great Britain</i>,

@@ -106,8 +106,10 @@ own research. Several features come directly from teaching:
   belong in other tools, not in a river tool.
 - **Flood risk assessment.** It is not for planning, insurance or construction
   decisions; those need a validated model run by someone qualified to run it.
-- **Sediment modelling.** Scour and settling stay hints read from the water
-  speed, so students reason about them rather than read a number.
+- **Sediment modelling.** Scour and settling stay hints, so students reason
+  about them rather than read a number: read from the water speed, or, with
+  the bed's material chosen, from whether the flow can move it. How deep the
+  bed scours and how it changes are not modelled.
 - **Accounts and cloud storage.** There is no log-in and no server storage;
   everything stays in the user's browser.
 

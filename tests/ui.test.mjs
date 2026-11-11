@@ -143,7 +143,12 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await page.fill('#rf-allow', '30'); await page.locator('#rf-allow').blur(); await settle(page);
   const a1 = await ws(page, 200);
   check('climate allowance raises the water', a1 > a0, `+${((a1 - a0) * 1000).toFixed(0)} mm`);
-  check('flow readout includes the allowance', (await page.textContent('#rf-q-out')).includes('+30%'));
+  {
+    // the readout spells out the sum, so the box and the modelled flow cannot look as if they disagree
+    const out = await page.textContent('#rf-q-out'), Q = await page.evaluate(() => window.RFL_UI.state.flow.Q);
+    const qf = v => v < 10 ? v.toFixed(2) : v.toFixed(1);
+    check('flow readout spells out set flow + allowance = modelled flow', out.includes(`${qf(Q)} m³/s + 30% climate allowance = ${qf(Q * 1.3)} m³/s modelled`), out);
+  }
   await page.fill('#rf-allow', '0'); await page.locator('#rf-allow').blur(); await settle(page);
 
   // results panel
@@ -613,7 +618,7 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   const status = (await page.locator('#rf-status .rf-note').allTextContents()).join('\n');
   check('hints: the bridge is named for speeding the channel up', /speeds the channel up at 150–158 m/.test(status), status.split('\n').filter(t => /speed|slow/.test(t)).join(' | '));
   check('hints: the backwater upstream is named for slowing it', /slows the channel at/.test(status));
-  check('hints: they say sediment is not modelled', /does not model sediment/.test(status));
+  check('hints: they say they come from the water speed only', /hints from the water speed only/.test(status));
   await page.click('#rf-survey summary');
   for (const [k, v] of [['w', 12], ['d', 1.2], ['L', 20], ['t', 25], ['k', 0.85]]) await page.fill('#rf-sv-' + k, String(v));
   const est = await page.textContent('#rf-sv-out');
@@ -622,6 +627,66 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   const after = await page.evaluate(() => ({ Q: window.RFL_UI.state.flow.Q, allow: window.RFL_UI.state.flow.allowance, out: document.getElementById('rf-sv-out').textContent }));
   check('survey: Use this flow sets the flow and compares the model\'s speed', after.Q === 9.79 && after.allow === 0 && /model's channel speed is/.test(after.out), after.out.slice(-160));
   check('speed and survey: no console errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// ---- a narrow view area, as when embedded in a web page ----
+{
+  const { page, ctx, errors } = await openPage({ width: 1150, height: 900 });
+  for (const v of ['3d', 'plan', 'section', 'profile']) {
+    await page.click(`.rf-views [data-view="${v}"]`); await settle(page);
+    const r = await page.evaluate(v => {
+      const box = e => e.getBoundingClientRect();
+      const views = box(document.querySelector('.rf-views'));
+      const tools = [...document.querySelectorAll('.rf-stage-tools > *')].filter(e => !e.hidden && e.offsetParent).map(box);
+      const hit = tools.some(t => t.left < views.right && t.right > views.left && t.top < views.bottom && t.bottom > views.top);
+      const lowest = Math.max(views.bottom, ...tools.map(t => t.bottom));
+      const host = document.querySelector(`.rf-view[data-view="${v}"]`);
+      // the first sizeable shape below the svg's own top edge (its background spans the whole svg)
+      const svg = host && host.querySelector('svg'), top = svg && box(svg).top;
+      const rect = svg && [...svg.querySelectorAll('rect, polyline, polygon')].map(box).filter(b => b.width > 50 && b.height > 20 && b.top > top + 2).sort((a, b) => a.top - b.top)[0];
+      return { hit, lowest: Math.round(lowest), drawTop: rect ? Math.round(rect.top) : null };
+    }, v);
+    check(`narrow: ${v} tools clear of the view buttons`, !r.hit, JSON.stringify(r));
+    if (v !== '3d') check(`narrow: ${v} drawing starts below the buttons and tools`, r.drawTop !== null && r.drawTop >= r.lowest, JSON.stringify(r));
+  }
+  check('narrow: no console errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// ---- the river bed's material: where the flow can move it ----
+{
+  const { page, ctx, errors } = await openPage({ width: 1440, height: 900 });
+  const notes = async () => (await page.locator('#rf-status .rf-note').allTextContents()).join('\n');
+  check('bed: without a material the hints point to the River panel', /Choose what the river bed is made of/.test(await notes()));
+  check('bed: the Bed colouring waits until a material is chosen', await page.locator('[data-waterby="bed"]').isDisabled());
+  check('bed: the flow text appears once the river-full flow is ready', /river banks|full to the top|spills/.test(await page.textContent('#rf-flow-plain')));
+  await page.click('[data-preset="flood"]'); await settle(page); await settle(page);
+  await page.click('#rf-river-sec summary');
+  await page.selectOption('#rf-bed', '30'); await settle(page); await settle(page);
+  let n = await notes();
+  check('bed: coarse gravel moves through the bridge and builds up in its backwater', /Coarse gravel moves at .*0–165 m/.test(n) && /Coarse gravel builds up at 180–210 m/.test(n), n.split('\n').filter(t => /gravel/i.test(t)).join(' | '));
+  check('bed: the bridge is named for making gravel build up', /Your bridge makes coarse gravel build up at 180–210 m/.test(n));
+  check('bed: the speed-only design hints give way to the threshold', !/speeds the channel up/.test(n) && /Shields’ threshold/.test(n));
+  await page.click('.rf-views [data-view="plan"]'); await page.click('[data-waterby="bed"]'); await settle(page);
+  const fills = await page.$$eval('#rf-plan rect', r => r.map(e => e.getAttribute('fill')));
+  check('bed: Plan colours the channel red where gravel moves and blue where it builds up', fills.includes('#d8453b') && fills.includes('#2f7fd1') && /Does the water move the bed\? coarse gravel/.test(await page.textContent('#rf-legend')));
+  check('bed: the legend names the three states', /Moving:.*Building up:.*Stable:/.test(await page.textContent('#rf-legend')));
+  await page.selectOption('#rf-bed', '100'); await settle(page); await settle(page);
+  check('bed: cobbles are stable at this flow', /The bed is stable along the whole river at this flow: the water cannot move cobbles anywhere/.test(await notes()));
+  check('bed: with cobbles the whole channel shows stable grey, not building up', await page.$$eval('#rf-plan rect', r => { const f = r.map(e => e.getAttribute('fill')); return f.includes('#7e8c9a') && !f.includes('#2f7fd1') && !f.includes('#d8453b'); }));
+  await page.selectOption('#rf-bed', 'other');
+  check('bed: Other grain size shows the size field', await page.locator('#rf-bed-d').isVisible());
+  await page.fill('#rf-bed-d', '0.03'); await page.press('#rf-bed-d', 'Tab'); await settle(page);
+  check('bed: silt finer than sand is refused', await page.evaluate(() => window.RFL_UI.state.bed.d) === 100);
+  await page.fill('#rf-bed-d', '8'); await page.press('#rf-bed-d', 'Tab'); await settle(page); await settle(page);
+  check('bed: a grain size of your own is used', await page.evaluate(() => window.RFL_UI.state.bed.d) === 8 && /grains of 8 mm/i.test(await notes()));
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(() => document.getElementById('rf-csv').click())]);
+  const text = readFileSync(await dl.path(), 'utf8');
+  check('bed: the CSV gives the bed force and names the bed', /bed_force_n_m2/.test(text) && /river bed grains of 8 mm/.test(text));
+  await page.selectOption('#rf-bed', ''); await settle(page); await settle(page);
+  check('bed: clearing the material puts the colouring back to depth', await page.$eval('[data-waterby][aria-pressed="true"]', b => b.dataset.waterby) === 'depth');
+  check('bed: no console errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
 

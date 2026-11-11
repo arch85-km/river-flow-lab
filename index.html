@@ -103,6 +103,7 @@ input[type=range]{width:100%;accent-color:var(--rf-accent);margin:0}
 .rf-seg{display:flex;border:1px solid var(--rf-line);border-radius:7px;overflow:hidden;background:var(--rf-panel-2)}
 .rf-seg button{flex:1;border:0;background:none;padding:6px 4px;cursor:pointer;color:var(--rf-muted);white-space:nowrap}
 .rf-seg button[aria-pressed=true]{background:var(--rf-panel);color:var(--rf-ink);box-shadow:inset 0 0 0 1px var(--rf-line)}
+.rf-seg button:disabled{opacity:.45;cursor:not-allowed}
 .rf-grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .rf-kv{display:flex;justify-content:space-between;gap:8px}
 .rf-kv span:last-child{font-variant-numeric:tabular-nums}
@@ -126,6 +127,9 @@ textarea.rf-pts{width:100%;min-height:8rem;font:12px/1.35 ui-monospace,SFMono-Re
 .rf-views button{border:1px solid var(--rf-line);background:var(--rf-panel);border-radius:7px;padding:5px 12px;cursor:pointer}
 .rf-views button[aria-pressed=true]{border-color:var(--rf-accent);color:var(--rf-accent);box-shadow:inset 0 0 0 1px var(--rf-accent)}
 .rf-stage-tools{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+/* A narrow view area (an embedded page, a small window): the tools take a second row under the view buttons rather than sliding over them. */
+.rf-stage{container:stage/inline-size}
+@container stage (max-width:860px){.rf-stage-tools{top:54px;left:12px;right:12px;justify-content:flex-start}}
 .rf-glass{background:var(--rf-panel);border:1px solid var(--rf-line);border-radius:7px;padding:4px 8px}
 .rf-caption{position:absolute;right:12px;bottom:10px;z-index:5;text-align:right;font-size:12px;color:var(--rf-muted);pointer-events:none}
 
@@ -322,6 +326,9 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
         <div class="rf-kv"><span class="rf-lab">Active river</span><span id="rf-river-name"></span></div>
         <div class="rf-kv"><span class="rf-lab">Sections</span><span id="rf-river-n"></span></div>
         <div class="rf-kv"><span class="rf-lab">Length</span><span id="rf-river-len"></span></div>
+        <div class="rf-field"><label for="rf-bed">River bed</label><select class="rf-select" id="rf-bed"><option value="">Not set</option><option value="0.2">Fine sand (0.2 mm)</option><option value="0.7">Coarse sand (0.7 mm)</option><option value="4">Fine gravel (4 mm)</option><option value="30">Coarse gravel (30 mm)</option><option value="100">Cobbles (100 mm)</option><option value="other">Other grain size</option></select></div>
+        <div class="rf-field" id="rf-bed-d-l" hidden><label for="rf-bed-d">Median grain size, mm</label><input class="rf-num rf-mono" type="number" id="rf-bed-d" min="0.0625" max="500" step="0.1"></div>
+        <p class="rf-hint">What the bed is made of decides whether the flow can move it: Effect of the design then says where the bed may scour and where sediment settles. A loose bed of one grain size; silt and clay hold together and are not covered.</p>
         <p class="rf-hint">Draw the river's course on the map, from upstream to downstream. Sections are cut square to your line; their levels come from the template shape until surveyed levels are entered.</p>
         <button class="rf-btn rf-sq" type="button" id="rf-terrain">Build from a terrain model (.tif, .asc or .obj)</button>
         <input type="file" id="rf-terrain-file" accept=".tif,.tiff,.asc,.obj" multiple hidden>
@@ -5307,6 +5314,28 @@ const RFL = (() => {
     };
   }
 
+  // The force of the flow on the channel bed, N/m², as the mean bed shear
+  // stress tau = rho g R Sf: R the channel's hydraulic radius, Sf the friction
+  // slope (Q/K)², the same in every part of a section. In uniform flow Sf is
+  // the bed slope and this is the familiar rho g R S.
+  const RHO = 1000;
+  function bedShear(section) {
+    const ch = section && section.sub && section.sub.ch;
+    if (!ch || !(ch.A > 0) || !(ch.P > 0) || !(ch.K > 0)) return null;
+    return RHO * G * (ch.A / ch.P) * Math.pow(ch.Q / ch.K, 2);
+  }
+  // The force needed to start moving loose grains of median size d (m) on the
+  // bed, N/m²: Shields' threshold, with the critical Shields parameter from
+  // Soulsby and Whitehouse's fit to his curve (Soulsby 1997), quartz grains
+  // (relative density 2.65) in water at about 20 °C. For a non-cohesive bed
+  // of one grain size; silt and clay hold together and need other methods.
+  function criticalShear(d) {
+    const s = 2.65, nu = 1.0e-6;
+    const Dstar = d * Math.cbrt((s - 1) * G / (nu * nu));
+    const theta = 0.30 / (1 + 1.2 * Dstar) + 0.055 * (1 - Math.exp(-0.020 * Dstar));
+    return theta * (s - 1) * RHO * G * d;
+  }
+
   // Yarnell's pier equation as a check on the energy method at a bridge:
   //   dy = 2K (K + 10w - 0.6)(a + 15a^4) V^2/2g,   w = V^2/(2g y)
   // with V and y downstream of the bridge and a the share of the
@@ -5426,7 +5455,7 @@ const RFL = (() => {
   }
 
   return { G, solve, prepare, hydraulics, criticalWS, normalWS, wetted, applyBlock, clip,
-    interpolateSection, yarnell, wsAt, buildings, eddySpan, eddyLength };
+    interpolateSection, yarnell, wsAt, buildings, eddySpan, eddyLength, bedShear, criticalShear };
 })();
 if (typeof module !== 'undefined') module.exports = RFL;
 </script>
@@ -5473,6 +5502,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       boundary: { type: 'normal', slope: TEMPLATE.slope, ws: 1.5 },
       eddy: { on: true, er: 2, cr: 1 },
       survey: { k: 0.85 },
+      bed: { d: null }, // median grain size of the river bed, mm; null = not set
       flow: { Q: 15, Qmax: 80, allowance: 0 },
       obstructions: [],
       models: [],
@@ -5768,7 +5798,14 @@ if (typeof module !== 'undefined') module.exports = RFL;
     return [W, Math.round(H0 * Math.min(1.1, Math.max(0.85, W / W0)))];
   }
   // Margins for a chart that fills the stage: clear of the view buttons and the caption.
-  const stageTop = host => host.hasAttribute('data-fill') ? 62 : 0;
+  // Room the drawings leave at the top for the view buttons and tools, from
+  // where those actually end: one row normally, two in a narrow view area.
+  const stageTop = host => {
+    if (!host.hasAttribute('data-fill')) return 0;
+    const st = host.getBoundingClientRect(); let b = 50;
+    for (const e of document.querySelectorAll('.rf-views, .rf-stage-tools')) { const r = e.getBoundingClientRect(); if (r.height && r.top < st.top + st.height / 2) b = Math.max(b, r.bottom - st.top); }
+    return Math.round(b + 12);
+  };
   const stageBottom = host => host.hasAttribute('data-fill') ? 26 : 0;
   function svgRoot(host, W, H, label) {
     host.textContent = '';
@@ -5890,12 +5927,12 @@ if (typeof module !== 'undefined') module.exports = RFL;
       const x0 = sx(xb), x1 = sx(xa);
       el('rect', { x: x0, y: sy(s.raw[0][0]), width: Math.max(0.5, x1 - x0), height: sy(s.raw[s.raw.length - 1][0]) - sy(s.raw[0][0]), fill: C['ground-fill'], opacity: 0.6 }, svg);
       for (const [a, b] of reached(s)) {
-        if (waterBy !== 'speed') { el('rect', { x: x0, y: sy(a), width: Math.max(0.5, x1 - x0), height: Math.max(0.5, sy(b) - sy(a)), fill: C['water-fill'] }, svg); continue; }
-        // split at the banks: each part has its own mean speed
+        if (waterBy === 'depth') { el('rect', { x: x0, y: sy(a), width: Math.max(0.5, x1 - x0), height: Math.max(0.5, sy(b) - sy(a)), fill: C['water-fill'] }, svg); continue; }
+        // split at the banks: each part has its own mean speed, and only the channel is the river bed
         const cuts = [a, ...[s.banks.left, s.banks.right].filter(y => y > a && y < b), b];
         for (let k = 0; k < cuts.length - 1; k++) {
           const p = cuts[k], q = cuts[k + 1];
-          el('rect', { x: x0, y: sy(p), width: Math.max(0.5, x1 - x0), height: Math.max(0.5, sy(q) - sy(p)), fill: SPEED_BANDS[speedBand(speedAt(s, (p + q) / 2), vTop)] }, svg);
+          el('rect', { x: x0, y: sy(p), width: Math.max(0.5, x1 - x0), height: Math.max(0.5, sy(q) - sy(p)), fill: waterBy === 'bed' ? BED_COLOURS[bedAt(s, (p + q) / 2)] : SPEED_BANDS[speedBand(speedAt(s, (p + q) / 2), vTop)] }, svg);
         }
       }
     });
@@ -6101,8 +6138,9 @@ if (typeof module !== 'undefined') module.exports = RFL;
       if (lookUp) el('circle', { cx, cy, r: 2.5, fill: C.water }, g);
       else for (const q of [1, -1]) el('line', { x1: cx - k, x2: cx + k, y1: cy - q * k, y2: cy + q * k, stroke: C.water, 'stroke-width': 2 }, g); }
     const stretch = ((box.b - box.t) / (zhi - zlo)) / ((box.r - box.l) / (ymax - ymin));
-    if (stretch > 1.25) el('text', { x: box.r, y: 30 + stageTop(host), 'text-anchor': 'end', fill: C.muted }, svg).textContent = `Not to scale: heights drawn ${stretch.toFixed(0)}× larger than widths`;
-    else if (Math.abs(stretch - 1) < 0.05) el('text', { x: W - 10, y: 30 + stageTop(host), 'text-anchor': 'end', fill: C.muted }, svg).textContent = 'True scale: heights and widths match';
+    // inside the frame, top right, as in Plan and Profile: on the caption line it ran into the caption in a narrow view
+    if (stretch > 1.25) el('text', { x: box.r - 4, y: box.t + 14, 'text-anchor': 'end', fill: C.muted }, svg).textContent = `Not to scale: heights drawn ${stretch.toFixed(0)}× larger than widths`;
+    else if (Math.abs(stretch - 1) < 0.05) el('text', { x: box.r - 4, y: box.t + 14, 'text-anchor': 'end', fill: C.muted }, svg).textContent = 'True scale: heights and widths match';
     for (const { b, z0, z1 } of buildingsHere) {
       const ya = b.y - b.w / 2, yb = b.y + b.w / 2, verdict = RFL.buildings(before() ? BASE : RES, [b])[0], wet = isNum(verdict.depth) ? verdict.depth > 0 : s.ws > b.floor;
       el('rect', { class: 'rf-cut-building', x: sx(ya), y: sy(z1), width: sx(yb) - sx(ya), height: sy(z0) - sy(z1), fill: wet ? C.bad : C.deck, stroke: C.ink, 'stroke-width': 1.5 }, g);
@@ -7548,12 +7586,12 @@ onmessage = e => {
   }
   function showDepth(ev) {
     const tip = $('rf-depth-tip'), g = groundUnder(ray3D(ev)), R = before() ? BASE : RES;
-    let d = -1, v = null;
-    if (g) { const q = R.sections.reduce((m, s) => Math.abs(s.x - g.x) < Math.abs(m.x - g.x) ? s : m); d = reached(q).some(([a, b]) => g.y >= a && g.y <= b) ? RFL.wsAt(R, g.x) - groundAtLocal(q.raw, g.y) : -1; v = speedAt(q, g.y); }
+    let d = -1, v = null, bed = null;
+    if (g) { const q = R.sections.reduce((m, s) => Math.abs(s.x - g.x) < Math.abs(m.x - g.x) ? s : m); d = reached(q).some(([a, b]) => g.y >= a && g.y <= b) ? RFL.wsAt(R, g.x) - groundAtLocal(q.raw, g.y) : -1; v = speedAt(q, g.y); bed = bedAt(q, g.y); }
     tip.hidden = !(d > 0.005);
     if (tip.hidden) return;
     const r = $('rf-3d').getBoundingClientRect();
-    tip.textContent = `Depth ${d.toFixed(2)} m` + (waterBy === 'speed' && isNum(v) ? ` · ${v.toFixed(2)} m/s` : '');
+    tip.textContent = `Depth ${d.toFixed(2)} m` + (waterBy === 'speed' && isNum(v) ? ` · ${v.toFixed(2)} m/s` : '') + (waterBy === 'bed' && bed && bed !== 'plain' ? ({ moves: ' · bed moving', builds: ' · bed building up', stable: ' · bed stable' }[bed] || '') : '');
     tip.style.left = (ev.clientX - r.left) + 'px'; tip.style.top = (ev.clientY - r.top) + 'px';
   }
   function hoverNow(ev) {
@@ -7580,6 +7618,37 @@ onmessage = e => {
   function speedAt(s, y) {
     const part = y < s.banks.left ? s.sub.lob : y > s.banks.right ? s.sub.rob : s.sub.ch;
     return part && isNum(part.V) ? part.V : s.V;
+  }
+  // Water coloured by the bed: in the channel, red where the flow can move the
+  // chosen bed material and blue where it cannot; the floodplains, whose
+  // ground is not the river bed, stay pale.
+  // Three states of the channel bed at each section:
+  //   moves  - the force of the flow on the bed exceeds what it takes to move it;
+  //   builds - it does not, but the bed moves just upstream, so material carried
+  //            down is dropped here (sedimentation): the whole still stretch below
+  //            a moving one;
+  //   stable - it does not, and nothing arrives: still here and still upstream.
+  // At the top of the reach nothing is known of what arrives from further up,
+  // so a still stretch there counts as stable.
+  const BED_COLOURS = { moves: '#d8453b', builds: '#2f7fd1', stable: '#7e8c9a', plain: '#d7dee6' };
+  const bedMemo = new WeakMap();
+  function bedStates(res) {
+    const d = bedD(); if (!d || !res || !res.sections) return null;
+    const hit = bedMemo.get(res); if (hit && hit.d === d) return hit.states;
+    const tc = RFL.criticalShear(d / 1000), states = new Map();
+    let above = 'stable';
+    for (const s of [...res.sections].sort((a, b) => b.x - a.x)) { // from the upstream end down
+      const t = RFL.bedShear(s);
+      const st = isNum(t) && t > tc ? 'moves' : above === 'stable' ? 'stable' : 'builds';
+      states.set(s, st); above = st;
+    }
+    bedMemo.set(res, { d, states });
+    return states;
+  }
+  function bedAt(s, y) {
+    if (!bedD() || y < s.banks.left || y > s.banks.right) return 'plain';
+    const st = bedStates(RES);
+    return (st && st.get(s)) || 'stable';
   }
   function maxSpeed(secs) {
     const top = Math.max(...secs.flatMap(s => ['lob', 'ch', 'rob'].map(k => s.sub[k] && isNum(s.sub[k].V) ? s.sub[k].V : 0)));
@@ -7628,7 +7697,7 @@ onmessage = e => {
         tCol.push(...mixHex(inCh ? '#8d7b5f' : '#a9b07f', '#d9cfb3', inCh ? 0 : Math.min(1, Math.max(0, (z - s.ws) / 3))));
         wPos.push(...P(s.x, y, inRiver ? s.ws : Math.min(s.ws, z - 0.3)));
         const d = s.ws - z;
-        wCol.push(...(waterBy === 'speed' ? hexRGB(SPEED_BANDS[speedBand(speedAt(s, y), vTop)]) : depthColour(d, maxDepth)));
+        wCol.push(...(waterBy === 'speed' ? hexRGB(SPEED_BANDS[speedBand(speedAt(s, y), vTop)]) : waterBy === 'bed' ? hexRGB(BED_COLOURS[bedAt(s, y)]) : depthColour(d, maxDepth)));
       }
     }
     for (let i = 0; i < secs.length - 1; i++) for (let j = 0; j < nJ - 1; j++) {
@@ -7861,8 +7930,11 @@ onmessage = e => {
     r.value = Math.round(1000 * Math.log(Math.max(S.flow.Q, Qmin) / Qmin) / Math.log(S.flow.Qmax / Qmin));
     $('rf-q').value = +S.flow.Q.toFixed(2);
     $('rf-allow').value = S.flow.allowance;
-    const bf = bankfull();
-    $('rf-q-out').textContent = `${flowQ().toFixed(1)} m³/s` + (S.flow.allowance ? ` with +${S.flow.allowance}%` : '') + (bf ? ` · bankfull ≈ ${bf.Q.toFixed(1)} m³/s at ${bf.id}` : '');
+    const bf = bankfullSoon();
+    // Spell out the sum: the box holds the flow you set, the model runs the flow
+    // with the climate allowance added, and the two must not look as if they disagree.
+    const qf = v => v < 10 ? v.toFixed(2) : v.toFixed(1);
+    $('rf-q-out').textContent = (S.flow.allowance ? `${qf(S.flow.Q)} m³/s + ${S.flow.allowance}% climate allowance = ${qf(flowQ())} m³/s modelled` : `${qf(flowQ())} m³/s modelled`) + (bf ? ` · bankfull ≈ ${bf.Q.toFixed(1)} m³/s at ${bf.id}` : '');
     document.querySelectorAll('[data-preset]').forEach(b => b.setAttribute('aria-pressed', String(!!activePreset && activePreset.kind === b.dataset.preset && activePreset.Q === S.flow.Q)));
     $('rf-flow-plain').textContent = !bf ? `${flowQ().toFixed(1)} m³/s` : `${flowQ() < 0.9 * bf.Q ? 'The water stays inside the river banks' : flowQ() <= 1.1 * bf.Q ? 'The river is full to the top of its banks' : 'The river spills over its banks'} (${flowQ().toFixed(1)} m³/s).`;
     $('rf-eddy-on').checked = S.eddy.on; $('rf-eddy-er').value = S.eddy.er; $('rf-eddy-cr').value = S.eddy.cr;
@@ -7879,15 +7951,37 @@ onmessage = e => {
     if (key === bfCache.key) return bfCache.val;
     const bank = Math.min(groundAtLocal(raw.pts, raw.banks.left), groundAtLocal(raw.pts, raw.banks.right));
     const m = model(false);
-    const f = Q => { const r = RFL.solve(m, Q); return r.error ? NaN : RFL.wsAt(r, raw.x) - bank; };
+    // Each trial solves the whole river, which is most of the app's start-up
+    // time, so the root is found by the Illinois method (regula falsi that
+    // halves a stale end) rather than by bisection: about 6 solves instead of
+    // about 35, stopping when the level is within 0.1 mm of the bank top.
+    const memo = new Map();
+    const f = Q => { if (!memo.has(Q)) { const r = RFL.solve(m, Q); memo.set(Q, r.error ? NaN : RFL.wsAt(r, raw.x) - bank); } return memo.get(Q); };
     let lo = 0.01, hi = 1, val = null;
-    for (let k = 0; k < 24 && f(hi) < 0; k++) hi *= 2;
-    if (f(hi) >= 0 && f(lo) < 0) {
-      for (let k = 0; k < 28; k++) { const mid = (lo + hi) / 2; if (f(mid) < 0) lo = mid; else hi = mid; }
-      val = { Q: (lo + hi) / 2, id: raw.id };
+    for (let k = 0; k < 24 && f(hi) < 0; k++) { lo = hi; hi *= 2; }
+    let fa = f(lo), fb = f(hi);
+    if (fb >= 0 && fa < 0) {
+      let side = 0, c = hi;
+      for (let k = 0; k < 60; k++) {
+        c = (lo * fb - hi * fa) / (fb - fa);
+        const fc = f(c);
+        if (!isNum(fc)) { c = (lo + hi) / 2; break; }
+        if (Math.abs(fc) < 1e-4 || hi - lo < 1e-7 * hi) break;
+        if (fc < 0) { lo = c; fa = fc; if (side === -1) fb /= 2; side = -1; }
+        else { hi = c; fb = fc; if (side === 1) fa /= 2; side = 1; }
+      }
+      val = { Q: c, id: raw.id };
     }
     bfCache = { key, val };
     return val;
+  }
+  // Before the app is first shown, the river-full flow is left for a moment
+  // after: it is most of the start-up time, and only the line under the flow
+  // buttons needs it. A button pressed sooner computes it there and then.
+  function bankfullSoon() {
+    if (document.documentElement.classList.contains('rf-ready')) return bankfull();
+    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { bankfull(); renderFlow(); }, 0))); // after the app is drawn
+    return null;
   }
   function preset(kind) {
     const bf = bankfull(); if (!bf) return;
@@ -7978,8 +8072,14 @@ onmessage = e => {
       const top = V3.maxDepth || 2.5, step = top / 5, nice = v => +v.toFixed(2);
       const vstep = (V3.maxSpeed || 1) / 5, bands = (cols, st) => `<div class="rf-bands">${cols.map((c, i) => `<div><i style="background:${c}"></i>${nice(i * st)}–${nice((i + 1) * st)}</div>`).join('')}</div>`;
       const bySpeed = waterBy === 'speed';
-      host.innerHTML = `<div class="rf-seg" role="group" aria-label="Colour the water by" style="margin-bottom:8px"><button type="button" data-waterby="depth" aria-pressed="${!bySpeed}">Depth</button><button type="button" data-waterby="speed" aria-pressed="${bySpeed}">Speed</button></div>` +
-        (bySpeed ? `<div class="rf-kv"><span>Water speed</span><span class="rf-lab">m/s</span></div>` + bands(SPEED_BANDS, vstep) +
+      host.innerHTML = `<div class="rf-seg" role="group" aria-label="Colour the water by" style="margin-bottom:8px"><button type="button" data-waterby="depth" aria-pressed="${waterBy === 'depth'}">Depth</button><button type="button" data-waterby="speed" aria-pressed="${bySpeed}">Speed</button><button type="button" data-waterby="bed" aria-pressed="${waterBy === 'bed'}"${bedD() ? '' : ' disabled title="Choose what the river bed is made of, in River, first"'}>Bed</button></div>` +
+        (waterBy === 'bed' ? `<div class="rf-kv"><span>Does the water move the bed? ${esc(bedLabel())}</span></div>` +
+          line(BED_COLOURS.moves, 'Moving: the water is strong enough to carry the bed along' + T(' (bed shear stress above Shields’ threshold)', '')) +
+          line(BED_COLOURS.builds, 'Building up: material carried down from upstream is dropped here') +
+          line(BED_COLOURS.stable, 'Stable: nothing is worn away and nothing arrives') +
+          line(BED_COLOURS.plain, 'Floodplain: not part of the river bed, so not judged') +
+          '<p class="rf-hint">Red shows where the bed can move, not how much: it wears away most where the water speeds up, as through a bridge opening. Blue builds up most where the water first slows. At the top of the river shown, what arrives from further upstream is not known, so still water there counts as stable.</p>'
+        : bySpeed ? `<div class="rf-kv"><span>Water speed</span><span class="rf-lab">m/s</span></div>` + bands(SPEED_BANDS, vstep) +
           '<p class="rf-hint">One mean speed in the channel and one on each floodplain at every section: the colour changes along the river and at the banks, not around a pier.</p>'
         : `<div class="rf-kv"><span>Water depth</span><span class="rf-lab">m</span></div>` +
           (view === '3d' ? bands(DEPTH_BANDS, step) : '<div class="rf-ramp" style="background:var(--rf-water-fill)"></div>')) +
@@ -7996,6 +8096,7 @@ onmessage = e => {
     $('rf-caption').textContent = view === 'map' ? '' : s ? `${flowQ().toFixed(1)} m³/s · ${T(s.id + ' water', 'water')} ${f2(s.ws)} ${levelUnit()}, depth ${f2(s.depth)} m${showingBefore ? ' · without your design' : ''}` : '';
   }
   function renderRiver() {
+    renderBed();
     $('rf-river-name').textContent = S.name.replace(/ \(.*\)$/, '');
     const local = !!(S.geo && S.geo.local), mapBtn = document.querySelector('.rf-views [data-view=map]');
     mapBtn.disabled = local; mapBtn.title = local ? 'A river from a terrain model has no position on the world map' : '';
@@ -8010,9 +8111,32 @@ onmessage = e => {
   // alone. The tool does not model sediment: these compare each section with
   // the reach's own typical (median) speed, and with the river without the
   // design, and say so. Whether a bed actually scours depends on its material.
+  // ---------- the river bed's material ----------
+  const BEDS = [[0.2, 'fine sand'], [0.7, 'coarse sand'], [4, 'fine gravel'], [30, 'coarse gravel'], [100, 'cobbles']];
+  const bedD = () => S.bed && isNum(S.bed.d) && S.bed.d > 0 ? S.bed.d : null;
+  function bedLabel() {
+    const d = bedD(); if (!d) return null;
+    const m = BEDS.find(([v]) => Math.abs(v - d) < 1e-9);
+    return m ? `${m[1]} (${d} mm)` : `grains of ${d} mm`;
+  }
+  function renderBed() {
+    const d = bedD(), preset = d && BEDS.some(([v]) => Math.abs(v - d) < 1e-9);
+    const sel = $('rf-bed'), inp = $('rf-bed-d');
+    if (sel.value !== 'other' || preset) sel.value = !d ? '' : preset ? String(d) : 'other';
+    $('rf-bed-d-l').hidden = sel.value !== 'other';
+    if (!d && waterBy === 'bed') waterBy = 'depth'; // nothing to colour by
+    if (document.activeElement !== inp) inp.value = d || '';
+  }
+
   // A change of 10% in speed is about 20% in the force on the bed, which goes
   // roughly with the square of the speed.
   const FAST = 1.5, SLOW = 0.6, CHANGE = 0.1;
+  // The design in a sentence: one element by its kind ("Your bridge"), several as "Your design".
+  function designWho() {
+    const kinds = [['bridges', 'bridge'], ['obstructions', 'obstruction'], ['walls', 'flood wall'], ['floats', 'floating object'], ['models', 'model']];
+    const all = kinds.flatMap(([k, w]) => S[k].map(() => w));
+    return all.length === 1 ? `Your ${all[0]}` : 'Your design';
+  }
   // The name a student gave an element, from the id a blockage or eddy zone carries.
   function elementName(id) {
     const all = [...S.bridges, ...S.obstructions, ...S.models];
@@ -8029,12 +8153,45 @@ onmessage = e => {
       for (const s of list) { const i = secs.indexOf(s), last = out[out.length - 1]; if (last && last.i === i - 1) { last.b = s.x; last.i = i; } else out.push({ a: s.x, b: s.x, i }); }
       return out.reverse().map(r => r.a === r.b ? `${r.a.toFixed(0)} m` : `${r.a.toFixed(0)}–${r.b.toFixed(0)} m`).join(', ');
     };
-    const out = [], fast = secs.filter(s => v(s) >= FAST * mid), slow = secs.filter(s => v(s) <= SLOW * mid);
+    const out = [], d = bedD(), name = bedLabel();
+    const N = t => t < 1 ? t.toFixed(2) : t.toFixed(1);
+    if (d) {
+      // With the bed's material known: does the water move it? (Shields' threshold)
+      const tc = RFL.criticalShear(d / 1000), tau = new Map(secs.map(s => [s, RFL.bedShear(s)]));
+      const st = bedStates(RES), of = k => secs.filter(s => st.get(s) === k);
+      const moves = of('moves'), builds = of('builds'), stable = of('stable');
+      const top = Math.max(...secs.map(s => tau.get(s) || 0)), low = Math.min(...secs.map(s => tau.get(s) || 0));
+      // the material as a sentence's subject, with its verb: "Sand moves", "Cobbles move"
+      const m = BEDS.find(([v]) => Math.abs(v - d) < 1e-9), word = m ? m[1] : `grains of ${d} mm`;
+      const many = !m || /s$/.test(word), Word = word[0].toUpperCase() + word.slice(1);
+      const vb = (one, more) => many ? more : one;
+      const tech = (txt) => T(` (${txt})`, '');
+      if (!stable.length && !builds.length) out.push(chip(`${Word} ${vb('moves', 'move')} along the whole river at this flow.` +
+        (d < 2 ? ' Sand is easily carried, so this is normal.' : '') + ' The bed wears away most where the water speeds up.' +
+        tech(`${N(low)}–${N(top)} N/m² on the bed, against ${N(tc)} N/m² to move it`), 'rf-warn'));
+      else if (!moves.length) out.push(chip(`The bed is stable along the whole river at this flow: the water cannot move ${word} anywhere.` +
+        tech(`up to ${N(top)} N/m² on the bed, against ${N(tc)} N/m² needed`), 'rf-good'));
+      else {
+        const times = top / tc, how = times < 1.95 ? `${Math.round(times * 10) / 10} times` : Math.round(times) === 2 ? 'twice' : `${Math.round(times)} times`;
+        out.push(chip(`${Word} ${vb('moves', 'move')} at ${ranges(moves)}: the water pushes on the bed up to ${how} as hard as needed to shift it` +
+          tech(`${N(top)} N/m² against ${N(tc)} N/m²`) + '.', 'rf-warn'));
+        if (builds.length) out.push(chip(`${Word} ${vb('builds', 'build')} up at ${ranges(builds)}: carried down from upstream and dropped where the water slows.`));
+        if (stable.length) out.push(chip(`The bed is stable at ${ranges(stable)}: nothing is worn away and nothing arrives.`));
+      }
+      if (BASE && !BASE.error) {
+        const was = bedStates(BASE), at = s => { const b = BASE.sections.find(q => Math.abs(q.x - s.x) < 1e-6); return b && was ? was.get(b) : null; };
+        const started = moves.filter(s => at(s) && at(s) !== 'moves'), piled = builds.filter(s => at(s) && at(s) !== 'builds');
+        const who = designWho();
+        if (started.length) out.push(chip(`${who} starts the bed moving at ${ranges(started)}, where it was still before: expect the bed to wear away there.`, 'rf-bad'));
+        if (piled.length) out.push(chip(`${who} makes ${word} build up at ${ranges(piled)}, where ${vb('it', 'they')} did not before.`, 'rf-warn'));
+      }
+    }
+    const fast = d ? [] : secs.filter(s => v(s) >= FAST * mid), slow = d ? [] : secs.filter(s => v(s) <= SLOW * mid);
     if (fast.length) out.push(chip(`Fastest water at ${ranges(fast)}: up to ${Math.max(...fast.map(v)).toFixed(2)} m/s in the channel, against a typical ${mid.toFixed(2)} m/s on this reach. Where the bed is most likely to scour.`, 'rf-warn'));
     if (slow.length) out.push(chip(`Slowest water at ${ranges(slow)}: down to ${Math.min(...slow.map(v)).toFixed(2)} m/s in the channel. Where sediment is most likely to settle.`));
     const still = RES.eddyZones.filter(z => !z.pier && zoneWet(z, RES.sections));
-    if (still.length) out.push(chip(`Still water in the eddy zones beside ${[...new Set(still.map(z => elementName(z.blockage)))].join(', ')}: sediment tends to settle there.`));
-    if (BASE && !BASE.error) {
+    if (still.length) out.push(chip(`Still water in the eddy zones beside ${[...new Set(still.map(z => elementName(z.blockage)))].join(', ')}: material can build up there.`));
+    if (BASE && !BASE.error && !d) { // with the bed known, the threshold above says it better
       const ratio = new Map();
       for (const s of secs) {
         const b = BASE.sections.find(q => Math.abs(q.x - s.x) < 1e-6);
@@ -8045,7 +8202,10 @@ onmessage = e => {
       if (slower.length) out.push(chip(`Your design slows the channel at ${ranges(slower)}, by up to ${Math.round(-Math.min(...slower.map(s => ratio.get(s))) * 100)}%: more sediment may settle there than without it.`));
     }
     if (!out.length) out.push(chip(`The channel speed is even along this reach (${sorted[0].toFixed(2)}–${sorted[sorted.length - 1].toFixed(2)} m/s): no place stands out for scour or settling.`));
-    out.push(chip('Scour and settling here are hints from the water speed only. The tool does not model sediment, and whether a bed scours depends on what it is made of.'));
+    out.push(chip(d
+      ? T('Whether the bed moves is judged by Shields’ threshold for a loose bed of one grain size, section by section. How deep it wears away, wear round piers and abutments, a coarse surface layer, silt and clay, and plants on the bed are not modelled.',
+          'This shows only whether the water can move the bed, for a loose bed of one grain size. How deep it wears away, wear round piers, silt and clay, and plants on the bed are not modelled.')
+      : 'Scour and settling here are hints from the water speed only. Choose what the river bed is made of, in River, to see where the flow can move it.'));
     return out;
   }
   function renderStatus() {
@@ -8322,7 +8482,7 @@ onmessage = e => {
   const creditLine = () => S.geo && S.geo.osm ? RIVER_CREDIT : '';
   // `forData`: for a CSV, which always holds the run with the design, whichever view is shown.
   function settingsLine(forData) {
-    return `Flow ${flowQ().toFixed(2)} m3/s (set ${S.flow.Q} m3/s, climate allowance ${S.flow.allowance}%); downstream boundary ${S.boundary.type === 'ws' ? 'fixed level ' + S.boundary.ws + ' m' : 'normal depth, slope ' + S.boundary.slope}; eddy zones ${S.eddy.on ? `on (ER ${S.eddy.er}, CR ${S.eddy.cr})` : 'off'}; steady 1D standard step (${APP} ${VERSION})` + (before() && !forData ? '; shown without design elements' : '') + (creditLine() ? '; ' + creditLine() : '');
+    return `Flow ${flowQ().toFixed(2)} m3/s (set ${S.flow.Q} m3/s, climate allowance ${S.flow.allowance}%); downstream boundary ${S.boundary.type === 'ws' ? 'fixed level ' + S.boundary.ws + ' m' : 'normal depth, slope ' + S.boundary.slope}; eddy zones ${S.eddy.on ? `on (ER ${S.eddy.er}, CR ${S.eddy.cr})` : 'off'}; river bed ${bedLabel() || 'not set'}; steady 1D standard step (${APP} ${VERSION})` + (before() && !forData ? '; shown without design elements' : '') + (creditLine() ? '; ' + creditLine() : '');
   }
   function csv() {
     if (!RES || RES.error) return;
@@ -8330,8 +8490,8 @@ onmessage = e => {
     const base = BASE && !BASE.error;
     const lines = [`# ${APP} ${VERSION} — ${S.name}`, `# ${CAUTION}`, `# ${settingsLine(true)}`,
       `# Results with the design elements${base ? '; change_vs_no_design_m compares them with the same river without the design' : ''}.`];
-    lines.push(['section', 'chainage_m', 'bed_m', 'water_level_m', 'depth_m', 'energy_level_m', ...(base ? ['change_vs_no_design_m'] : []), 'v_channel_ms', 'v_mean_ms', 'froude', 'notes'].join(','));
-    for (const s of RES.sections) lines.push([q(s.id), s.x.toFixed(2), s.bed.toFixed(3), s.ws.toFixed(3), s.depth.toFixed(3), s.egl.toFixed(3), ...(base ? [(s.ws - RFL.wsAt(BASE, s.x)).toFixed(3)] : []), s.sub.ch.V.toFixed(3), s.V.toFixed(3), s.Fr.toFixed(3), q([...s.flags, ...(s.eddies.length ? ['eddy zone'] : [])].join(' '))].join(','));
+    lines.push(['section', 'chainage_m', 'bed_m', 'water_level_m', 'depth_m', 'energy_level_m', ...(base ? ['change_vs_no_design_m'] : []), 'v_channel_ms', 'v_mean_ms', 'froude', 'bed_force_n_m2', 'notes'].join(','));
+    for (const s of RES.sections) lines.push([q(s.id), s.x.toFixed(2), s.bed.toFixed(3), s.ws.toFixed(3), s.depth.toFixed(3), s.egl.toFixed(3), ...(base ? [(s.ws - RFL.wsAt(BASE, s.x)).toFixed(3)] : []), s.sub.ch.V.toFixed(3), s.V.toFixed(3), s.Fr.toFixed(3), isNum(RFL.bedShear(s)) ? RFL.bedShear(s).toFixed(2) : '', q([...s.flags, ...(s.eddies.length ? ['eddy zone'] : [])].join(' '))].join(','));
     if (RES.bridges.length) {
       lines.push('', 'bridge,soffit_m,deck_m,water_upstream_m,afflux_m,yarnell_pier_rise_m,soffit_freeboard_m,flow');
       for (const b of RES.bridges) lines.push([q(b.id), b.lowChord, b.highChord, b.wsUpstream.toFixed(3), isNum(b.afflux) ? b.afflux.toFixed(3) : '', b.yarnell ? b.yarnell.rise.toFixed(3) : '', b.freeboard.toFixed(3), b.flow].join(','));
@@ -8438,6 +8598,7 @@ onmessage = e => {
     if (badElement) return badElement;
     for (const f of st.floats || []) if (![f.x0, f.x1, f.y0, f.y1, f.draft, f.height].every(isNum)) return `Floating object ${f.id || '?'} is not readable.`;
     if (st.survey !== undefined && (typeof st.survey !== 'object' || st.survey === null || Array.isArray(st.survey) || Object.values(st.survey).some(v => v !== null && !isNum(v)))) return 'The float survey in this project is not readable.';
+    if (st.bed !== undefined && (typeof st.bed !== 'object' || st.bed === null || !(st.bed.d === null || st.bed.d === undefined || (isNum(st.bed.d) && st.bed.d >= 0.0625 && st.bed.d <= 500)))) return 'The river bed in this project is not readable.';
     for (const m of st.models || []) {
       const nv = Array.isArray(m.v) ? m.v.length / 3 : 0;
       if (!nv || !Number.isInteger(nv) || !m.v.every(isNum) || !Array.isArray(m.f) || !m.f.length || m.f.length % 3 || !m.f.every(k => Number.isInteger(k) && k >= 0 && k < nv) || ![m.x, m.y, m.rot, m.scale, m.base].every(isNum)) return `Imported model ${m.id || '?'} is not readable.`;
@@ -8453,7 +8614,7 @@ onmessage = e => {
       const d = defaultState(), old = S;
       // If anything the checks missed still fails, the open project is put back.
       try {
-        S = { ...d, ...st, flow: { ...d.flow, ...(st.flow || {}) }, eddy: { ...d.eddy, ...(st.eddy || {}) }, boundary: { ...d.boundary, ...(st.boundary || {}) }, survey: { ...d.survey, ...(st.survey || {}) },
+        S = { ...d, ...st, flow: { ...d.flow, ...(st.flow || {}) }, eddy: { ...d.eddy, ...(st.eddy || {}) }, boundary: { ...d.boundary, ...(st.boundary || {}) }, survey: { ...d.survey, ...(st.survey || {}) }, bed: { ...d.bed, ...(st.bed || {}) },
           obstructions: st.obstructions || [], bridges: st.bridges || [], walls: st.walls || [], buildings: st.buildings || [], models: st.models || [], floats: st.floats || [] };
         editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = ''; compare = false; MAP.centred = false;
         renderEditor(); renderElements(); run();
@@ -8553,6 +8714,8 @@ onmessage = e => {
   });
   $('rf-q').addEventListener('change', e => { const v = parseFloat(e.target.value); if (isNum(v) && v > 0) { S.flow.Q = v; if (v > S.flow.Qmax) S.flow.Qmax = Math.ceil(v); } schedule(); });
   for (const k of SURVEY) $('rf-sv-' + k).addEventListener('input', e => { const v = parseFloat(e.target.value); S.survey = { ...(S.survey || {}), [k]: isNum(v) ? v : null }; renderSurvey(); });
+  $('rf-bed').addEventListener('change', e => { const v = e.target.value; if (v === 'other') { $('rf-bed-d-l').hidden = false; $('rf-bed-d').focus(); return; } S.bed = { d: v ? +v : null }; schedule(); });
+  $('rf-bed-d').addEventListener('change', e => { const v = parseFloat(e.target.value); if (isNum(v) && v >= 0.0625 && v <= 500) { S.bed = { d: v }; schedule(); } else e.target.value = bedD() || ''; });
   $('rf-sv-use').addEventListener('click', () => {
     const c = surveyCalc(); if (!c) return;
     S.flow.Q = +c.Q.toPrecision(3); S.flow.allowance = 0; activePreset = null;

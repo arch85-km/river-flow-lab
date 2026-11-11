@@ -256,6 +256,23 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('a building behind a wall is dry while the wall holds', level < 3 && b.cutOff && b.depth <= 0, `water ${level.toFixed(2)} m`);
 }
 
+// 8z. The force on the bed, and the force needed to move its grains
+{
+  // In uniform flow the friction slope is the bed slope, so the bed force is
+  // rho g R S at normal depth: rectangle 10 m wide, n 0.03, S 0.001, 20 m³/s.
+  const b = 10, n = 0.03, S = 0.001, Q = 20;
+  const prep = RFL.prepare({ sections: [section(0, rect(b, 0), n), section(10, rect(b, 0.01), n)] }).preps[0];
+  const y = RFL.normalWS(prep, Q, S), h = RFL.hydraulics(prep, y, Q);
+  const hand = 1000 * 9.81 * (b * y / (b + 2 * y)) * S;
+  check('bed force in uniform flow is rho g R S', near(RFL.bedShear(h), hand, 1e-6), `${RFL.bedShear(h).toFixed(4)} N/m² against ${hand.toFixed(4)} by hand`);
+  // Shields' threshold with Soulsby's fit, by hand for 4 mm quartz grains in water
+  const d = 0.004, Dstar = d * Math.cbrt(1.65 * 9.81 / 1e-12), theta = 0.30 / (1 + 1.2 * Dstar) + 0.055 * (1 - Math.exp(-0.020 * Dstar));
+  check('threshold to move 4 mm gravel matches a hand calculation', near(RFL.criticalShear(d), theta * 1.65 * 1000 * 9.81 * d, 1e-9), `${RFL.criticalShear(d).toFixed(3)} N/m², Shields parameter ${theta.toFixed(4)}`);
+  const sizes = [0.0002, 0.0007, 0.004, 0.03, 0.1].map(RFL.criticalShear);
+  check('coarser grains need more force, from fine sand to cobbles', sizes.every((t, i) => !i || t > sizes[i - 1]), sizes.map(t => t.toFixed(2)).join(' < ') + ' N/m²');
+  check('a dry channel has no bed force', RFL.bedShear({ sub: { ch: { A: 0, P: 0, K: 0, Q: 0 } } }) === null);
+}
+
 // 9. Yarnell's pier equation against a hand calculation
 {
   // K 1.25, V 2 m/s, y 2 m, a 0.1: hv = 0.20387, w = 0.10194

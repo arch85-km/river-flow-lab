@@ -17,6 +17,7 @@ abstract: >-
   change against the same river without the design. The river can be a
   template reach, a line drawn on a map or taken from OpenStreetMap, a terrain
   model, or surveyed sections, and a flow can come from a simple float survey.
+  With the bed's material chosen, it shows where the flow can move the bed.
   The method notes in docs/method-notes.html document every assumption, name
   every source the code implements, and declare what the tool does not model.
   It is a teaching model, not a flood risk assessment.
@@ -29,7 +30,7 @@ license:
   - MIT
   - CC-BY-4.0
 repository-code: "https://github.com/arch85-km/river-flow-lab"
-url: "https://karam.me.uk/applications/river-flow-lab/"
+url: "https://karam.me.uk/river-flow-lab/"
 keywords:
   - river hydraulics
   - open-channel flow
