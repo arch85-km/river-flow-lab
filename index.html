@@ -3,11 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>River Flood Lab</title>
-<meta name="description" content="River Flood Lab: a browser teaching tool for how river flow, water level, obstructions and bridges interact. Not a flood risk assessment.">
+<title>River Flow Lab</title>
+<meta name="description" content="River Flow Lab: a browser teaching tool for how river flow, water level, obstructions and bridges interact. Not a flood risk assessment.">
 <script>
 /* Apply the saved theme at once, and never leave the page hidden if the start-up fails. */
-try { var rfT = localStorage.getItem('riverfloodlab.theme.v1'); if (rfT === 'light' || rfT === 'dark') document.documentElement.setAttribute('data-theme', rfT); } catch (e) {}
+/* The app was called River Flood Lab until November 2026: carry its saved settings across once. */
+try { ['theme.v1', 'basemap.custom.v1', 'tour.optout.v1'].forEach(function (k) { var o = localStorage.getItem('riverfloodlab.' + k); if (o !== null && localStorage.getItem('riverflowlab.' + k) === null) localStorage.setItem('riverflowlab.' + k, o); localStorage.removeItem('riverfloodlab.' + k); }); } catch (e) {}
+try { var rfT = localStorage.getItem('riverflowlab.theme.v1'); if (rfT === 'light' || rfT === 'dark') document.documentElement.setAttribute('data-theme', rfT); } catch (e) {}
 addEventListener('error', function () { document.documentElement.classList.add('rf-ready'); });
 </script>
 <style>
@@ -37,7 +39,7 @@ addEventListener('error', function () { document.documentElement.classList.add('
   --rf-eddy:#c4a6ff;--rf-deck:#b9bec6;--rf-block:#d9a06a;--rf-building:#e8eef6;--rf-grid:#1a242f}
 *{box-sizing:border-box}
 html:not(.rf-ready) #rf-root{visibility:hidden}
-html:not(.rf-ready) body::after{content:"Loading River Flood Lab…";position:fixed;inset:0;display:grid;place-items:center;color:var(--rf-muted);font-size:15px}
+html:not(.rf-ready) body::after{content:"Loading River Flow Lab…";position:fixed;inset:0;display:grid;place-items:center;color:var(--rf-muted);font-size:15px}
 .rf-lab3d{position:absolute;left:0;top:0;transform:translate(-50%,-100%);background:var(--rf-panel);color:var(--rf-ink);border:1px solid var(--rf-line);border-radius:5px;padding:1px 7px;font-size:12px;white-space:nowrap;pointer-events:none;z-index:3}
 .rf-depth-tip{position:absolute;left:0;top:0;transform:translate(12px,-120%);background:var(--rf-panel);color:var(--rf-ink);border:1px solid var(--rf-line);border-radius:5px;padding:2px 7px;font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none;z-index:4}
 .rf-bands{display:flex;gap:2px}
@@ -235,7 +237,7 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
 <div id="rf-root" data-drawer="controls" data-level="basic">
   <header class="rf-top">
     <div class="rf-logo" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M2 8c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M2 13c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M2 18c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/></svg></div>
-    <div class="rf-brand"><h1>River Flood Lab</h1><span class="rf-eyebrow">River flow and flooding<span class="rf-adv"> · 1D standard step</span></span></div>
+    <div class="rf-brand"><h1>River Flow Lab</h1><span class="rf-eyebrow">River flow and flooding<span class="rf-adv"> · 1D standard step</span></span></div>
     <div class="rf-top-actions">
       <button class="rf-btn" id="rf-level" type="button" aria-pressed="false" title="Show the technical settings, results and terms">Advanced</button>
       <button class="rf-btn" id="rf-theme" type="button" aria-label="Switch colour theme">Theme</button>
@@ -468,7 +470,7 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
 
 <div id="rf-about-veil" hidden></div>
 <div id="rf-about" hidden role="dialog" aria-modal="true" aria-labelledby="rf-about-h">
-  <h3 id="rf-about-h">River Flood Lab</h3>
+  <h3 id="rf-about-h">River Flow Lab</h3>
   <p class="rf-about-sub">River flow · Water level · Obstructions and bridges</p>
 
   <h4>Licence and credits</h4>
@@ -4744,7 +4746,7 @@ void main() {
 <!-- three:end -->
 
 <script id="rfl-engine">
-/* River Flood Lab — hydraulic engine.
+/* River Flow Lab — hydraulic engine.
  *
  * Steady, gradually varied, subcritical flow in one dimension, solved
  * section by section with the standard-step method:
@@ -5430,12 +5432,12 @@ if (typeof module !== 'undefined') module.exports = RFL;
 </script>
 
 <script id="rfl-ui">
-/* River Flood Lab — interface. The model runs in this page; see the README for what the map and river searches contact. */
+/* River Flow Lab — interface. The model runs in this page; see the README for what the map and river searches contact. */
 (() => {
   'use strict';
-  const APP = 'River Flood Lab', VERSION = '0.1.0';
+  const APP = 'River Flow Lab', VERSION = '0.1.0';
   const CAUTION = 'Teaching model — not a flood risk assessment. Do not use for planning, insurance or construction decisions.';
-  const THEME_KEY = 'riverfloodlab.theme.v1';
+  const THEME_KEY = 'riverflowlab.theme.v1';
   const $ = id => document.getElementById(id);
   const isNum = v => typeof v === 'number' && isFinite(v);
   const f2 = v => isNum(v) ? v.toFixed(2) : '—';
@@ -6829,7 +6831,7 @@ onmessage = e => {
   // requested (at most 6 × 6), never prefetched, and only while this view is
   // open; the OSMF tile policy forbids bulk downloads. A custom tile service
   // can replace them; it must carry its own credit line.
-  const BASEMAP_KEY = 'riverfloodlab.basemap.custom.v1';
+  const BASEMAP_KEY = 'riverflowlab.basemap.custom.v1';
   const OSM_TILES = { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', credit: '© OpenStreetMap contributors', maxZoom: 19,
     hint: 'Map tiles did not load. Check the connection; if other sites load, the tile server may be refusing requests from this address.' };
   const SITE0 = { lat: 53.3626, lon: -1.4721, z: 17 };   // River Sheaf at Heeley, Sheffield
@@ -7820,7 +7822,7 @@ onmessage = e => {
     const g = c.getContext('2d');
     g.fillStyle = C.panel; g.fillRect(0, 0, c.width, c.height); g.drawImage(src, 0, 0);
     g.scale(k, k); f.draw(g, H / k);
-    c.toBlob(b => download('river-flood-lab-3d.png', b), 'image/png');
+    c.toBlob(b => download('river-flow-lab-3d.png', b), 'image/png');
   }
 
   // ---------- status, flow, table ----------
@@ -8335,7 +8337,7 @@ onmessage = e => {
       lines.push('', 'building,chainage_m,floor_m,water_level_m,water_over_floor_m,status');
       RFL.buildings(RES, S.buildings).forEach((r, i) => lines.push([q(S.buildings[i].label || r.id), S.buildings[i].x, r.floor, isNum(r.ws) ? r.ws.toFixed(3) : '', isNum(r.depth) ? r.depth.toFixed(3) : '', q(r.cutOff ? 'cut off from the river' : r.flanked ? 'water can come round the wall end' : '')].join(',')));
     }
-    download('river-flood-lab.csv', new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
+    download('river-flow-lab.csv', new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
   }
   // The map as it is on screen: the loaded tiles, then the overlay. A tile
   // service without CORS headers taints the canvas; the export then keeps
@@ -8362,8 +8364,8 @@ onmessage = e => {
         return c;
       };
       let c = draw(true);
-      try { c.toBlob(b => download('river-flood-lab-map.png', b), 'image/png'); }
-      catch { c = draw(false); c.toBlob(b => download('river-flood-lab-map.png', b), 'image/png'); }
+      try { c.toBlob(b => download('river-flow-lab-map.png', b), 'image/png'); }
+      catch { c = draw(false); c.toBlob(b => download('river-flow-lab-map.png', b), 'image/png'); }
     };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
   }
@@ -8382,7 +8384,7 @@ onmessage = e => {
       const g = c.getContext('2d'); g.scale(k, k);
       g.fillStyle = C.panel; g.fillRect(0, 0, W, H); g.drawImage(img, 0, 0, W, H);
       f.draw(g, H);
-      c.toBlob(b => download(`river-flood-lab-${view}.png`, b), 'image/png');
+      c.toBlob(b => download(`river-flow-lab-${view}.png`, b), 'image/png');
     };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(data);
   }
@@ -8405,7 +8407,7 @@ onmessage = e => {
     return { h, draw(g, y) { g.fillStyle = C.panel; g.fillRect(0, y, W, h); rows.forEach((r, i) => { g.font = r.font; g.fillStyle = r.color; g.fillText(r.text, 12, y + 18 + i * 16); }); } };
   }
   function save() {
-    download('river-flood-lab-project.json', new Blob([JSON.stringify({ app: APP, version: VERSION, saved: new Date().toISOString(), caution: CAUTION, state: S }, null, 1)], { type: 'application/json' }));
+    download('river-flow-lab-project.json', new Blob([JSON.stringify({ app: APP, version: VERSION, saved: new Date().toISOString(), caution: CAUTION, state: S }, null, 1)], { type: 'application/json' }));
   }
   function validState(st) {
     if (!st || !Array.isArray(st.sections) || st.sections.length < 2) return 'The file has fewer than two cross-sections.';
@@ -8443,7 +8445,7 @@ onmessage = e => {
     const r = new FileReader();
     r.onload = () => {
       let st;
-      try { const j = JSON.parse(r.result); st = j.state || j; } catch { alert('That file is not a River Flood Lab project.'); return; }
+      try { const j = JSON.parse(r.result); st = j.state || j; } catch { alert('That file is not a River Flow Lab project.'); return; }
       const err = validState(st); if (err) { alert(err); return; }
       const d = defaultState(), old = S;
       // If anything the checks missed still fails, the open project is put back.
@@ -8714,14 +8716,14 @@ onmessage = e => {
   $('rf-3d-reset').addEventListener('click', fit3D);
 
   // ---------- about: licence, release and how to cite (click the © line) ----------
-  const TITLE = 'River Flood Lab: A browser-based teaching tool for river flow, water level, obstructions and bridges';
-  const REPO = 'https://github.com/arch85-km/river-flood-lab';
+  const TITLE = 'River Flow Lab: A browser-based teaching tool for river flow, water level, obstructions and bridges';
+  const REPO = 'https://github.com/arch85-km/river-flow-lab';
   const About = (() => {
     let lastFocus = null;
     function open() {
       $('rf-about-rel').textContent = `Version ${VERSION} · not yet released`;
       $('rf-about-apa').textContent = `Al-Obaidi, K. M. (2026). ${TITLE} (Version ${VERSION}) [Computer software]. ${REPO}`;
-      $('rf-about-bib').textContent = ['@software{alobaidi2026riverfloodlab,', '  author  = {Al-Obaidi, Karam M.},', `  title   = {${TITLE}},`,
+      $('rf-about-bib').textContent = ['@software{alobaidi2026riverflowlab,', '  author  = {Al-Obaidi, Karam M.},', `  title   = {${TITLE}},`,
         '  year    = {2026},', `  version = {${VERSION}},`, `  url     = {${REPO}},`, '  note    = {Code MIT licensed; accompanying material CC BY 4.0}', '}'].join('\n');
       lastFocus = document.activeElement;
       $('rf-about-veil').hidden = false; $('rf-about').hidden = false;
@@ -8746,9 +8748,9 @@ onmessage = e => {
   // until the visitor ticks "Don't show this on launch"; skipping does not
   // switch it off, so the next student at a shared machine still sees it.
   // ?tour=0 stops it for one visit, ?tour=1 forces it.
-  const TOUR_KEY = 'riverfloodlab.tour.optout.v1';
+  const TOUR_KEY = 'riverflowlab.tour.optout.v1';
   const TOUR = [
-    { title: 'Welcome to River Flood Lab',
+    { title: 'Welcome to River Flow Lab',
       body: 'A short tour of the main parts, about a minute. You can keep using the app while it runs.' },
     { target: '.rf-stage', title: 'The river',
       body: 'The reach in <b>3D</b>: drag to turn it, scroll to zoom. The buttons along the top switch to the <b>Map</b>, a <b>Plan</b>, one <b>Section</b> across the river, or the <b>Profile</b> along it.' },

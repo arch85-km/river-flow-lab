@@ -1,6 +1,6 @@
 <?php
 /**
- * River Flood Lab — OpenStreetMap waterways proxy and cache
+ * River Flow Lab — OpenStreetMap waterways proxy and cache
  *
  * Ported from Solar Analysis Lab's buildings proxy; only the query, the box
  * size and the names differ. The page asks this script, on its own site, for
@@ -221,8 +221,8 @@ $maxAge = $CACHE_DAYS * 86400;
 // counts and the key they are filed under go as soon as the hour is over,
 // whoever asks next and whether or not the answer is already kept.
 $hour = date('YmdH');
-foreach ((array)glob($LIMIT_DIR . '/riverfloodlab-overpass-*') as $old) {
-    if (strpos(basename((string)$old), 'riverfloodlab-overpass-' . $hour . '-') !== 0) @unlink((string)$old);
+foreach ((array)glob($LIMIT_DIR . '/riverflowlab-overpass-*') as $old) {
+    if (strpos(basename((string)$old), 'riverflowlab-overpass-' . $hour . '-') !== 0) @unlink((string)$old);
 }
 
 $age = is_file($file) ? time() - (int)filemtime($file) : null;
@@ -247,7 +247,7 @@ if ($age !== null && $age < $maxAge) {
 // four billion. The key is random, made by the hour's first fetch, and deleted
 // with the counts when the hour is over (above), after which no count can be
 // traced back to anyone.
-$limitKeyFile = $LIMIT_DIR . '/riverfloodlab-overpass-' . $hour . '-key';
+$limitKeyFile = $LIMIT_DIR . '/riverflowlab-overpass-' . $hour . '-key';
 $limitKey = (string)@file_get_contents($limitKeyFile);
 if (strlen($limitKey) !== 32) {
     $fresh = random_bytes(32);
@@ -264,9 +264,9 @@ if (strlen($limitKey) !== 32) {
     }
 }
 $ip = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
-$bucket = $LIMIT_DIR . '/riverfloodlab-overpass-' . $hour . '-' . hash_hmac('sha256', $ip, $limitKey) . '.cnt';
+$bucket = $LIMIT_DIR . '/riverflowlab-overpass-' . $hour . '-' . hash_hmac('sha256', $ip, $limitKey) . '.cnt';
 // The whole site's count for the hour: a number and nothing else.
-$allBucket = $LIMIT_DIR . '/riverfloodlab-overpass-' . $hour . '-all.cnt';
+$allBucket = $LIMIT_DIR . '/riverflowlab-overpass-' . $hour . '-all.cnt';
 if ((int)@file_get_contents($allBucket) >= $MAX_FETCHES_ALL_PER_HOUR) {
     if ($age !== null) answer(cached($file), 'stale', 'cache', $age);
     fail(429, 'This site\'s river requests for the hour are used up.', 600);
@@ -285,7 +285,7 @@ bump($allBucket);
 $fwd = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
 $secure = $fwd !== '' ? $fwd === 'https'
         : (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off');
-$agent = 'RiverFloodLab-overpass-proxy/1.0 (+' . ($secure ? 'https' : 'http') . '://' . $self . ')';
+$agent = 'RiverFlowLab-overpass-proxy/1.0 (+' . ($secure ? 'https' : 'http') . '://' . $self . ')';
 
 foreach ($UPSTREAMS as $url) {
     $ch = curl_init($url);

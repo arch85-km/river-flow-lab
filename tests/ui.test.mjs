@@ -1,4 +1,4 @@
-// Browser checks for River Flood Lab, in headless Chromium.
+// Browser checks for River Flow Lab, in headless Chromium.
 //
 // Serves the folder over http://127.0.0.1 and refuses every off-origin
 // request, except map tiles and place search, which are answered from local
@@ -625,6 +625,19 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await ctx.close();
 }
 
+// ---- settings saved under the app's old name are carried across ----
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('riverfloodlab.theme.v1', 'dark'); localStorage.setItem('riverfloodlab.tour.optout.v1', '1'); } });
+  const page = await ctx.newPage();
+  await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
+  await page.goto(origin + '/'); await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result); await page.waitForTimeout(900);
+  const s = await page.evaluate(() => ({ theme: localStorage.getItem('riverflowlab.theme.v1'), old: localStorage.getItem('riverfloodlab.theme.v1'), dark: document.documentElement.getAttribute('data-theme') }));
+  check('rename: a theme saved as River Flood Lab is kept', s.theme === 'dark' && s.old === null && s.dark === 'dark', JSON.stringify(s));
+  check('rename: a tour opt-out saved as River Flood Lab is kept', await page.locator('#rf-tour').isHidden());
+  await ctx.close();
+}
+
 // ---- guided tour and the © card ----
 for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
   const tag = size.width < 900 ? 'phone' : 'desktop';
@@ -664,7 +677,7 @@ for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) 
   check(`tour (${tag}): Escape closes it`, await page.locator('#rf-tour').isHidden());
   await page.click('#rf-credit');
   const about = await page.evaluate(() => ({ text: document.getElementById('rf-about').textContent, over: (() => { const r = document.getElementById('rf-about').getBoundingClientRect(); return r.left < 0 || r.right > innerWidth + 1; })() }));
-  check(`about (${tag}): clicking © shows licence, release and citation`, await page.locator('#rf-about').isVisible() && /MIT/.test(about.text) && /CC BY 4\.0/.test(about.text) && /Version 0\.1\.0/.test(about.text) && /@software\{alobaidi2026riverfloodlab/.test(about.text) && /Al-Obaidi, K\. M\. \(2026\)/.test(about.text));
+  check(`about (${tag}): clicking © shows licence, release and citation`, await page.locator('#rf-about').isVisible() && /MIT/.test(about.text) && /CC BY 4\.0/.test(about.text) && /Version 0\.1\.0/.test(about.text) && /@software\{alobaidi2026riverflowlab/.test(about.text) && /Al-Obaidi, K\. M\. \(2026\)/.test(about.text));
   check(`about (${tag}): fits the window`, !about.over);
   await page.keyboard.press('Escape');
   check(`about (${tag}): Escape closes it`, await page.locator('#rf-about').isHidden());

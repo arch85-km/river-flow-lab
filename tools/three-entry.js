@@ -1,4 +1,4 @@
-// The parts of three.js River Flood Lab uses. tools/build-three.mjs bundles
+// The parts of three.js River Flow Lab uses. tools/build-three.mjs bundles
 // this file into index.html, so the page needs no network.
 export {
   WebGLRenderer, Scene, PerspectiveCamera, Group, Mesh, LineSegments, Line,

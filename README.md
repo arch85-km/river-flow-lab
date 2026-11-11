@@ -1,4 +1,4 @@
-# River Flood Lab
+# River Flow Lab
 
 A single-file browser tool for teaching how river flow, water level,
 obstructions and bridges interact, for architecture and urban design
@@ -105,8 +105,8 @@ On a phone the view sits on top, with Controls and Results beneath.
 
 ## What it stores and what it contacts
 
-- **Browser storage:** the colour theme (`riverfloodlab.theme.v1`) and, if
-  you set one, a custom map tile service (`riverfloodlab.basemap.custom.v1`).
+- **Browser storage:** the colour theme (`riverflowlab.theme.v1`) and, if
+  you set one, a custom map tile service (`riverflowlab.basemap.custom.v1`).
 - **OpenStreetMap tiles** (`tile.openstreetmap.org`): the map area on
   screen, only while the Map view is open; at most 6 × 6 tiles, never
   prefetched. A custom tile service replaces them if you set one.
@@ -189,7 +189,7 @@ npm test
 ```
 
 `tests/engine.test.mjs` (65 checks), `tests/overpass-proxy.mjs` (19 checks;
-skipped where PHP is not installed) and `tests/ui.test.mjs` (250 checks,
+skipped where PHP is not installed) and `tests/ui.test.mjs` (252 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused, except map tiles, place search and Overpass, which are
 answered from local fixtures in `tests/fixtures/`; the Overpass fixture is

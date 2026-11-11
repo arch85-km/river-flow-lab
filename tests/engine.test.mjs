@@ -1,4 +1,4 @@
-// Engine checks for River Flood Lab.
+// Engine checks for River Flow Lab.
 //
 // Each check compares the engine with an independent closed-form result or
 // a separate numerical integration written here. Agreement shows the

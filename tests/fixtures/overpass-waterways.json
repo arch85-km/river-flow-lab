@@ -1,6 +1,6 @@
 {
   "version": 0.6,
-  "generator": "River Flood Lab test fixture — synthetic, not OpenStreetMap data",
+  "generator": "River Flow Lab test fixture — synthetic, not OpenStreetMap data",
   "elements": [
     { "type": "way", "id": 101, "tags": { "waterway": "river", "name": "River Sheaf" },
       "geometry": [ { "lat": 53.3596, "lon": -1.4752 }, { "lat": 53.3610, "lon": -1.4740 }, { "lat": 53.3626, "lon": -1.4721 } ] },

@@ -190,7 +190,7 @@ try {
   const IP = '127.0.0.1';
   let names = readdirSync(LIMITS);
   const keyName = names.find((f) => /-key$/.test(f)) || '';
-  const hour = (keyName.match(/^riverfloodlab-overpass-(\d{10})-key$/) || [])[1] || '';
+  const hour = (keyName.match(/^riverflowlab-overpass-(\d{10})-key$/) || [])[1] || '';
   const counts = names.filter((f) => f.endsWith('.cnt') && !f.endsWith('-all.cnt'));
   const plain = [IP, createHash('sha1').update(IP).digest('hex'), createHash('sha256').update(IP).digest('hex')];
   check('a visitor\'s count is filed under a keyed hash, not the address or a plain hash of it',
@@ -198,8 +198,8 @@ try {
         names.length + ' files this hour: ' + names.map((f) => f.replace(/[0-9a-f]{40,}/, '…')).join(', '));
 
   // Files from an earlier hour, including the first version's plain-hash name
-  const was = ['riverfloodlab-overpass-2000010100-key', 'riverfloodlab-overpass-2000010100-' + 'a'.repeat(64) + '.cnt',
-               'riverfloodlab-overpass-2000010100-' + plain[1] + '.cnt'];
+  const was = ['riverflowlab-overpass-2000010100-key', 'riverflowlab-overpass-2000010100-' + 'a'.repeat(64) + '.cnt',
+               'riverflowlab-overpass-2000010100-' + plain[1] + '.cnt'];
   for (const f of was) writeFileSync(join(LIMITS, f), '1');
   const hit = await ask(BOX4);                    // answered from the cache
   names = readdirSync(LIMITS);
@@ -210,7 +210,7 @@ try {
 
   // The limit still applies: this visitor's count, set to the hour's maximum
   const key = readFileSync(join(LIMITS, keyName));
-  const mine = 'riverfloodlab-overpass-' + hour + '-' + createHmac('sha256', key).update(IP).digest('hex') + '.cnt';
+  const mine = 'riverflowlab-overpass-' + hour + '-' + createHmac('sha256', key).update(IP).digest('hex') + '.cnt';
   writeFileSync(join(LIMITS, mine), '300');
   reset(); mode.u1 = mode.u2 = mode.u3 = 'ok';
   const over = await ask('48.850000,2.340000,48.853594,2.345470');
@@ -221,7 +221,7 @@ try {
   // The whole site's ceiling: past it, nothing new is fetched for anyone, and
   // what is already kept is still served
   for (const f of readdirSync(LIMITS)) if (f.endsWith('.cnt')) rmSync(join(LIMITS, f));
-  writeFileSync(join(LIMITS, 'riverfloodlab-overpass-' + hour + '-all.cnt'), '1000');
+  writeFileSync(join(LIMITS, 'riverflowlab-overpass-' + hour + '-all.cnt'), '1000');
   reset();
   const capped = await ask('48.870000,2.340000,48.873594,2.345470');
   const keptStill = await ask(BOX4);

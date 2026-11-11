@@ -1,6 +1,6 @@
 # Architecture
 
-How River Flood Lab is put together: what lives where, how a calculation
+How River Flow Lab is put together: what lives where, how a calculation
 flows through the code, and what the tooling around it does. For *why* the
 methods were chosen and what they do not model, read the README's method
 section (the method notes follow); this file is the map, not the argument.
@@ -110,7 +110,7 @@ next to a bridge; eddy zones on, CR 1, ER 2.
   (`templateSections`) or along a line drawn on the map
   (`reachFromLine`). `terrainDialog` and `terrainReach` build a reach from
   a terrain model.
-- **Files**: save and open a project (`river-flood-lab-project.json`,
+- **Files**: save and open a project (`river-flow-lab-project.json`,
   checked whole by `validState` before anything changes); CSV of the
   results; PNG of the view, the map or the 3D view, each with a footer of
   the settings and the caution.
@@ -142,8 +142,8 @@ next to a bridge; eddy zones on, CR 1, ER 2.
 
 | Key | Holds |
 |---|---|
-| `riverfloodlab.theme.v1` | Light, dark or automatic |
-| `riverfloodlab.basemap.custom.v1` | A custom tile service: URL template, credit, maximum zoom |
+| `riverflowlab.theme.v1` | Light, dark or automatic |
+| `riverflowlab.basemap.custom.v1` | A custom tile service: URL template, credit, maximum zoom |
 
 Projects and terrain files stay in the browser; nothing is uploaded.
 
@@ -171,7 +171,7 @@ npm test
 ```
 
 runs the three suites. At this version: `tests/engine.test.mjs` 65 checks,
-`tests/ui.test.mjs` 250 checks, `tests/overpass-proxy.mjs` 19 checks (skipped
+`tests/ui.test.mjs` 252 checks, `tests/overpass-proxy.mjs` 19 checks (skipped
 where PHP is not installed). The engine checks compare with closed-form
 results (normal and critical depth), an independent RK4 integration of the
 gradually varied flow equation, and hand calculations (Yarnell, the weir
