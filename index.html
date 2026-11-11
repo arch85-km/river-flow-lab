@@ -69,6 +69,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .rf-btn.rf-primary{background:var(--rf-accent);color:var(--rf-accent-ink);border-color:var(--rf-accent);border-radius:6px}
 .rf-btn.rf-sq{border-radius:6px}
 .rf-btn.rf-small{padding:2px 9px;font-size:12px}
+.rf-btn:disabled{opacity:.45;cursor:not-allowed}
+.rf-btn:disabled:hover{border-color:var(--rf-line)}
 .rf-menu{position:relative}
 .rf-menu-list{position:absolute;right:0;top:calc(100% + 4px);background:var(--rf-panel);border:1px solid var(--rf-line);border-radius:8px;box-shadow:0 8px 24px #0003;padding:4px;z-index:30;min-width:190px}
 .rf-menu-list button{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 10px;border-radius:5px;cursor:pointer}
@@ -151,6 +153,35 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
 .rf-foot{grid-area:foot;display:flex;gap:14px;align-items:center;padding:6px 14px;border-top:1px solid var(--rf-line);background:var(--rf-panel-2);font-size:11.5px;color:var(--rf-muted);min-width:0;overflow:hidden;white-space:nowrap}
 .rf-foot b{color:var(--rf-ink);font-weight:600}
 .rf-foot .rf-grow{flex:1;overflow:hidden;text-overflow:ellipsis}
+.rf-credit{cursor:pointer;border-radius:3px}
+.rf-credit:hover{color:var(--rf-ink);text-decoration:underline}
+
+/* About: licence, release and how to cite (as Solar Analysis Lab) */
+#rf-about-veil{position:fixed;inset:0;z-index:300;background:rgba(5,8,12,.62);backdrop-filter:blur(2px)}
+#rf-about{position:fixed;z-index:301;top:50%;left:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 28px));max-height:min(80vh,760px);overflow:auto;padding:22px 24px 18px;background:var(--rf-panel);color:var(--rf-ink);border:1px solid var(--rf-line);border-radius:13px;box-shadow:0 18px 50px #0006}
+#rf-about h3{margin:0 0 3px;font-size:16px;font-weight:650}
+#rf-about .rf-about-sub{margin:0 0 18px;font-size:12px;color:var(--rf-faint)}
+#rf-about h4{margin:19px 0 7px;font-size:10px;font-weight:650;letter-spacing:.8px;text-transform:uppercase;color:var(--rf-accent)}
+#rf-about h4:first-of-type{margin-top:0}
+#rf-about p{margin:0 0 9px;font-size:12.5px;line-height:1.56;color:var(--rf-muted)}
+#rf-about a{color:var(--rf-accent)}
+#rf-about b{color:var(--rf-ink);font-weight:600}
+#rf-about .rf-cite{margin:0 0 9px;padding:9px 11px;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--rf-panel-2);border:1px solid var(--rf-line);border-radius:7px;font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--rf-muted);user-select:all}
+#rf-about .rf-about-close{display:flex;justify-content:flex-end;margin-top:17px}
+
+/* Guided tour: coach marks, not a modal; the spotlight lets clicks through */
+#rf-tour-spot{position:fixed;z-index:200;border-radius:9px;pointer-events:none;box-shadow:0 0 0 2px var(--rf-accent),0 0 0 9999px rgba(8,14,22,.55);transition:top .24s,left .24s,width .24s,height .24s}
+#rf-tour-spot.rf-dim-only{box-shadow:0 0 0 9999px rgba(8,14,22,.6)}
+#rf-tour{position:fixed;z-index:201;width:min(330px,calc(100vw - 22px));padding:15px 16px 13px;background:var(--rf-panel);color:var(--rf-ink);border:1px solid var(--rf-line);border-radius:11px;box-shadow:0 18px 50px #0005}
+#rf-tour .rf-tour-step{font-size:10px;font-weight:650;letter-spacing:.7px;text-transform:uppercase;color:var(--rf-accent);margin-bottom:6px}
+#rf-tour h4{margin:0 0 6px;font-size:14.5px;font-weight:650}
+#rf-tour p{margin:0;font-size:12.5px;line-height:1.52;color:var(--rf-muted)}
+#rf-tour p b{color:var(--rf-ink)}
+.rf-tour-optout{display:flex;align-items:center;gap:7px;margin-top:11px;padding-top:10px;border-top:1px solid var(--rf-line-soft);font-size:12px;color:var(--rf-muted);cursor:pointer}
+.rf-tour-nav{display:flex;align-items:center;gap:6px;margin-top:13px}
+.rf-tour-dots{flex:1;display:flex;gap:4px;justify-content:center}
+.rf-tour-dots i{width:5px;height:5px;border-radius:50%;background:var(--rf-line);display:block}
+.rf-tour-dots i.on{background:var(--rf-accent)}
 .rf-drawers{display:none}
 .rf-map{overflow:hidden;cursor:grab;touch-action:none;background:#e5e3df;user-select:none}
 .rf-map.rf-drawing{cursor:crosshair}
@@ -208,6 +239,7 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
     <div class="rf-top-actions">
       <button class="rf-btn" id="rf-level" type="button" aria-pressed="false" title="Show the technical settings, results and terms">Advanced</button>
       <button class="rf-btn" id="rf-theme" type="button" aria-label="Switch colour theme">Theme</button>
+      <button class="rf-btn" id="rf-help" type="button" title="Replay the guided tour">Tour</button>
       <div class="rf-menu">
         <button class="rf-btn" id="rf-file-btn" type="button" aria-haspopup="true" aria-expanded="false">File ▾</button>
         <div class="rf-menu-list" id="rf-file-menu" hidden role="menu">
@@ -225,7 +257,7 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
   </header>
 
   <aside class="rf-left" aria-label="Controls">
-    <details class="rf-sec" open>
+    <details class="rf-sec" open data-tour="flow">
       <summary><span class="rf-eyebrow" data-plain="How big is the flow?">Flow</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
       <div class="rf-body">
         <div class="rf-field rf-adv"><label for="rf-q">River flow, m³/s</label><input class="rf-num rf-mono" type="number" id="rf-q" min="0.01" step="0.1"></div>
@@ -239,19 +271,23 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
         <p class="rf-hint rf-basic" id="rf-flow-plain" aria-live="polite"></p>
         <div class="rf-field rf-adv"><label for="rf-allow">Climate allowance, %</label><input class="rf-num rf-mono" type="number" id="rf-allow" min="0" max="200" step="1"></div>
         <p class="rf-hint rf-adv">Raises the flow you set. Use the Environment Agency peak river flow allowance for your catchment and epoch.</p>
-        <details class="rf-adv">
-          <summary class="rf-lab" style="cursor:pointer">Downstream boundary and slider range</summary>
+        <details id="rf-survey">
+          <summary class="rf-lab" style="cursor:pointer">Flow from a float survey</summary>
           <div class="rf-body" style="padding:8px 0 0">
-            <div class="rf-field"><label for="rf-bnd">Boundary</label><select class="rf-select" id="rf-bnd"><option value="normal">Normal depth</option><option value="ws">Fixed water level</option></select></div>
-            <div class="rf-field" id="rf-bnd-s-l"><label for="rf-bnd-s">Slope</label><input class="rf-num rf-mono" type="number" id="rf-bnd-s" step="0.0001" min="0.00001"></div>
-            <div class="rf-field" id="rf-bnd-ws-l"><label for="rf-bnd-ws">Level, m</label><input class="rf-num rf-mono" type="number" id="rf-bnd-ws" step="0.01"></div>
-            <div class="rf-field"><label for="rf-qmax">Slider maximum, m³/s</label><input class="rf-num rf-mono" type="number" id="rf-qmax" min="1" step="1"></div>
+            <p class="rf-hint">Time a float over a measured stretch of the channel. The surface moves faster than the water near the bed, so the mean speed is about 0.85 of the float's speed. Using the result sets the climate allowance to 0, as a survey measures the flow on the day.</p>
+            <div class="rf-field"><label for="rf-sv-w">Channel width, m</label><input class="rf-num rf-mono" type="number" id="rf-sv-w" min="0" step="0.1"></div>
+            <div class="rf-field"><label for="rf-sv-d">Mean depth, m</label><input class="rf-num rf-mono" type="number" id="rf-sv-d" min="0" step="0.05"></div>
+            <div class="rf-field"><label for="rf-sv-L">Float distance, m</label><input class="rf-num rf-mono" type="number" id="rf-sv-L" min="0" step="0.5"></div>
+            <div class="rf-field"><label for="rf-sv-t">Float time, s (average)</label><input class="rf-num rf-mono" type="number" id="rf-sv-t" min="0" step="0.5"></div>
+            <div class="rf-field"><label for="rf-sv-k">Surface to mean speed</label><input class="rf-num rf-mono" type="number" id="rf-sv-k" min="0.5" max="1" step="0.05"></div>
+            <p class="rf-hint" id="rf-sv-out" aria-live="polite"></p>
+            <button class="rf-btn rf-primary" type="button" id="rf-sv-use" disabled>Use this flow</button>
           </div>
         </details>
       </div>
     </details>
 
-    <details class="rf-sec" open>
+    <details class="rf-sec" open data-tour="design">
       <summary><span class="rf-eyebrow" data-plain="Your design">Design</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
       <div class="rf-body">
         <p class="rf-hint">Add an element at the chosen section (<b id="rf-at"></b>), then open it to adjust. Every result is compared with the river without them.</p>
@@ -355,6 +391,10 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
       <button class="rf-btn" type="button" id="rf-3d-reset" data-for="3d">Reset view</button>
       <label class="rf-glass" data-for="section">Heights <select class="rf-select" id="rf-sec-vex" style="padding:1px 4px"><option value="0">Fit to screen</option><option value="1">True scale</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option></select></label>
       <label class="rf-glass" data-for="profile">Heights <select class="rf-select" id="rf-pro-vex" style="padding:1px 4px"><option value="0">Fit to screen</option><option value="1">True scale</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option><option value="50">50×</option></select></label>
+      <label class="rf-glass" data-for="plan">Widths <select class="rf-select" id="rf-plan-scale" style="padding:1px 4px"><option value="0">Fit to screen</option><option value="1" selected>True scale</option><option value="2">2×</option><option value="5">5×</option></select></label>
+      <button class="rf-btn rf-sq" type="button" id="rf-plan-out" data-for="plan" aria-label="Zoom out of the plan">−</button>
+      <button class="rf-btn rf-sq" type="button" id="rf-plan-in" data-for="plan" aria-label="Zoom in to the plan">+</button>
+      <button class="rf-btn" type="button" id="rf-plan-fit" data-for="plan">Fit</button>
       <button class="rf-btn rf-sq" type="button" id="rf-pro-out" data-for="profile" aria-label="Zoom out of the profile">−</button>
       <button class="rf-btn rf-sq" type="button" id="rf-pro-in" data-for="profile" aria-label="Zoom in to the profile">+</button>
       <button class="rf-btn" type="button" id="rf-pro-fit" data-for="profile">Fit</button>
@@ -405,7 +445,7 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
         <div class="rf-tiles" id="rf-tiles"></div>
       </div>
     </details>
-    <details class="rf-sec" open>
+    <details class="rf-sec" open data-tour="effect">
       <summary><span class="rf-eyebrow">Effect of the design</span><span class="rf-chev" aria-hidden="true">▾</span></summary>
       <div class="rf-body"><div class="rf-notes" id="rf-status" aria-live="polite"></div></div>
     </details>
@@ -420,10 +460,60 @@ table.rf-table{border-collapse:collapse;font-size:11.5px;width:100%;font-variant
   </aside>
 
   <footer class="rf-foot">
-    <span>© Karam Al-Obaidi</span>
-    <span class="rf-grow"><b>Teaching tool.</b> <span id="rf-caution-foot"></span></span>
+    <span class="rf-credit" id="rf-credit" role="button" tabindex="0" title="Licence, release and how to cite">© Karam Al-Obaidi</span>
+    <span class="rf-grow"></span>
     <span class="rf-hide-narrow rf-adv">Steady 1D standard step · Manning · Yarnell check</span>
   </footer>
+</div>
+
+<div id="rf-about-veil" hidden></div>
+<div id="rf-about" hidden role="dialog" aria-modal="true" aria-labelledby="rf-about-h">
+  <h3 id="rf-about-h">River Flood Lab</h3>
+  <p class="rf-about-sub">River flow · Water level · Obstructions and bridges</p>
+
+  <h4>Licence and credits</h4>
+  <p>&copy; Karam Al-Obaidi. The application is licensed <b>MIT</b> and the documentation
+     <b>CC BY 4.0</b> &mdash; use it, adapt it, build on it, for any purpose including
+     commercially. Credit is the only condition.
+     <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">creativecommons.org/licenses/by/4.0</a></p>
+  <p>A model you make here is <b>yours</b>. Neither licence claims anything over your
+     river, your results, your CSV or the images you export.</p>
+  <p>Built with <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a>
+     0.186.1 (MIT), <b>bundled into this file</b> with its licence, so the app runs with no
+     network. The map, place search and river lines come from
+     <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
+     (ODbL) and are used only when you ask for them. A terrain model you load carries its own
+     licence &mdash; for Environment Agency LIDAR, the Open Government Licence.</p>
+
+  <h4>This release</h4>
+  <p><b id="rf-about-rel"></b> &mdash; the version of this file. Quote it alongside any figure
+     you publish: two runs of the same river on different releases can differ.</p>
+
+  <h4>How to cite</h4>
+  <p>Keeping the notice in the file satisfies the licence; a citation is the scholarly act on
+     top of that.</p>
+  <div class="rf-cite" id="rf-about-apa"></div>
+  <div class="rf-cite" id="rf-about-bib"></div>
+  <p>Report the <b>flow and climate allowance</b>, the <b>downstream boundary</b>, the
+     <b>eddy-zone settings</b>, <b>where the river&rsquo;s levels came from</b> and the
+     <b>section spacing</b> near any structure alongside any figure taken from the tool. The CSV
+     header carries the first four.</p>
+
+  <div class="rf-about-close"><button class="rf-btn rf-sq" id="rf-about-close" type="button">Close</button></div>
+</div>
+
+<div id="rf-tour-spot" hidden></div>
+<div id="rf-tour" hidden role="dialog" aria-label="Guided tour">
+  <div class="rf-tour-step" id="rf-tour-step"></div>
+  <h4 id="rf-tour-title"></h4>
+  <p id="rf-tour-body"></p>
+  <label class="rf-tour-optout" id="rf-tour-optout" hidden><input type="checkbox" id="rf-tour-dont"> Don't show this on launch</label>
+  <div class="rf-tour-nav">
+    <button class="rf-btn rf-sq rf-small" id="rf-tour-skip" type="button">Skip</button>
+    <span class="rf-tour-dots" id="rf-tour-dots"></span>
+    <button class="rf-btn rf-sq rf-small" id="rf-tour-back" type="button">Back</button>
+    <button class="rf-btn rf-primary rf-small" id="rf-tour-next" type="button">Next</button>
+  </div>
 </div>
 
 
@@ -4672,6 +4762,9 @@ void main() {
 const RFL = (() => {
   'use strict';
   const G = 9.81;
+  // Manning's n of a floating object's underside and sides when none is given:
+  // a smooth steel or concrete hull, against 0.035 for a natural channel bed.
+  const HULL_N = 0.013;
   const isNum = v => typeof v === 'number' && isFinite(v);
 
   // ---------- ground-line geometry ----------
@@ -4830,20 +4923,24 @@ const RFL = (() => {
     const out = { ws, sub: {}, A: 0, P: 0, T: 0, K: 0, flags: [] };
     let sumK3A2 = 0;
     for (const [key, a, b, n] of subs) {
-      let A = 0, P = 0, T = 0;
+      let A = 0, P = 0, T = 0, PF = 0, PFn = 0;
       if (b > a) for (const [p, q] of subtractSpans(a, b, spans)) {
         const w = wettedAtDeck(prep, ws, p, q);
         A += w.A; P += w.P; T += w.T;
         // A floating object: the water above its underside is gone, and its
         // underside and sides become wetted perimeter. Flow passes beneath it.
+        // The hull is far smoother than a river bed, so its perimeter carries
+        // its own roughness (default HULL_N), combined with the bed's below.
         for (const f of prep.floats || []) {
           const l = Math.max(p, f.y0), r = Math.min(q, f.y1);
           if (!(r > l)) continue;
           const whole = wettedAtDeck(prep, ws, l, r), under = wettedAtDeck(prep, ws - f.draft, l, r);
-          A -= whole.A - under.A; P += under.T; T -= whole.T;
+          A -= whole.A - under.A; T -= whole.T;
           const side = y => Math.min(f.draft, Math.max(0, ws - groundAt(pts, y)));
-          if (f.y0 >= l && f.y0 < r) P += side(f.y0);
-          if (f.y1 > l && f.y1 <= r) P += side(f.y1);
+          let pf = under.T;
+          if (f.y0 >= l && f.y0 < r) pf += side(f.y0);
+          if (f.y1 > l && f.y1 <= r) pf += side(f.y1);
+          PF += pf; PFn += pf * Math.pow(isNum(f.n) && f.n > 0 ? f.n : HULL_N, 1.5);
         }
       }
       // The flowing layer above dead water, its floor the dead water's surface.
@@ -4862,7 +4959,12 @@ const RFL = (() => {
       // Water above an end of the ground line is held by a vertical wall.
       if (key === 'lob' && ws > pts[0][1] && !closed.some(([c]) => c <= ymin)) { P += ws - pts[0][1]; out.flags.push('wall-left'); }
       if (key === 'rob' && ws > pts[pts.length - 1][1] && !closed.some(([, d]) => d >= ymax)) { P += ws - pts[pts.length - 1][1]; out.flags.push('wall-right'); }
-      const K = (A > 0 && P > 0 ? A * Math.pow(A / P, 2 / 3) / n : 0) + KL;
+      // Bed and hull roughness combined by Horton's rule, weighted by wetted
+      // perimeter: n = (Σ Pᵢ nᵢ^1.5 / Σ Pᵢ)^(2/3), as HEC-RAS composites n in a
+      // main channel (Hydraulic Reference Manual, ch. 2). Equal n gives n back.
+      const nE = PF > 0 && P > 0 ? Math.pow((P * Math.pow(n, 1.5) + PFn) / (P + PF), 2 / 3) : n;
+      P += PF;
+      const K = (A > 0 && P > 0 ? A * Math.pow(A / P, 2 / 3) / nE : 0) + KL;
       A += LA; P += LP; T += LT;
       out.sub[key] = { A, P, T, K, n };
       out.A += A; out.P += P; out.T += T; out.K += K;
@@ -5100,7 +5202,7 @@ const RFL = (() => {
 
   // ---------- the profile ----------
 
-  // model: { sections, obstructions, bridges, walls, floats:[{x0,x1,y0,y1,draft}], stations, eddy:{on,cr,er},
+  // model: { sections, obstructions, bridges, walls, floats:[{x0,x1,y0,y1,draft,n}], stations, eddy:{on,cr,er},
   //          boundary:{type:'normal',slope} | {type:'ws',ws},
   //          coeff:{cc,ce,bridgeCc,bridgeCe} }
   function solve(model, Q) {
@@ -5365,6 +5467,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       sections,
       boundary: { type: 'normal', slope: TEMPLATE.slope, ws: 1.5 },
       eddy: { on: true, er: 2, cr: 1 },
+      survey: { k: 0.85 },
       flow: { Q: 15, Qmax: 80, allowance: 0 },
       obstructions: [],
       models: [],
@@ -5384,8 +5487,13 @@ if (typeof module !== 'undefined') module.exports = RFL;
   const ARROWS = { n: 6, size: 1 };
   const T = (tech, plain) => level === 'advanced' ? tech : plain;
   let compare = false, showingBefore = false, activePreset = null, lookUp = false, sectionStretch = 0;
+  let waterBy = 'depth'; // colour the water in 3D and Plan by 'depth' or 'speed'
   const secZoom = { k: 1, cy: null, cz: null, map: null };
   const proZoom = { k: 1, cx: null, cz: null, map: null };
+  // Plan: how many times larger distances across are drawn than distances
+  // along (1 = true scale, 0 = stretched to fill the view), and the zoom.
+  const planZoom = { k: 1, cx: null, cy: null, map: null };
+  let planStretch = 1;
   let profileStretch = 0;
   const PLAIN = {
     'From chainage, m': 'Starts at, m along river', 'To chainage, m': 'Ends at, m along river',
@@ -5420,7 +5528,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
   // Every floating thing as boxes: chainages, widths, draft and height above water.
   function floatBoxes() {
     return [
-      ...S.floats.map(f => ({ id: f.id, name: f.label || f.id, x0: Math.min(f.x0, f.x1), x1: Math.max(f.x0, f.x1), y0: Math.min(f.y0, f.y1), y1: Math.max(f.y0, f.y1), draft: f.draft > 0 ? f.draft : 0.01, height: Math.max(0, f.height) })),
+      ...S.floats.map(f => ({ id: f.id, name: f.label || f.id, x0: Math.min(f.x0, f.x1), x1: Math.max(f.x0, f.x1), y0: Math.min(f.y0, f.y1), y1: Math.max(f.y0, f.y1), draft: f.draft > 0 ? f.draft : 0.01, height: Math.max(0, f.height), n: f.n > 0 ? f.n : undefined })),
       ...S.models.filter(isFloating).flatMap(m => modelBlocks(m).map(b => ({ id: b.id, name: m.label || m.id, x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1, draft: draftOf(m), height: Math.max(0, modelGeo(m).size[2] - draftOf(m)) }))),
     ];
   }
@@ -5585,7 +5693,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       sections,
       boundary: S.boundary.type === 'ws' ? { type: 'ws', ws: S.boundary.ws } : { type: 'normal', slope: S.boundary.slope },
       eddy: S.eddy,
-      floats: withDesign ? floatBoxes().map(({ x0, x1, y0, y1, draft }) => ({ x0, x1, y0, y1, draft })) : [],
+      floats: withDesign ? floatBoxes().map(({ x0, x1, y0, y1, draft, n }) => ({ x0, x1, y0, y1, draft, n })) : [],
       obstructions: withDesign ? [...solidBlocks(), ...S.obstructions.map(o => ({ ...o, x0: Math.min(o.x0, o.x1), x1: Math.max(o.x0, o.x1), y0: Math.min(o.y0, o.y1), y1: Math.max(o.y0, o.y1) }))] : [],
       bridges: withDesign ? S.bridges.map(b => ({ ...b, piers: parsePiers(b.piers), pierK: +b.pierK || 1.25 })) : [],
       walls: withDesign ? S.walls.map(w => ({ ...w, side: wallSide(w) })) : [],
@@ -5604,7 +5712,11 @@ if (typeof module !== 'undefined') module.exports = RFL;
     BASE = hasDesign() && !RES.error ? RFL.solve({ ...model(false), stations: RES.sections.map(s => s.x) }, Q) : null;
     if (!RES.error && (!viewId || !RES.sections.some(s => s.id === viewId))) viewId = RES.sections[Math.floor(RES.sections.length / 2)].id;
     renderFlow(); renderPills(); renderHeadline(); renderStatus(); renderViewPicker(); renderTiles(); renderRiver(); renderActive(); renderTable(); scheduleRating();
+    // A floating object's note checks its depth against the water, which has just changed.
+    if (floatEdited && floatEdited.d.isConnected) floatEdited.d.querySelector('.rf-el-body .rf-hint').textContent = floatHint(floatEdited.it);
+    floatEdited = null;
   }
+  let floatEdited = null;
   // Only the view on screen is drawn; switching views draws the new one.
   // "Without" draws the view from the run with no design elements.
   const before = () => compare && BASE && !BASE.error;
@@ -5738,20 +5850,49 @@ if (typeof module !== 'undefined') module.exports = RFL;
   // ---------- plan ----------
   function renderPlan() {
     const host = $('rf-plan'), [W, H] = dims(host, 640, 270);
-    const svg = svgRoot(host, W, H, 'Plan of the reach with water extent, eddy zones and design elements');
+    let svg = svgRoot(host, W, H, 'Plan of the reach with water extent, eddy zones and design elements');
     if (!RES || RES.error) return;
     const secs = RES.sections;
     const xmin = secs[0].x, xmax = secs[secs.length - 1].x;
     const ymin = Math.min(...secs.map(s => s.raw[0][0])), ymax = Math.max(...secs.map(s => s.raw[s.raw.length - 1][0]));
     const box = { l: 46, r: W - 10, t: 10 + stageTop(host), b: H - 38 - stageBottom(host) };
-    box.sx = lin(xmax, xmin, box.l, box.r); box.sy = lin(ymin, ymax, box.t, box.b);
-    axes(svg, box, [xmin, xmax], [ymin, ymax], T('Chainage, m (flow →)', 'Distance along river, m (flow →)'), 'Across river, m');
+    // At a set scale the shorter way is padded (across) or the box narrowed
+    // (along), so a metre across is drawn planStretch times a metre along.
+    let ylo = ymin, yhi = ymax;
+    if (planStretch) {
+      const span = (box.b - box.t) / ((box.r - box.l) / (xmax - xmin) * planStretch);
+      if (span >= ymax - ymin) { const pad = (span - (ymax - ymin)) / 2; ylo -= pad; yhi += pad; }
+      else { const width = (xmax - xmin) * ((box.b - box.t) / (ymax - ymin)) / planStretch, mid = (box.l + box.r) / 2; box.l = mid - width / 2; box.r = mid + width / 2; }
+    }
+    let va = xmin, vb = xmax, vlo = ylo, vhi = yhi;
+    if (planZoom.k > 1) {
+      const w = (xmax - xmin) / planZoom.k, ht = (yhi - ylo) / planZoom.k;
+      const cx = Math.min(xmax - w / 2, Math.max(xmin + w / 2, planZoom.cx ?? (xmin + xmax) / 2)), cy = Math.min(yhi - ht / 2, Math.max(ylo + ht / 2, planZoom.cy ?? (ylo + yhi) / 2));
+      planZoom.cx = cx; planZoom.cy = cy; va = cx - w / 2; vb = cx + w / 2; vlo = cy - ht / 2; vhi = cy + ht / 2;
+    }
+    planZoom.map = { box, W, H, va, vb, vlo, vhi, xmin, xmax, ylo, yhi };
+    box.sx = lin(vb, va, box.l, box.r); box.sy = lin(vlo, vhi, box.t, box.b);
+    axes(svg, box, [va, vb], [vlo, vhi], T('Chainage, m (flow →)', 'Distance along river, m (flow →)'), 'Across river, m');
+    const across = ((box.b - box.t) / (yhi - ylo)) / ((box.r - box.l) / (xmax - xmin));
+    const noteText = Math.abs(across - 1) < 0.05 ? 'True scale: across and along match' : `Not to scale: distances across drawn ${across.toFixed(across < 10 ? 1 : 0)}× larger than along`;
+    el('rect', { x: box.l, y: box.t, width: box.r - box.l, height: box.b - box.t }, el('clipPath', { id: 'rf-plan-clip' }, svg));
+    const top = svg;
+    svg = el('g', { 'clip-path': 'url(#rf-plan-clip)' }, top);
     const { sx, sy } = box;
+    const vTop = V3.maxSpeed = maxSpeed(secs);
     secs.forEach((s, i) => {
       const xa = i ? (s.x + secs[i - 1].x) / 2 : s.x, xb = i < secs.length - 1 ? (s.x + secs[i + 1].x) / 2 : s.x;
       const x0 = sx(xb), x1 = sx(xa);
       el('rect', { x: x0, y: sy(s.raw[0][0]), width: Math.max(0.5, x1 - x0), height: sy(s.raw[s.raw.length - 1][0]) - sy(s.raw[0][0]), fill: C['ground-fill'], opacity: 0.6 }, svg);
-      for (const [a, b] of reached(s)) el('rect', { x: x0, y: sy(a), width: Math.max(0.5, x1 - x0), height: Math.max(0.5, sy(b) - sy(a)), fill: C['water-fill'] }, svg);
+      for (const [a, b] of reached(s)) {
+        if (waterBy !== 'speed') { el('rect', { x: x0, y: sy(a), width: Math.max(0.5, x1 - x0), height: Math.max(0.5, sy(b) - sy(a)), fill: C['water-fill'] }, svg); continue; }
+        // split at the banks: each part has its own mean speed
+        const cuts = [a, ...[s.banks.left, s.banks.right].filter(y => y > a && y < b), b];
+        for (let k = 0; k < cuts.length - 1; k++) {
+          const p = cuts[k], q = cuts[k + 1];
+          el('rect', { x: x0, y: sy(p), width: Math.max(0.5, x1 - x0), height: Math.max(0.5, sy(q) - sy(p)), fill: SPEED_BANDS[speedBand(speedAt(s, (p + q) / 2), vTop)] }, svg);
+        }
+      }
     });
     // channel banks
     el('polyline', { points: secs.map(s => `${sx(s.x)},${sy(s.banks.left)}`).join(' '), fill: 'none', stroke: C.water, 'stroke-width': 1 }, svg);
@@ -5776,7 +5917,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
     for (const f of floatBoxes()) el('rect', { x: sx(f.x1), y: sy(f.y0), width: Math.max(3, sx(f.x0) - sx(f.x1)), height: Math.max(1, sy(f.y1) - sy(f.y0)), fill: FLOAT_COLOUR }, svg);
     for (const w of S.walls) el('line', { x1: sx(w.x0), x2: sx(w.x1), y1: sy(w.y), y2: sy(w.y), stroke: C.block, 'stroke-width': 3, 'stroke-linecap': 'round' }, svg);
     for (const b of S.bridges) {
-      const xa = sx(b.x + b.length), xb = sx(b.x), [ea, eb] = bridgeEnds(b, ymin, ymax);
+      const xa = sx(b.x + b.length), xb = sx(b.x), [ea, eb] = bridgeEnds(b, ymin, ymax); // the real valley sides, not the padded view
       el('rect', { x: xa, y: sy(ea), width: Math.max(2, xb - xa), height: sy(eb) - sy(ea), fill: `url(#${host.id}-deck)`, stroke: C.deck }, svg);
       for (const p of parsePiers(b.piers)) el('rect', { x: xa, y: sy(p.y - p.width / 2), width: Math.max(2, xb - xa), height: Math.max(1.5, sy(p.y + p.width / 2) - sy(p.y - p.width / 2)), fill: C.deck }, svg);
       el('text', { x: (xa + xb) / 2, y: box.t + 11, 'text-anchor': 'middle', fill: C.ink, 'font-weight': 600 }, svg).textContent = b.id;
@@ -5796,6 +5937,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
       const hit = el('line', { x1: sx(s.x), x2: sx(s.x), y1: box.t, y2: box.b, stroke: 'transparent', 'stroke-width': 8, style: 'cursor:pointer' }, svg);
       hit.addEventListener('click', () => selectView(s.id));
     }
+    el('text', { x: box.r - 4, y: box.t + 14, 'text-anchor': 'end', fill: C.muted }, top).textContent = noteText;
   }
 
   // ---------- cross-section ----------
@@ -7401,12 +7543,12 @@ onmessage = e => {
   }
   function showDepth(ev) {
     const tip = $('rf-depth-tip'), g = groundUnder(ray3D(ev)), R = before() ? BASE : RES;
-    let d = -1;
-    if (g) { const q = R.sections.reduce((m, s) => Math.abs(s.x - g.x) < Math.abs(m.x - g.x) ? s : m); d = reached(q).some(([a, b]) => g.y >= a && g.y <= b) ? RFL.wsAt(R, g.x) - groundAtLocal(q.raw, g.y) : -1; }
+    let d = -1, v = null;
+    if (g) { const q = R.sections.reduce((m, s) => Math.abs(s.x - g.x) < Math.abs(m.x - g.x) ? s : m); d = reached(q).some(([a, b]) => g.y >= a && g.y <= b) ? RFL.wsAt(R, g.x) - groundAtLocal(q.raw, g.y) : -1; v = speedAt(q, g.y); }
     tip.hidden = !(d > 0.005);
     if (tip.hidden) return;
     const r = $('rf-3d').getBoundingClientRect();
-    tip.textContent = `Depth ${d.toFixed(2)} m`;
+    tip.textContent = `Depth ${d.toFixed(2)} m` + (waterBy === 'speed' && isNum(v) ? ` · ${v.toFixed(2)} m/s` : '');
     tip.style.left = (ev.clientX - r.left) + 'px'; tip.style.top = (ev.clientY - r.top) + 'px';
   }
   function hoverNow(ev) {
@@ -7425,6 +7567,19 @@ onmessage = e => {
   const DEPTH_BANDS = ['#fde9a9', '#7fd3c4', '#3a9ad9', '#1f5fb8', '#0b2a5e'];
   const hexRGB = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16) / 255);
   function depthColour(d, max) { return hexRGB(DEPTH_BANDS[Math.min(4, Math.max(0, Math.floor(d / max * 5)))]); }
+  // Water speed in five bands, slow (pale blue) to fast (red). A 1D model has
+  // one mean speed in the channel and one on each floodplain at a section, so
+  // the colour changes along the river and at the banks, not within a part.
+  const SPEED_BANDS = ['#d4ecf7', '#8fc6e6', '#f2d16b', '#ec8a3a', '#c4362b'];
+  const speedBand = (v, max) => Math.min(4, Math.max(0, Math.floor(v / max * 5)));
+  function speedAt(s, y) {
+    const part = y < s.banks.left ? s.sub.lob : y > s.banks.right ? s.sub.rob : s.sub.ch;
+    return part && isNum(part.V) ? part.V : s.V;
+  }
+  function maxSpeed(secs) {
+    const top = Math.max(...secs.flatMap(s => ['lob', 'ch', 'rob'].map(k => s.sub[k] && isNum(s.sub[k].V) ? s.sub[k].V : 0)));
+    return Math.max(0.5, Math.ceil(top * 2) / 2);
+  }
   function mixHex(a, b, t) {
     const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
     const ch = (p, s) => (p >> s) & 255;
@@ -7457,6 +7612,7 @@ onmessage = e => {
     const tPos = [], tCol = [], wPos = [], wCol = [], idx = [];
     const maxDepth = Math.max(1, Math.ceil(Math.max(...secs.map(s => s.ws - s.bed)) * 2) / 2);
     V3.maxDepth = maxDepth;
+    const vTop = V3.maxSpeed = maxSpeed(secs);
     for (const s of secs) {
       const a = s.raw[0][0], w = s.raw[s.raw.length - 1][0] - a;
       const joined = reached(s);
@@ -7467,7 +7623,7 @@ onmessage = e => {
         tCol.push(...mixHex(inCh ? '#8d7b5f' : '#a9b07f', '#d9cfb3', inCh ? 0 : Math.min(1, Math.max(0, (z - s.ws) / 3))));
         wPos.push(...P(s.x, y, inRiver ? s.ws : Math.min(s.ws, z - 0.3)));
         const d = s.ws - z;
-        wCol.push(...depthColour(d, maxDepth));
+        wCol.push(...(waterBy === 'speed' ? hexRGB(SPEED_BANDS[speedBand(speedAt(s, y), vTop)]) : depthColour(d, maxDepth)));
       }
     }
     for (let i = 0; i < secs.length - 1; i++) for (let j = 0; j < nJ - 1; j++) {
@@ -7668,19 +7824,42 @@ onmessage = e => {
   }
 
   // ---------- status, flow, table ----------
+  // ---------- flow from a float survey ----------
+  // Float speed = distance / time; mean speed = factor × float speed (the
+  // surface runs faster than the water near the bed; 0.8–0.9, 0.85 usual);
+  // flow = mean speed × width × mean depth.
+  const SURVEY = ['w', 'd', 'L', 't', 'k'];
+  function surveyCalc() {
+    const v = S.survey || {}, ok = k => isNum(v[k]) && v[k] > 0;
+    if (!SURVEY.every(ok)) return null;
+    const Vs = v.L / v.t, Vm = v.k * Vs, A = v.w * v.d;
+    return { Vs, Vm, A, Q: Vm * A };
+  }
+  function renderSurvey() {
+    const v = S.survey || {};
+    for (const k of SURVEY) { const inp = $('rf-sv-' + k); if (document.activeElement !== inp) inp.value = isNum(v[k]) ? v[k] : ''; }
+    const c = surveyCalc(), out = $('rf-sv-out');
+    $('rf-sv-use').disabled = !c;
+    if (!c) { out.textContent = 'Fill in all five to estimate the flow.'; return; }
+    let msg = `Float ${c.Vs.toFixed(2)} m/s, so mean speed ≈ ${c.Vm.toFixed(2)} m/s. × area ${c.A.toFixed(2)} m² = flow ≈ ${c.Q.toFixed(2)} m³/s.`;
+    const s = viewSection();
+    if (s && s.sub && s.sub.ch && Math.abs(flowQ() - c.Q) < 0.006 * c.Q + 1e-6) {
+      const m = s.sub.ch.V, diff = (m - c.Vm) / c.Vm;
+      msg += ` At ${s.id} the model's channel speed is ${m.toFixed(2)} m/s, ${Math.abs(diff) < 0.1 ? 'close to your survey' : `${Math.round(Math.abs(diff) * 100)}% ${diff > 0 ? 'faster' : 'slower'} than your survey`}.` +
+        (Math.abs(diff) < 0.1 ? '' : ` Check that the river's width and depth match the site; if they do, the roughness (Manning's n) is the usual cause: ${diff > 0 ? 'a rougher' : 'a smoother'} channel would bring them closer.`);
+    }
+    out.textContent = msg;
+  }
   function renderFlow() {
+    renderSurvey();
     const r = $('rf-q-range'), Qmin = Math.max(0.05, S.flow.Qmax / 500);
     r.value = Math.round(1000 * Math.log(Math.max(S.flow.Q, Qmin) / Qmin) / Math.log(S.flow.Qmax / Qmin));
     $('rf-q').value = +S.flow.Q.toFixed(2);
-    $('rf-qmax').value = S.flow.Qmax;
     $('rf-allow').value = S.flow.allowance;
     const bf = bankfull();
     $('rf-q-out').textContent = `${flowQ().toFixed(1)} m³/s` + (S.flow.allowance ? ` with +${S.flow.allowance}%` : '') + (bf ? ` · bankfull ≈ ${bf.Q.toFixed(1)} m³/s at ${bf.id}` : '');
     document.querySelectorAll('[data-preset]').forEach(b => b.setAttribute('aria-pressed', String(!!activePreset && activePreset.kind === b.dataset.preset && activePreset.Q === S.flow.Q)));
     $('rf-flow-plain').textContent = !bf ? `${flowQ().toFixed(1)} m³/s` : `${flowQ() < 0.9 * bf.Q ? 'The water stays inside the river banks' : flowQ() <= 1.1 * bf.Q ? 'The river is full to the top of its banks' : 'The river spills over its banks'} (${flowQ().toFixed(1)} m³/s).`;
-    $('rf-bnd').value = S.boundary.type;
-    $('rf-bnd-s').value = S.boundary.slope; $('rf-bnd-ws').value = S.boundary.ws;
-    $('rf-bnd-s-l').hidden = S.boundary.type !== 'normal'; $('rf-bnd-ws-l').hidden = S.boundary.type !== 'ws';
     $('rf-eddy-on').checked = S.eddy.on; $('rf-eddy-er').value = S.eddy.er; $('rf-eddy-cr').value = S.eddy.cr;
   }
 
@@ -7792,14 +7971,20 @@ onmessage = e => {
     }
     if (view === '3d' || view === 'plan') {
       const top = V3.maxDepth || 2.5, step = top / 5, nice = v => +v.toFixed(2);
-      host.innerHTML = `<div class="rf-kv"><span>Water depth</span><span class="rf-lab">m</span></div>` +
-        (view === '3d' ? `<div class="rf-bands">${DEPTH_BANDS.map((c, i) => `<div><i style="background:${c}"></i>${nice(i * step)}–${nice((i + 1) * step)}</div>`).join('')}</div>` : '<div class="rf-ramp" style="background:var(--rf-water-fill)"></div>') +
+      const vstep = (V3.maxSpeed || 1) / 5, bands = (cols, st) => `<div class="rf-bands">${cols.map((c, i) => `<div><i style="background:${c}"></i>${nice(i * st)}–${nice((i + 1) * st)}</div>`).join('')}</div>`;
+      const bySpeed = waterBy === 'speed';
+      host.innerHTML = `<div class="rf-seg" role="group" aria-label="Colour the water by" style="margin-bottom:8px"><button type="button" data-waterby="depth" aria-pressed="${!bySpeed}">Depth</button><button type="button" data-waterby="speed" aria-pressed="${bySpeed}">Speed</button></div>` +
+        (bySpeed ? `<div class="rf-kv"><span>Water speed</span><span class="rf-lab">m/s</span></div>` + bands(SPEED_BANDS, vstep) +
+          '<p class="rf-hint">One mean speed in the channel and one on each floodplain at every section: the colour changes along the river and at the banks, not around a pier.</p>'
+        : `<div class="rf-kv"><span>Water depth</span><span class="rf-lab">m</span></div>` +
+          (view === '3d' ? bands(DEPTH_BANDS, step) : '<div class="rf-ramp" style="background:var(--rf-water-fill)"></div>')) +
         line('var(--rf-eddy)', T('Eddy zone (separated flow; the swirl is not calculated)', 'Still water beside a blockage (the swirl is not calculated)')) + line('var(--rf-block)', 'Obstruction or flood wall') + line('var(--rf-deck)', 'Bridge') + (S.floats.length || S.models.some(isFloating) ? line(FLOAT_COLOUR, 'Floating object') : '') + line('var(--rf-bad)', 'Building with water over its floor') +
-        `<p class="rf-hint">${view === '3d' ? 'Point at the water to read its depth. White arrows show which way the water flows. Drag a design element to move it. Drag the blue line, or click the ground, to choose where the section cuts. Levels are exaggerated vertically. Set the height of a building on its card.' : 'Arrows show which way the water flows. Click a section line to choose it.'}</p>`;
+        `<p class="rf-hint">${view === '3d' ? 'Point at the water to read its depth' + (waterBy === 'speed' ? ' and speed' : '') + '. White arrows show which way the water flows. Drag a design element to move it. Drag the blue line, or click the ground, to choose where the section cuts. Levels are exaggerated vertically. Set the height of a building on its card.' : 'Arrows show which way the water flows. Click a section line to choose it.'}</p>`;
     } else {
       host.innerHTML = line('var(--rf-water)', 'Water level') + (level === 'advanced' ? line('var(--rf-egl)', 'Energy line', true) : '') + line('var(--rf-base)', 'Without design elements', true) + line('var(--rf-ground)', 'Ground and bed') +
         (view === 'section' ? line('var(--rf-eddy)', T('Eddy zone', 'Still water')) + line('var(--rf-block)', 'Blocked area') + (viewSection() && elementsBeyond(viewSection()).length ? line('var(--rf-muted)', 'Beyond the cut, in the view') : '') + (S.floats.length ? line(FLOAT_COLOUR, 'Floating object') : '') + (viewSection() && S.models.some(m => modelCut(m, viewSection().x)) ? line('var(--rf-deck)', 'Your model, cut at this section') : '') : line('var(--rf-deck)', 'Bridge deck'));
     }
+    host.querySelectorAll('[data-waterby]').forEach(b => b.addEventListener('click', () => { waterBy = b.dataset.waterby; renderActive(); }));
   }
   function renderCaption() {
     const s = viewSection();
@@ -7816,6 +8001,48 @@ onmessage = e => {
   }
 
   function chip(text, cls) { return `<div class="rf-note ${cls || ''}">${esc(text)}</div>`; }
+  // Where scour and settling are most likely, read from the channel speeds
+  // alone. The tool does not model sediment: these compare each section with
+  // the reach's own typical (median) speed, and with the river without the
+  // design, and say so. Whether a bed actually scours depends on its material.
+  // A change of 10% in speed is about 20% in the force on the bed, which goes
+  // roughly with the square of the speed.
+  const FAST = 1.5, SLOW = 0.6, CHANGE = 0.1;
+  // The name a student gave an element, from the id a blockage or eddy zone carries.
+  function elementName(id) {
+    const all = [...S.bridges, ...S.obstructions, ...S.models];
+    const e = all.find(q => q.id === id) || all.find(q => String(id).startsWith(q.id));
+    return e ? e.label || e.id : String(id);
+  }
+  function sedimentHints() {
+    const secs = RES.sections.filter(s => s.sub && s.sub.ch && s.sub.ch.A > 0);
+    if (secs.length < 3) return [];
+    const v = s => s.sub.ch.V, sorted = secs.map(v).sort((a, b) => a - b), mid = sorted[Math.floor(sorted.length / 2)];
+    // runs of neighbouring sections as chainage ranges, upstream first
+    const ranges = list => {
+      const out = [];
+      for (const s of list) { const i = secs.indexOf(s), last = out[out.length - 1]; if (last && last.i === i - 1) { last.b = s.x; last.i = i; } else out.push({ a: s.x, b: s.x, i }); }
+      return out.reverse().map(r => r.a === r.b ? `${r.a.toFixed(0)} m` : `${r.a.toFixed(0)}–${r.b.toFixed(0)} m`).join(', ');
+    };
+    const out = [], fast = secs.filter(s => v(s) >= FAST * mid), slow = secs.filter(s => v(s) <= SLOW * mid);
+    if (fast.length) out.push(chip(`Fastest water at ${ranges(fast)}: up to ${Math.max(...fast.map(v)).toFixed(2)} m/s in the channel, against a typical ${mid.toFixed(2)} m/s on this reach. Where the bed is most likely to scour.`, 'rf-warn'));
+    if (slow.length) out.push(chip(`Slowest water at ${ranges(slow)}: down to ${Math.min(...slow.map(v)).toFixed(2)} m/s in the channel. Where sediment is most likely to settle.`));
+    const still = RES.eddyZones.filter(z => !z.pier && zoneWet(z, RES.sections));
+    if (still.length) out.push(chip(`Still water in the eddy zones beside ${[...new Set(still.map(z => elementName(z.blockage)))].join(', ')}: sediment tends to settle there.`));
+    if (BASE && !BASE.error) {
+      const ratio = new Map();
+      for (const s of secs) {
+        const b = BASE.sections.find(q => Math.abs(q.x - s.x) < 1e-6);
+        if (b && b.sub.ch && b.sub.ch.V > 0) ratio.set(s, v(s) / b.sub.ch.V - 1);
+      }
+      const faster = secs.filter(s => ratio.get(s) >= CHANGE), slower = secs.filter(s => ratio.get(s) <= -CHANGE);
+      if (faster.length) out.push(chip(`Your design speeds the channel up at ${ranges(faster)}, by up to ${Math.round(Math.max(...faster.map(s => ratio.get(s))) * 100)}%: more risk of scour there than without it.`, 'rf-warn'));
+      if (slower.length) out.push(chip(`Your design slows the channel at ${ranges(slower)}, by up to ${Math.round(-Math.min(...slower.map(s => ratio.get(s))) * 100)}%: more sediment may settle there than without it.`));
+    }
+    if (!out.length) out.push(chip(`The channel speed is even along this reach (${sorted[0].toFixed(2)}–${sorted[sorted.length - 1].toFixed(2)} m/s): no place stands out for scour or settling.`));
+    out.push(chip('Scour and settling here are hints from the water speed only. The tool does not model sediment, and whether a bed scours depends on what it is made of.'));
+    return out;
+  }
   function renderStatus() {
     const box = $('rf-status');
     if (!RES || RES.error) { box.innerHTML = `<p class="rf-err">${esc(RES ? RES.error : 'No result')}</p>`; return; }
@@ -7869,6 +8096,7 @@ onmessage = e => {
     if (crossing.length) chips.push(chip(`Sections cross on a tight bend at ${crossing.join(', ')}: their water levels are not reliable. Draw a gentler bend or use wider spacing.`, 'rf-warn'));
     const walls = RES.sections.filter(s => s.flags.some(f => f.startsWith('wall-')));
     if (walls.length) chips.push(chip(`Water above the end of ${walls.map(s => s.id).join(', ')}: extend those sections`, 'rf-warn'));
+    chips.push(...sedimentHints());
     box.innerHTML = chips.join('');
   }
 
@@ -7912,7 +8140,22 @@ onmessage = e => {
     buildings: [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['w', 'Width across river, m'], ['d', 'Length along river, m'], ['floor', 'Floor level, m'], ['height', 'Height above floor, m', 'hslide']],
   };
   FIELDS.models = [['label', 'Name', 'text'], ['x', 'Distance along river, m'], ['y', 'Distance from left side, m'], ['rot', 'Rotation', 'rot'], ['scale', 'Scale (1 = metres)'], ['base', 'Base level, m'], ['up', 'Which way is up', 'axis'], ['floating', 'Floats on the water', 'float'], ['draft', 'Depth below the water, m']];
-  FIELDS.floats = [['label', 'Name', 'text'], ['along', 'Distance along river, m'], ['len', 'Length along river, m'], ['left', 'Distance from left side, m'], ['wid', 'Width across river, m'], ['draft', 'Depth below the water, m'], ['height', 'Height above the water, m']];
+  FIELDS.floats = [['label', 'Name', 'text'], ['along', 'Distance along river, m'], ['len', 'Length along river, m'], ['left', 'Distance from left side, m'], ['wid', 'Width across river, m'], ['draft', 'Depth below the water, m'], ['tonnes', 'Weight, tonnes'], ['height', 'Height above the water, m'], ['n', 'Hull roughness, Manning n', 'adv']];
+  // A floating box sinks until it displaces its own weight of water
+  // (Archimedes, fresh water 1,000 kg/m³): weight in tonnes = depth below the
+  // water × length × width. Weight is shown and typed here but only the depth
+  // is stored, so a saved project is unchanged.
+  const floatArea = it => Math.abs(it.x1 - it.x0) * Math.abs(it.y1 - it.y0);
+  function floatHint(it) {
+    let msg = `${NOTES.floats} It weighs about ${(it.draft * floatArea(it)).toFixed(1)} t: a floating box sinks until it pushes aside its own weight of water, so a heavier one sits deeper and blocks more flow.`;
+    if (RES && !RES.error) {
+      const xm = (it.x0 + it.x1) / 2, ym = (it.y0 + it.y1) / 2;
+      const s = RES.sections.reduce((m, q) => Math.abs(q.x - xm) < Math.abs(m.x - xm) ? q : m);
+      const depth = RFL.wsAt(RES, xm) - groundAtLocal(s.raw, ym);
+      if (depth > 0 && it.draft >= depth) msg += ` At this weight it would need ${it.draft.toFixed(2)} m of water but has only about ${depth.toFixed(2)} m here, so it rests on the bed and blocks the water down to it.`;
+    }
+    return msg;
+  }
   // Form fields stated as position and size; the model keeps from/to values.
   const spanOf = (a, b) => ({
     start: it => Math.min(it[a], it[b]),
@@ -7927,6 +8170,7 @@ onmessage = e => {
     setback: { get: it => it.setback >= 0 ? it.setback : 1, set: (it, v) => { it.setback = Math.max(0, v); } },
     openAt: { get: SO.start, set: (it, v) => { const n = SO.size(it); it.openLeft = v; it.openRight = v + n; } },
     openW: { get: SO.size, size: true, set: (it, v) => { const a = SO.start(it); it.openLeft = a; it.openRight = a + v; } },
+    tonnes: { get: it => it.draft * floatArea(it), size: true, set: (it, v) => { it.draft = v / floatArea(it); } }, // kept exact: rounding 2.5 mm to 3 mm was a 20% error
   };
   const NOTES = {
     obstructions: 'A solid block in the channel or on the floodplain: a pier, debris, a building or a raised deck. It takes away flow area and raises the water upstream.',
@@ -7947,7 +8191,7 @@ onmessage = e => {
     const n = S[kind].length + 1;
     const ids = { obstructions: 'O', bridges: 'B', walls: 'W', buildings: 'H', floats: 'F' };
     let id = ids[kind] + n; while (S[kind].some(e => e.id === id)) id += "'";
-    if (kind === 'floats') return { id, label: `Floating object ${n}`, x0: s.x, x1: s.x + 10, y0: (bl + br) / 2 - 2, y1: (bl + br) / 2 + 2, draft: 0.5, height: 1 };
+    if (kind === 'floats') return { id, label: `Floating object ${n}`, x0: s.x, x1: s.x + 10, y0: (bl + br) / 2 - 2, y1: (bl + br) / 2 + 2, draft: 0.5, height: 1, n: 0.013 };
     if (kind === 'obstructions') return { id, x0: s.x, x1: s.x + 4, y0: (bl + br) / 2 - 1, y1: (bl + br) / 2 + 1, top: +(bank + 1).toFixed(2) };
     if (kind === 'bridges') return { id, label: `Bridge ${n}`, x: s.x, length: 8, openLeft: bl - 2, openRight: br + 2, lowChord: +(bank + 0.8).toFixed(2), highChord: +(bank + 1.6).toFixed(2), piers: '', pierK: 1.25, abut: 15 };
     if (kind === 'walls') return { id, side: 'left', x0: s.x - 30, x1: s.x + 30, y: bl - 2, z: +(bank + 1).toFixed(2) };
@@ -7977,10 +8221,11 @@ onmessage = e => {
         if (type === 'float') return `<label>${lab}<select data-f="${f}"><option value="no"${it[f] !== 'yes' ? ' selected' : ''}>No, solid to the ground</option><option value="yes"${it[f] === 'yes' ? ' selected' : ''}>Yes, moored</option></select></label>`;
         if (type === 'axis') return `<label>${lab}<select data-f="${f}"><option value="y"${it[f] !== 'z' ? ' selected' : ''}>Y is up (most exports)</option><option value="z"${it[f] === 'z' ? ' selected' : ''}>Z is up</option></select></label>`;
         if (type === 'rot') return `<label class="rf-wide2">${lab}: <output>${it[f]}°</output><input type="range" min="-180" max="180" step="1" data-f="${f}" value="${it[f]}"></label>`;
+        if (type === 'adv') return `<label class="rf-adv" title="${esc(tech)}">${lab}<input type="number" step="0.001" min="0.008" data-f="${f}" value="${esc(isNum(it[f]) ? it[f] : 0.013)}"></label>`;
         if (type === 'pier') return `<label>${lab}<select data-f="${f}">${PIER.map(([v, t]) => `<option value="${v}"${String(it[f]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`;
         if (type === 'side') return `<label>${lab}<select data-f="${f}"><option value="left"${it[f] === 'left' ? ' selected' : ''}>left</option><option value="right"${it[f] === 'right' ? ' selected' : ''}>right</option></select></label>`;
-        return `<label class="${wide}" title="${esc(tech)}">${lab}<input type="${type === 'text' ? 'text' : 'number'}" step="0.1" data-f="${f}" value="${esc(SPAN[f] ? +SPAN[f].get(it).toFixed(2) : it[f] ?? '')}"></label>`;
-      }).join('') + `<p class="rf-hint rf-wide2">${k === 'walls' ? `${NOTES.walls} It protects the land on the ${wallSide(it)}.` : k === 'bridges' ? T(NOTES.bridges, NOTES.plainBridges) : k === 'models' ? `${NOTES.models} Size: ${modelGeo(it).size.map(v => v.toFixed(1)).join(' × ')} m (height last).` : NOTES[k]}</p>${k === 'walls' ? '<button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-bank>Move to bank</button>' : ''}<button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-del>Remove ${esc(KIND[k].toLowerCase())}</button></div></details>`).join('');
+        return `<label class="${wide}" title="${esc(tech)}">${lab}<input type="${type === 'text' ? 'text' : 'number'}" step="0.1" data-f="${f}" value="${esc(SPAN[f] ? +SPAN[f].get(it).toFixed(2) : f === 'draft' && isNum(it[f]) ? +it[f].toFixed(4) : it[f] ?? '')}"></label>`;
+      }).join('') + `<p class="rf-hint rf-wide2">${k === 'walls' ? `${NOTES.walls} It protects the land on the ${wallSide(it)}.` : k === 'bridges' ? T(NOTES.bridges, NOTES.plainBridges) : k === 'models' ? `${NOTES.models} Size: ${modelGeo(it).size.map(v => v.toFixed(1)).join(' × ')} m (height last).` : k === 'floats' ? floatHint(it) : NOTES[k]}</p>${k === 'walls' ? '<button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-bank>Move to bank</button>' : ''}<button class="rf-btn rf-sq rf-small rf-wide2" type="button" data-del>Remove ${esc(KIND[k].toLowerCase())}</button></div></details>`).join('');
     host.querySelectorAll('details.rf-el').forEach(d => {
       const k = d.dataset.k, it = S[k][+d.dataset.i];
       d.querySelectorAll('[data-f]').forEach(inp => inp.addEventListener(inp.type === 'range' ? 'input' : 'change', () => {
@@ -7988,6 +8233,7 @@ onmessage = e => {
         if (type === 'text' || type === 'side' || type === 'axis' || type === 'float') it[f] = inp.value;
         else if (type === 'pier') it[f] = +inp.value;
         else if (f === 'abut' && inp.value.trim() === '') delete it.abut;
+        else if (type === 'adv') { const v = parseFloat(inp.value); if (isNum(v) && v > 0) it[f] = v; else { inp.value = isNum(it[f]) ? it[f] : 0.013; return; } }
         else if (SPAN[f]) { const v = parseFloat(inp.value); if (isNum(v) && (!SPAN[f].size || v > 0)) SPAN[f].set(it, v); else { inp.value = +SPAN[f].get(it).toFixed(2); return; } }
         else { const v = parseFloat(inp.value); if (isNum(v)) it[f] = v; else { inp.value = it[f]; return; } }
         if (f === 'label') d.querySelector('.rf-el-name').textContent = it.label;
@@ -7995,6 +8241,12 @@ onmessage = e => {
         if (k === 'walls') d.querySelector('.rf-el-body .rf-hint').textContent = `${NOTES.walls} It protects the land on the ${wallSide(it)}.`;
         if (type === 'rot') inp.parentElement.querySelector('output').textContent = it[f] + '°';
         if (type === 'hslide') { if (!(it[f] > 0)) it[f] = 3.5; d.querySelectorAll(`[data-f=${f}]`).forEach(o => { if (o !== inp) o.value = it[f]; }); }
+        if (k === 'floats') {
+          // depth, weight and size are tied together: show each one's new value
+          if (f !== 'tonnes') d.querySelector('[data-f=tonnes]').value = +SPAN.tonnes.get(it).toFixed(2);
+          if (f !== 'draft') d.querySelector('[data-f=draft]').value = +it.draft.toFixed(4);
+          floatEdited = { d, it };
+        }
         schedule();
       }));
       const toBank = d.querySelector('[data-bank]');
@@ -8180,6 +8432,7 @@ onmessage = e => {
     const badElement = numeric(st.obstructions, ['x0', 'x1', 'y0', 'y1', 'top'], 'Obstruction') || numeric(st.bridges, ['x', 'length', 'openLeft', 'openRight', 'lowChord', 'highChord'], 'Bridge') || numeric(st.walls, ['x0', 'x1', 'y', 'z'], 'Flood wall') || numeric(st.buildings, ['x', 'y', 'w', 'd', 'floor'], 'Building');
     if (badElement) return badElement;
     for (const f of st.floats || []) if (![f.x0, f.x1, f.y0, f.y1, f.draft, f.height].every(isNum)) return `Floating object ${f.id || '?'} is not readable.`;
+    if (st.survey !== undefined && (typeof st.survey !== 'object' || st.survey === null || Array.isArray(st.survey) || Object.values(st.survey).some(v => v !== null && !isNum(v)))) return 'The float survey in this project is not readable.';
     for (const m of st.models || []) {
       const nv = Array.isArray(m.v) ? m.v.length / 3 : 0;
       if (!nv || !Number.isInteger(nv) || !m.v.every(isNum) || !Array.isArray(m.f) || !m.f.length || m.f.length % 3 || !m.f.every(k => Number.isInteger(k) && k >= 0 && k < nv) || ![m.x, m.y, m.rot, m.scale, m.base].every(isNum)) return `Imported model ${m.id || '?'} is not readable.`;
@@ -8195,7 +8448,7 @@ onmessage = e => {
       const d = defaultState(), old = S;
       // If anything the checks missed still fails, the open project is put back.
       try {
-        S = { ...d, ...st, flow: { ...d.flow, ...(st.flow || {}) }, eddy: { ...d.eddy, ...(st.eddy || {}) }, boundary: { ...d.boundary, ...(st.boundary || {}) },
+        S = { ...d, ...st, flow: { ...d.flow, ...(st.flow || {}) }, eddy: { ...d.eddy, ...(st.eddy || {}) }, boundary: { ...d.boundary, ...(st.boundary || {}) }, survey: { ...d.survey, ...(st.survey || {}) },
           obstructions: st.obstructions || [], bridges: st.bridges || [], walls: st.walls || [], buildings: st.buildings || [], models: st.models || [], floats: st.floats || [] };
         editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = ''; compare = false; MAP.centred = false;
         renderEditor(); renderElements(); run();
@@ -8270,7 +8523,6 @@ onmessage = e => {
   try { theme = localStorage.getItem(THEME_KEY) || 'auto'; } catch { /* storage unavailable */ }
 
   // ---------- wiring ----------
-  $('rf-caution-foot').textContent = CAUTION;
   document.querySelectorAll('.rf-views [data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
   document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => preset(b.dataset.preset)));
   document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => {
@@ -8295,11 +8547,14 @@ onmessage = e => {
     S.flow.Q = +(Qmin * Math.pow(S.flow.Qmax / Qmin, e.target.value / 1000)).toPrecision(3); schedule();
   });
   $('rf-q').addEventListener('change', e => { const v = parseFloat(e.target.value); if (isNum(v) && v > 0) { S.flow.Q = v; if (v > S.flow.Qmax) S.flow.Qmax = Math.ceil(v); } schedule(); });
-  $('rf-qmax').addEventListener('change', e => { const v = parseFloat(e.target.value); if (isNum(v) && v > 0) { S.flow.Qmax = v; S.flow.Q = Math.min(S.flow.Q, v); } schedule(); });
+  for (const k of SURVEY) $('rf-sv-' + k).addEventListener('input', e => { const v = parseFloat(e.target.value); S.survey = { ...(S.survey || {}), [k]: isNum(v) ? v : null }; renderSurvey(); });
+  $('rf-sv-use').addEventListener('click', () => {
+    const c = surveyCalc(); if (!c) return;
+    S.flow.Q = +c.Q.toPrecision(3); S.flow.allowance = 0; activePreset = null;
+    if (S.flow.Q > S.flow.Qmax) S.flow.Qmax = Math.ceil(S.flow.Q * 1.5);
+    schedule();
+  });
   $('rf-allow').addEventListener('change', e => { const v = parseFloat(e.target.value); S.flow.allowance = isNum(v) && v >= 0 ? v : 0; schedule(); });
-  $('rf-bnd').addEventListener('change', e => { S.boundary.type = e.target.value; schedule(); });
-  $('rf-bnd-s').addEventListener('change', e => { const v = parseFloat(e.target.value); if (isNum(v) && v > 0) S.boundary.slope = v; schedule(); });
-  $('rf-bnd-ws').addEventListener('change', e => { const v = parseFloat(e.target.value); if (isNum(v)) S.boundary.ws = v; schedule(); });
   $('rf-view-sec').addEventListener('change', e => selectView(e.target.value));
   $('rf-sec-pick').addEventListener('change', e => { editIdx = +e.target.value; renderEditor(); const s = S.sections[editIdx]; const r = RES && RES.sections.find(q => Math.abs(q.x - s.x) < 1e-6); if (r) selectView(r.id); });
   $('rf-sec-apply').addEventListener('click', applySection);
@@ -8400,6 +8655,37 @@ onmessage = e => {
   $('rf-pro-out').addEventListener('click', () => zoomProfile(1 / 1.5));
   $('rf-pro-fit').addEventListener('click', fitProfile);
   $('rf-pro-vex').addEventListener('change', e => { profileStretch = +e.target.value; renderActive(); });
+
+  // Plan zoom and pan, as the profile's. Across runs down the screen here.
+  function zoomPlan(factor, fx, fy) {
+    const m = planZoom.map; if (!m) return;
+    const k = Math.min(60, Math.max(1, planZoom.k * factor));
+    if (fx === undefined) { planZoom.k = k; if (k === 1) planZoom.cx = planZoom.cy = null; renderPlan(); return; }
+    const px = m.vb - fx * (m.vb - m.va), py = m.vlo + fy * (m.vhi - m.vlo), w = (m.xmax - m.xmin) / k, ht = (m.yhi - m.ylo) / k;
+    planZoom.k = k; planZoom.cx = px + (fx - 0.5) * w; planZoom.cy = py - (fy - 0.5) * ht;
+    renderPlan();
+  }
+  function fitPlan() { planZoom.k = 1; planZoom.cx = planZoom.cy = null; renderPlan(); }
+  $('rf-plan').addEventListener('wheel', ev => {
+    const m = planZoom.map; if (!m) return; ev.preventDefault();
+    const r = $('rf-plan').getBoundingClientRect(), x = (ev.clientX - r.left) * m.W / r.width, y = (ev.clientY - r.top) * m.H / r.height;
+    zoomPlan(ev.deltaY < 0 ? 1.25 : 0.8, Math.min(1, Math.max(0, (x - m.box.l) / (m.box.r - m.box.l))), Math.min(1, Math.max(0, (y - m.box.t) / (m.box.b - m.box.t))));
+  }, { passive: false });
+  let planDrag = null;
+  $('rf-plan').addEventListener('pointerdown', ev => { if (ev.button === 0 && planZoom.k > 1) { planDrag = { x: ev.clientX, y: ev.clientY }; $('rf-plan').style.cursor = 'grabbing'; } });
+  addEventListener('pointermove', ev => {
+    if (!planDrag || !planZoom.map) return;
+    const m = planZoom.map, r = $('rf-plan').getBoundingClientRect(), dx = (ev.clientX - planDrag.x) * m.W / r.width, dy = (ev.clientY - planDrag.y) * m.H / r.height;
+    planDrag = { x: ev.clientX, y: ev.clientY };
+    planZoom.cx += dx / (m.box.r - m.box.l) * (m.vb - m.va); planZoom.cy -= dy / (m.box.b - m.box.t) * (m.vhi - m.vlo);
+    renderPlan();
+  });
+  addEventListener('pointerup', () => { if (planDrag) { planDrag = null; $('rf-plan').style.cursor = ''; } });
+  $('rf-plan').addEventListener('dblclick', fitPlan);
+  $('rf-plan-in').addEventListener('click', () => zoomPlan(1.5));
+  $('rf-plan-out').addEventListener('click', () => zoomPlan(1 / 1.5));
+  $('rf-plan-fit').addEventListener('click', fitPlan);
+  $('rf-plan-scale').addEventListener('change', e => { planStretch = +e.target.value; renderActive(); });
   $('rf-sec-vex').addEventListener('change', e => { sectionStretch = +e.target.value; renderActive(); });
   $('rf-look').addEventListener('click', () => { lookUp = !lookUp; $('rf-look').textContent = lookUp ? 'Looking upstream' : 'Looking downstream'; renderActive(); });
   $('rf-import').addEventListener('click', () => $('rf-obj').click());
@@ -8427,14 +8713,174 @@ onmessage = e => {
   $('rf-vex').addEventListener('change', e => { V3.vex = +e.target.value; build3D(); });
   $('rf-3d-reset').addEventListener('click', fit3D);
 
+  // ---------- about: licence, release and how to cite (click the © line) ----------
+  const TITLE = 'River Flood Lab: A browser-based teaching tool for river flow, water level, obstructions and bridges';
+  const REPO = 'https://github.com/arch85-km/river-flood-lab';
+  const About = (() => {
+    let lastFocus = null;
+    function open() {
+      $('rf-about-rel').textContent = `Version ${VERSION} · not yet released`;
+      $('rf-about-apa').textContent = `Al-Obaidi, K. M. (2026). ${TITLE} (Version ${VERSION}) [Computer software]. ${REPO}`;
+      $('rf-about-bib').textContent = ['@software{alobaidi2026riverfloodlab,', '  author  = {Al-Obaidi, Karam M.},', `  title   = {${TITLE}},`,
+        '  year    = {2026},', `  version = {${VERSION}},`, `  url     = {${REPO}},`, '  note    = {Code MIT licensed; accompanying material CC BY 4.0}', '}'].join('\n');
+      lastFocus = document.activeElement;
+      $('rf-about-veil').hidden = false; $('rf-about').hidden = false;
+      $('rf-about-close').focus({ preventScroll: true }); // or the card opens scrolled to its foot
+      $('rf-about').scrollTop = 0;
+    }
+    function close() {
+      $('rf-about-veil').hidden = true; $('rf-about').hidden = true;
+      if (lastFocus && lastFocus.focus) lastFocus.focus();
+    }
+    return { open, close, isOpen: () => !$('rf-about').hidden };
+  })();
+  $('rf-credit').addEventListener('click', About.open);
+  $('rf-credit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); About.open(); } });
+  $('rf-about-close').addEventListener('click', About.close);
+  $('rf-about-veil').addEventListener('click', About.close);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && About.isOpen()) { e.stopPropagation(); About.close(); } }, true);
+
+  // ---------- guided tour (as Solar Analysis Lab) ----------
+  // Coach marks rather than a modal: the spotlight lets clicks through, so the
+  // river can still be turned while the tour is up. It opens on every launch
+  // until the visitor ticks "Don't show this on launch"; skipping does not
+  // switch it off, so the next student at a shared machine still sees it.
+  // ?tour=0 stops it for one visit, ?tour=1 forces it.
+  const TOUR_KEY = 'riverfloodlab.tour.optout.v1';
+  const TOUR = [
+    { title: 'Welcome to River Flood Lab',
+      body: 'A short tour of the main parts, about a minute. You can keep using the app while it runs.' },
+    { target: '.rf-stage', title: 'The river',
+      body: 'The reach in <b>3D</b>: drag to turn it, scroll to zoom. The buttons along the top switch to the <b>Map</b>, a <b>Plan</b>, one <b>Section</b> across the river, or the <b>Profile</b> along it.' },
+    { target: '[data-tour=flow]', drawer: 'controls', title: '1 — How big is the flow?',
+      body: 'Pick <b>Normal day</b>, <b>River full</b> or <b>Major flood</b>. They are set from this river (river full just fills the channel), not from return periods.' },
+    { target: '[data-tour=design]', drawer: 'controls', title: '2 — Your design',
+      body: 'Add an <b>obstruction</b>, a <b>bridge</b>, a <b>flood wall</b> or a <b>building</b>, then open it to change its size and place. You can also import a 3D model.' },
+    { target: '#rf-river-sec', drawer: 'controls', title: '3 — Which river',
+      body: 'Start from the template, <b>draw a river</b> on the map, find one in <b>OpenStreetMap</b>, or build it from a <b>terrain model</b>.' },
+    { target: '.rf-headline', title: '4 — The main result',
+      body: 'The biggest change your design makes to the water level. Once there is a design, <b>With design</b> and <b>Without</b> switch between the two rivers.' },
+    { target: '[data-tour=effect]', drawer: 'results', title: '5 — Effect of the design',
+      body: 'What each element does: how far the water rises above a bridge, the gap under its deck, and the depth over each building’s floor.' },
+    { target: '#rf-level', title: 'Advanced',
+      body: 'Shows the technical settings and results: the exact flow and climate allowance, eddy zones, section spacing, water level against flow, and every section in a table.' },
+    { target: '#rf-file-btn', title: 'Save and export',
+      body: 'Export the view as a PNG or the results as a CSV with the settings in its header, and save or open a project.' },
+    { title: 'That’s the tour',
+      body: 'Replay it any time from <b>Tour</b> at the top. Click <b>© Karam Al-Obaidi</b> at the bottom for the licence, this release and how to cite.' },
+  ];
+  const Tour = (() => {
+    let idx = -1, active = false, was = null;
+    const spot = $('rf-tour-spot'), card = $('rf-tour');
+    const lim = (v, a, b) => Math.min(Math.max(v, a), b);
+    const narrow = () => matchMedia('(max-width:900px)').matches;
+    const setDrawer = d => {
+      $('rf-root').dataset.drawer = d;
+      document.querySelectorAll('.rf-drawers [data-drawer]').forEach(q => q.setAttribute('aria-pressed', String(q.dataset.drawer === d)));
+    };
+    const suppressed = () => { try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return false; } };
+    const suppress = on => { try { if (on) localStorage.setItem(TOUR_KEY, '1'); else localStorage.removeItem(TOUR_KEY); } catch { /* private mode: it will not stick */ } };
+
+    // Place the spotlight on the step's target, cut to the window, and the card
+    // below it, above it, beside it, or over it only as a last resort.
+    function place() {
+      const step = TOUR[idx], vw = innerWidth, vh = innerHeight, m = 6, g = 12;
+      let r = null;
+      const el = step.target && document.querySelector(step.target);
+      if (el) {
+        const b = el.getBoundingClientRect(), i = step.inset || 0;
+        const top = Math.max(b.top + i, 0), bottom = Math.min(b.bottom - i, vh);
+        const left = Math.max(b.left + i, 0), right = Math.min(b.right - i, vw);
+        if (bottom - top > 4 && right - left > 4) r = { left, top, width: right - left, height: bottom - top };
+      }
+      spot.classList.toggle('rf-dim-only', !r);
+      const s = r ? [r.left - m, r.top - m, r.width + 2 * m, r.height + 2 * m] : [vw / 2, vh / 2, 0, 0];
+      ['left', 'top', 'width', 'height'].forEach((k, n) => { spot.style[k] = Math.round(s[n]) + 'px'; });
+      const cw = card.offsetWidth || 330, ch = card.offsetHeight || 180;
+      let left, top;
+      if (!r) { left = (vw - cw) / 2; top = (vh - ch) / 2; }
+      else {
+        const midX = () => r.left + r.width / 2 - cw / 2, midY = () => r.top + r.height / 2 - ch / 2;
+        if (r.top + r.height + g + ch < vh - 8) { top = r.top + r.height + g; left = midX(); }
+        else if (r.top - g - ch > 8) { top = r.top - g - ch; left = midX(); }
+        else if (r.left + r.width + g + cw < vw - 8) { left = r.left + r.width + g; top = midY(); }
+        else if (r.left - g - cw > 8) { left = r.left - g - cw; top = midY(); }
+        else { left = midX(); top = r.top + r.height - ch - 16; } // a target as big as the view: the card at its foot, clear of the view buttons
+      }
+      card.style.left = Math.round(lim(left, 8, Math.max(8, vw - cw - 8))) + 'px';
+      card.style.top = Math.round(lim(top, 8, Math.max(8, vh - ch - 8))) + 'px';
+    }
+    function show(i) {
+      idx = lim(i, 0, TOUR.length - 1);
+      const step = TOUR[idx];
+      if (step.drawer && narrow()) setDrawer(step.drawer);
+      const el = step.target && document.querySelector(step.target);
+      if (el) {
+        const det = el.tagName === 'DETAILS' ? el : el.closest('details');
+        if (det && !det.open) { det.open = true; was.opened.add(det); }
+        el.scrollIntoView({ block: narrow() ? 'center' : 'nearest' });
+      }
+      $('rf-tour-optout').hidden = !(idx === 0 || idx === TOUR.length - 1);
+      $('rf-tour-dont').checked = suppressed();
+      $('rf-tour-step').textContent = `Step ${idx + 1} of ${TOUR.length}`;
+      $('rf-tour-title').textContent = step.title;
+      $('rf-tour-body').innerHTML = step.body;
+      $('rf-tour-dots').innerHTML = TOUR.map((_, k) => `<i class="${k === idx ? 'on' : ''}"></i>`).join('');
+      $('rf-tour-back').disabled = idx === 0;
+      $('rf-tour-next').textContent = idx === TOUR.length - 1 ? 'Finish' : 'Next';
+      spot.hidden = false; card.hidden = false;
+      requestAnimationFrame(() => { place(); setTimeout(() => { if (active) place(); }, 250); });
+    }
+    function start(from = 0) {
+      closeMenu();
+      if (!active) was = { opened: new Set(), drawer: $('rf-root').dataset.drawer, scroll: [scrollY, ...['.rf-left', '.rf-right'].map(q => document.querySelector(q).scrollTop)] };
+      active = true;
+      show(from);
+    }
+    // Put back what the tour changed: the sections it opened, the drawer that
+    // was showing on a phone, and where the panels were scrolled to.
+    function end() {
+      if (!active) return;
+      active = false; spot.hidden = true; card.hidden = true;
+      for (const d of was.opened) d.open = false;
+      setDrawer(was.drawer);
+      document.querySelector('.rf-left').scrollTop = was.scroll[1];
+      document.querySelector('.rf-right').scrollTop = was.scroll[2];
+      scrollTo(0, was.scroll[0]);
+      was = null;
+    }
+    const next = () => { if (idx >= TOUR.length - 1) end(); else show(idx + 1); };
+    const back = () => show(idx - 1);
+    function maybeAutoStart() {
+      const p = new URLSearchParams(location.search).get('tour');
+      if (p === '0' || (suppressed() && p !== '1')) return;
+      setTimeout(() => { if (!active) start(0); }, 600);
+    }
+    addEventListener('resize', () => { if (active) place(); });
+    addEventListener('scroll', () => { if (active) place(); }, { capture: true, passive: true });
+    return { start, end, next, back, maybeAutoStart, suppress, suppressed, isActive: () => active, get step() { return idx; }, steps: TOUR.length };
+  })();
+  $('rf-tour-next').addEventListener('click', Tour.next);
+  $('rf-tour-back').addEventListener('click', Tour.back);
+  $('rf-tour-skip').addEventListener('click', Tour.end);
+  $('rf-tour-dont').addEventListener('change', e => Tour.suppress(e.target.checked));
+  $('rf-help').addEventListener('click', () => Tour.start(0));
+  addEventListener('keydown', e => {
+    if (!Tour.isActive() || About.isOpen() || /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+    if (e.key === 'Escape') Tour.end();
+    else if (e.key === 'ArrowRight') { e.preventDefault(); Tour.next(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); Tour.back(); }
+  });
+
   init3D();
   bindMap();
   applyLevel(location.hash === '#advanced' ? 'advanced' : 'basic');
   applyTheme(theme);
   renderEditor(); renderElements(); setView('3d'); run();
   document.documentElement.classList.add('rf-ready');
+  Tour.maybeAutoStart();
   // Hook for the browser checks.
-  window.RFL_UI = { terrain: { geoFrame, terrainReach, gridTerrain, gridFromTiffTags }, bng: { wgsToBng, bngToWgs, tmForward }, get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, setView, get view() { return view; },
+  window.RFL_UI = { tour: Tour, about: About, terrain: { geoFrame, terrainReach, gridTerrain, gridFromTiffTags }, bng: { wgsToBng, bngToWgs, tmForward }, get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, setView, get view() { return view; },
     // screen position (in the map) of the middle of a section, for the checks
     get rivers() { return MAP.rivers ? MAP.rivers.chains.map(c => ({ name: c.name, kind: c.kind, length: Math.round(c.length), points: c.pts.length, culvert: c.culvert })) : null; },
     chainScreen: (i, f) => { const c = MAP.rivers.chains[i]; const q = chainPart(c, 0, c.length * f); return toScreen(...q[q.length - 1]); },

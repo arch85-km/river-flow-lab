@@ -18,7 +18,8 @@ catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
 
 const html = readFileSync(new URL('../index.html', import.meta.url));
 const server = http.createServer((req, res) => {
-  if (req.url === '/' || req.url === '/index.html') { res.writeHead(200, { 'content-type': 'text/html' }); res.end(html); }
+  const path = req.url.split('?')[0];
+  if (path === '/' || path === '/index.html') { res.writeHead(200, { 'content-type': 'text/html' }); res.end(html); }
   else { res.writeHead(404); res.end(); }
 }).listen(0, '127.0.0.1');
 await new Promise(r => server.once('listening', r));
@@ -47,7 +48,7 @@ async function openPage(size, scheme = 'light') {
     if (u.startsWith('https://nominatim.openstreetmap.org/')) { searches.push({ u, t: Date.now() }); return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify([{ lat: '53.3811', lon: '-1.4701', display_name: 'Sheffield, South Yorkshire, England' }]) }); }
     offOrigin.push(u); return route.abort();
   });
-  await page.goto(origin + '/#advanced');
+  await page.goto(origin + '/?tour=0#advanced');
   await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
   // the rating curve is drawn after a short pause so the slider stays responsive
   await page.waitForFunction(() => document.querySelector('#rf-rc svg polyline'));
@@ -505,7 +506,7 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
     if (/tile\.openstreetmap\.org/.test(u)) return route.fulfill({ status: 200, contentType: 'image/png', body: tilePng });
     direct.push(new URL(u).host); return route.abort();
   });
-  await p2.goto(origin + '/'); await p2.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
+  await p2.goto(origin + '/?tour=0'); await p2.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
   await p2.click('.rf-views [data-view="map"]'); await p2.click('#rf-map-osm');
   await p2.waitForFunction(() => window.RFL_UI.rivers, null, { timeout: 20000 });
   check('rivers: with this site\'s proxy installed, only the proxy is asked', direct.length === 1 && direct[0] === 'proxy', direct.join(', '));
@@ -537,7 +538,7 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 } });
   const page = await ctx.newPage();
   await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
-  await page.goto(origin + '/#advanced'); await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
+  await page.goto(origin + '/?tour=0#advanced'); await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
   await page.click('.rf-views [data-view="map"]'); await page.waitForTimeout(500);
   check('map: failed tiles show the failure hint', /did not load/.test(await page.textContent('#rf-map-note')));
   await ctx.close();
@@ -555,6 +556,128 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   check('phone: no overflow with results open', over === 0, `${over}px`);
   check('phone: no console errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// ---- floating object: weight sets the depth below the water ----
+{
+  const { page, ctx, errors } = await openPage({ width: 1440, height: 900 });
+  await page.evaluate(() => { const S = window.RFL_UI.state; S.bridges = []; S.obstructions = []; S.walls = []; S.buildings = []; });
+  await page.click('[data-add="floats"]');
+  const f = 'details.rf-el[data-k="floats"]';
+  await page.waitForSelector(f + '[open] [data-f="tonnes"]');
+  const area = await page.evaluate(() => { const it = window.RFL_UI.state.floats[0]; return Math.abs(it.x1 - it.x0) * Math.abs(it.y1 - it.y0); });
+  const shown = +(await page.inputValue(f + ' [data-f="tonnes"]'));
+  check('float: weight shown is depth below the water × length × width', Math.abs(shown - 0.5 * area) < 0.01, `${shown} t for ${area} m²`);
+  const rise = () => page.evaluate(() => { const r = window.RFL_UI.result, b = window.RFL_UI.base; return Math.max(...r.sections.map(s => s.ws - (b.sections.find(q => Math.abs(q.x - s.x) < 1e-6) || s).ws)); });
+  const before = await rise();
+  await page.fill(f + ' [data-f="tonnes"]', String(+(area * 0.9).toFixed(2))); await page.press(f + ' [data-f="tonnes"]', 'Tab'); await settle(page); await settle(page);
+  const draft = await page.evaluate(() => window.RFL_UI.state.floats[0].draft);
+  await page.fill(f + ' [data-f="tonnes"]', '0.1'); await page.press(f + ' [data-f="tonnes"]', 'Tab');
+  const light = await page.evaluate(() => window.RFL_UI.state.floats[0].draft);
+  check('float: a light weight is kept exact, not rounded to the millimetre', Math.abs(light - 0.1 / area) < 1e-12, `${light} m`);
+  await page.fill(f + ' [data-f="tonnes"]', String(+(area * 0.9).toFixed(2))); await page.press(f + ' [data-f="tonnes"]', 'Tab'); await settle(page); await settle(page);
+  check('float: typing a weight sets the depth below the water', Math.abs(draft - 0.9) < 0.002 && Math.abs(+(await page.inputValue(f + ' [data-f="draft"]')) - 0.9) < 0.002, `depth ${draft} m`);
+  const after = await rise();
+  check('float: a heavier object raises the water more', after > before + 1e-4, `${(before * 1000).toFixed(1)} mm → ${(after * 1000).toFixed(1)} mm`);
+  await page.fill(f + ' [data-f="height"]', '3'); await page.press(f + ' [data-f="height"]', 'Tab'); await settle(page); await settle(page);
+  check('float: height above the water does not change the levels', Math.abs(await rise() - after) < 1e-9);
+  await page.fill(f + ' [data-f="tonnes"]', String(+(area * 20).toFixed(1))); await page.press(f + ' [data-f="tonnes"]', 'Tab'); await settle(page); await settle(page);
+  check('float: too heavy for the water depth says it rests on the bed', /rests on the bed/.test(await page.textContent(f + ' .rf-el-body .rf-hint')));
+  await page.fill(f + ' [data-f="tonnes"]', String(+(area * 0.9).toFixed(2))); await page.press(f + ' [data-f="tonnes"]', 'Tab'); await settle(page); await settle(page);
+  const smoothRise = await rise();
+  await page.fill(f + ' [data-f="n"]', '0.035'); await page.press(f + ' [data-f="n"]', 'Tab'); await settle(page); await settle(page);
+  check('float: a rougher hull raises the water more', await rise() > smoothRise + 1e-4 && await page.evaluate(() => window.RFL_UI.state.floats[0].n) === 0.035);
+  await page.evaluate(() => { location.hash = ''; });
+  check('float: hull roughness shows in Advanced', await page.locator(f + ' [data-f="n"]').isVisible());
+  check('float: no console errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// ---- water coloured by speed, flow from a float survey, scour and settling hints ----
+{
+  const { page, ctx, errors } = await openPage({ width: 1440, height: 900 });
+  await page.click('[data-preset="flood"]'); await settle(page); await settle(page);
+  await page.click('.rf-views [data-view="plan"]'); await settle(page);
+  const depthFills = await page.$$eval('#rf-plan rect', r => new Set(r.map(e => e.getAttribute('fill'))).size);
+  await page.click('[data-waterby="speed"]'); await settle(page);
+  const plan = await page.evaluate(() => ({ fills: [...document.querySelectorAll('#rf-plan rect')].map(e => e.getAttribute('fill')), legend: document.getElementById('rf-legend').textContent }));
+  const speedCols = ['#d4ecf7', '#8fc6e6', '#f2d16b', '#ec8a3a', '#c4362b'];
+  const used = new Set(plan.fills.filter(f => speedCols.includes(f)));
+  check('speed: Plan colours the water by speed, faster under the bridge', used.size >= 3 && /Water speed/.test(plan.legend) && plan.fills.includes('#c4362b'), [...used].join(' '));
+  // the bridge section's channel is in a faster band than the reach far upstream
+  const bands = await page.evaluate(() => { const r = window.RFL_UI.result.sections, at = x => r.reduce((m, s) => Math.abs(s.x - x) < Math.abs(m.x - x) ? s : m).sub.ch.V; return [at(150), at(285)]; });
+  check('speed: the channel is faster through the bridge than upstream', bands[0] > bands[1] * 1.1, bands.map(v => v.toFixed(2)).join(' against '));
+  await page.click('[data-waterby="depth"]'); await settle(page);
+  check('speed: Depth puts the plain water colour back', await page.$$eval('#rf-plan rect', r => !r.some(e => e.getAttribute('fill') === '#c4362b')) && depthFills > 0);
+  const status = (await page.locator('#rf-status .rf-note').allTextContents()).join('\n');
+  check('hints: the bridge is named for speeding the channel up', /speeds the channel up at 150–158 m/.test(status), status.split('\n').filter(t => /speed|slow/.test(t)).join(' | '));
+  check('hints: the backwater upstream is named for slowing it', /slows the channel at/.test(status));
+  check('hints: they say sediment is not modelled', /does not model sediment/.test(status));
+  await page.click('#rf-survey summary');
+  for (const [k, v] of [['w', 12], ['d', 1.2], ['L', 20], ['t', 25], ['k', 0.85]]) await page.fill('#rf-sv-' + k, String(v));
+  const est = await page.textContent('#rf-sv-out');
+  check('survey: float speed, mean speed and flow worked out', /Float 0\.80 m\/s/.test(est) && /mean speed ≈ 0\.68 m\/s/.test(est) && /flow ≈ 9\.79 m³\/s/.test(est), est);
+  await page.click('#rf-sv-use'); await settle(page); await settle(page);
+  const after = await page.evaluate(() => ({ Q: window.RFL_UI.state.flow.Q, allow: window.RFL_UI.state.flow.allowance, out: document.getElementById('rf-sv-out').textContent }));
+  check('survey: Use this flow sets the flow and compares the model\'s speed', after.Q === 9.79 && after.allow === 0 && /model's channel speed is/.test(after.out), after.out.slice(-160));
+  check('speed and survey: no console errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// ---- guided tour and the © card ----
+for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+  const tag = size.width < 900 ? 'phone' : 'desktop';
+  const ctx = await browser.newContext({ viewport: size });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
+  await page.goto(origin + '/'); await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
+  await page.waitForSelector('#rf-tour:not([hidden])', { timeout: 5000 }).catch(() => {});
+  check(`tour (${tag}): opens on first launch`, await page.locator('#rf-tour').isVisible());
+  const drawer0 = await page.evaluate(() => document.getElementById('rf-root').dataset.drawer);
+  const steps = await page.evaluate(() => window.RFL_UI.tour.steps);
+  const bad = [];
+  for (let i = 0; i < steps; i++) {
+    await page.waitForTimeout(320);
+    const r = await page.evaluate(() => {
+      const c = document.getElementById('rf-tour').getBoundingClientRect(), s = document.getElementById('rf-tour-spot').getBoundingClientRect();
+      const inside = c.left >= 0 && c.top >= 0 && c.right <= innerWidth + 1 && c.bottom <= innerHeight + 1;
+      const dim = document.getElementById('rf-tour-spot').classList.contains('rf-dim-only');
+      // the card must not sit over the middle of the spotlit target unless the target fills the screen
+      const overlap = !dim && Math.max(0, Math.min(c.right, s.right) - Math.max(c.left, s.left)) * Math.max(0, Math.min(c.bottom, s.bottom) - Math.max(c.top, s.top));
+      // a target the size of the view leaves nowhere else for the card
+      const big = s.width * s.height > innerWidth * innerHeight * 0.3;
+      return { inside, title: document.getElementById('rf-tour-title').textContent, ok: inside && (big || !overlap || overlap < c.width * c.height * 0.25) };
+    });
+    if (!r.ok) bad.push(`${i + 1} ${r.title}`);
+    await page.click('#rf-tour-next');
+  }
+  check(`tour (${tag}): every step's card is on screen and clear of its target`, bad.length === 0, bad.join('; '));
+  check(`tour (${tag}): Finish closes it`, await page.locator('#rf-tour').isHidden() && await page.locator('#rf-tour-spot').isHidden());
+  const after = await page.evaluate(() => ({ drawer: document.getElementById('rf-root').dataset.drawer, river: document.getElementById('rf-river-sec').open }));
+  check(`tour (${tag}): puts back the drawer and closes what it opened`, after.drawer === drawer0 && !after.river, JSON.stringify(after));
+  await page.click('#rf-help');
+  check(`tour (${tag}): Tour button replays it`, await page.locator('#rf-tour').isVisible());
+  await page.keyboard.press('Escape');
+  check(`tour (${tag}): Escape closes it`, await page.locator('#rf-tour').isHidden());
+  await page.click('#rf-credit');
+  const about = await page.evaluate(() => ({ text: document.getElementById('rf-about').textContent, over: (() => { const r = document.getElementById('rf-about').getBoundingClientRect(); return r.left < 0 || r.right > innerWidth + 1; })() }));
+  check(`about (${tag}): clicking © shows licence, release and citation`, await page.locator('#rf-about').isVisible() && /MIT/.test(about.text) && /CC BY 4\.0/.test(about.text) && /Version 0\.1\.0/.test(about.text) && /@software\{alobaidi2026riverfloodlab/.test(about.text) && /Al-Obaidi, K\. M\. \(2026\)/.test(about.text));
+  check(`about (${tag}): fits the window`, !about.over);
+  await page.keyboard.press('Escape');
+  check(`about (${tag}): Escape closes it`, await page.locator('#rf-about').isHidden());
+  check(`about (${tag}): the footer no longer carries the caution`, !/not a flood risk assessment/.test(await page.textContent('.rf-foot')));
+  check(`tour (${tag}): no page errors`, errors.length === 0, errors.join(' | '));
+  if (tag === 'desktop') {
+    await page.click('#rf-help'); await page.check('#rf-tour-dont'); await page.click('#rf-tour-skip');
+    await page.goto(origin + '/'); await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result); await page.waitForTimeout(1000);
+    check('tour: "Don\'t show this on launch" is remembered', await page.locator('#rf-tour').isHidden());
+    await page.goto(origin + '/?tour=1'); await page.waitForFunction(() => window.RFL_UI && window.RFL_UI.result);
+    await page.waitForSelector('#rf-tour:not([hidden])', { timeout: 5000 }).catch(() => {});
+    check('tour: ?tour=1 shows it anyway', await page.locator('#rf-tour').isVisible());
+  }
   await ctx.close();
 }
 

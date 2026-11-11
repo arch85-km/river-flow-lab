@@ -47,7 +47,7 @@ in the source so they can be found by search:
 |---|---|---|
 | `clip`, `raise`, `applyBlock`, `groundAt` | Ground-line geometry: part of a line, a line raised to a level, a blocked obstruction | HEC-RAS "blocked obstruction": area removed, its sides become wetted perimeter |
 | `wetted`, `wettedAtDeck` | Area, wetted perimeter and top width of the water between two offsets; a bridge soffit caps the water only under the deck | Trapezoid sums over the ground line; pressure flow where the soffit is touched |
-| `hydraulics` | One section at one water level: left overbank, channel and right overbank as subdivisions, each with its own conveyance; levees and ineffective areas excluded until overtopped; low ground cut off behind natural high ground excluded (`cutOff`); eddy zones as dead water below the blockage top, with the layer above it as its own subdivision; floating objects; vertical walls at the ends of the ground line | Manning, conveyance subdivision, velocity-head coefficient α (Chow 1959; HEC-RAS Hydraulic Reference Manual, ch. 2) |
+| `hydraulics` | One section at one water level: left overbank, channel and right overbank as subdivisions, each with its own conveyance; levees and ineffective areas excluded until overtopped; low ground cut off behind natural high ground excluded (`cutOff`); eddy zones as dead water below the blockage top, with the layer above it as its own subdivision; floating objects, their underside and sides wetted perimeter at hull roughness (`HULL_N`, 0.013 unless the object gives its own `n`); vertical walls at the ends of the ground line | Manning, conveyance subdivision, velocity-head coefficient α (Chow 1959; HEC-RAS Hydraulic Reference Manual, ch. 2); bed and hull roughness combined by Horton's composite n (HEC-RAS ch. 2) |
 | `criticalWS`, `normalWS`, `bisect` | Critical water level (least specific energy: a scan, then golden-section refinement, memoised) and normal depth | Chow 1959 |
 | `prepare` | Turns the model into prepared sections: adds interpolated sections where a blockage, eddy zone, wall, floating object or requested station needs one (`sectionAt`, `interpolateSection`); applies blocks, flood walls (`withWalls`) and eddy zones (`eddySpan`, `eddyLength`) | Eddy zones sized by the expansion (1:ER) and contraction (1:CR) ratios, HEC-RAS ch. 5 |
 | `solve` | The water profile, section by section from the downstream boundary upwards (`stepUp`): energy equation, average-conveyance friction slope, discharge-weighted reach length, contraction and expansion losses; critical depth where no subcritical answer exists | Standard step, HEC-RAS ch. 2 |
@@ -170,8 +170,8 @@ tools/three-entry.js           the parts of three.js the page uses
 npm test
 ```
 
-runs the three suites. At this version: `tests/engine.test.mjs` 62 checks,
-`tests/ui.test.mjs` 208 checks, `tests/overpass-proxy.mjs` 19 checks (skipped
+runs the three suites. At this version: `tests/engine.test.mjs` 65 checks,
+`tests/ui.test.mjs` 250 checks, `tests/overpass-proxy.mjs` 19 checks (skipped
 where PHP is not installed). The engine checks compare with closed-form
 results (normal and critical depth), an independent RK4 integration of the
 gradually varied flow equation, and hand calculations (Yarnell, the weir

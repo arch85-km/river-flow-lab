@@ -29,7 +29,15 @@ idealised channel with floodplains, not a survey) with one example bridge.
   *Without* switch the 3D, Plan, Section and Profile views between the two.
 - **Flow** (left): pick Normal day, River full or Major flood (river full is
   found at the chosen section). In Advanced, type or drag the flow and add a climate
-  allowance in per cent. The downstream boundary is folded away beneath.
+  allowance in per cent. The slider's range grows with the flow. The
+  downstream boundary is not shown: the water level at the downstream end is
+  normal depth on the river bed's own fall there, which every kind of reach
+  sets (template, drawn or terrain), and the CSV header records it.
+  *Flow from a float survey* works out the flow from a site survey: channel
+  width and mean depth, and the time a float takes over a measured distance.
+  The mean speed is taken as 0.85 of the float's (changeable), and the flow
+  as mean speed × width × depth. *Use this flow* sets it, and the app then
+  compares its own channel speed at the chosen section with the survey's.
 - **Design** (left): add an obstruction, bridge, flood wall or building at
   the chosen section, then open it to set its size and levels. Eddy zones
   (the dead water beside and behind a blockage) can be resized or switched
@@ -41,7 +49,12 @@ idealised channel with floodplains, not a survey) with one example bridge.
 - **Floating objects:** *+ Floating object* in Design adds a moored box, and an
   imported model can be set to float. It rises and falls with the water; only
   the part below the water blocks the flow, and water passes underneath. It
-  cannot drift, because the model is steady.
+  cannot drift, because the model is steady. Give its depth below the water
+  directly, or its weight in tonnes: a box sinks until it pushes aside its own
+  weight of water, so depth = weight ÷ (1 t/m³ × length × width). Its
+  underside adds friction like an ice cover, at the roughness of a smooth hull
+  (Manning's n 0.013, changeable in Advanced), combined with the bed's by
+  Horton's rule.
 - **River from a terrain model:** *Build from a terrain model (.tif, .asc or .obj)* in River
   shows the model from above. Click along the river from upstream to
   downstream; sections are cut square to the line. Most terrain models do not
@@ -72,9 +85,19 @@ idealised channel with floodplains, not a survey) with one example bridge.
   On a drawn river the 3D view follows its course. In 3D, drag a design
   element to move it (its levels move with the river bed), and drag the
   blue section line, or click the ground, to choose where the section cuts.
+  Plan has a true-scale option, zoom and pan, like Section and Profile.
+  In 3D and Plan the legend switches the water's colour between depth and
+  speed. A 1D model has one mean speed in the channel and one on each
+  floodplain at a section, so the colour changes along the river and at the
+  banks, not around a pier.
 - **Results** (right): the legend for the view, tiles for the chosen
   section, the effect of the design (afflux, soffit clearance, floor levels,
   choking), water level against flow, and every section in a table.
+  The effect of the design also names where scour and settling are most
+  likely, from the channel speeds alone: sections 1.5 times faster or 0.6
+  times slower than the reach's typical speed, places where the design
+  changes the speed by 10% or more, and wet eddy zones. Sediment itself is
+  not modelled, and the app says so.
 - **File** menu: export the view as PNG, the results as CSV, and save or
   open a project. Every export carries the caution and the settings.
 
@@ -165,8 +188,8 @@ The licence notice is in `NOTICE`.
 npm test
 ```
 
-`tests/engine.test.mjs` (62 checks), `tests/overpass-proxy.mjs` (19 checks;
-skipped where PHP is not installed) and `tests/ui.test.mjs` (208 checks,
+`tests/engine.test.mjs` (65 checks), `tests/overpass-proxy.mjs` (19 checks;
+skipped where PHP is not installed) and `tests/ui.test.mjs` (250 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused, except map tiles, place search and Overpass, which are
 answered from local fixtures in `tests/fixtures/`; the Overpass fixture is

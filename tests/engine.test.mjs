@@ -215,6 +215,19 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   const clear = RFL.solve({ ...base, sections: vsecs() }, 20), held = RFL.solve({ ...base, sections: vsecs(), floats: [f2] }, 20);
   const rise = RFL.wsAt(held, 200) - RFL.wsAt(clear, 200);
   check('a floating object raises the water upstream', rise > 0.001 && held.sections.some(s => Math.abs(s.x - 170) < 1e-6), mm(rise));
+  // The hull carries its own roughness, combined with the bed's by Horton's
+  // rule: n = (Σ P n^1.5 / Σ P)^(2/3). Bed 14 m at n 0.03 (base 10 + walls 2 × 2),
+  // hull 5 m (underside 4 + sides 2 × 0.5) at the default 0.013.
+  const nE = Math.pow((14 * Math.pow(0.03, 1.5) + 5 * Math.pow(0.013, 1.5)) / 19, 2 / 3), Khand = 18 * Math.pow(18 / 19, 2 / 3) / nE;
+  check('a hull\'s roughness joins the bed\'s by Horton\'s rule', near(h.K, Khand, 1e-9), `K ${h.K.toFixed(3)} against ${Khand.toFixed(3)} by hand, n ${nE.toFixed(4)}`);
+  const same = RFL.hydraulics(RFL.prepare({ sections: secs, floats: [{ ...float, n: 0.03 }] }).preps[0], 2, 10);
+  check('a hull as rough as the bed gives the plain Manning conveyance', near(same.K, 18 * Math.pow(18 / 19, 2 / 3) / 0.03, 1e-9));
+  // A float only millimetres deep blocks almost nothing; what it adds is the
+  // friction of its underside, like an ice cover, and a smooth hull adds far
+  // less of that than a lid as rough as the river bed would.
+  const filmRise = n => RFL.wsAt(RFL.solve({ ...base, sections: vsecs(), floats: [{ ...f2, draft: 0.003, n }] }, 20), 200) - RFL.wsAt(clear, 200);
+  const smooth = filmRise(undefined), rough = filmRise(0.035);
+  check('a smooth hull adds far less friction than a lid as rough as the bed', smooth > 0 && smooth < rough * 0.6 && smooth < rise / 10, `3 mm deep: ${mm(smooth)} smooth, ${mm(rough)} at bed roughness; ${mm(rise)} at 0.8 m deep`);
 }
 
 // 8h. A bridge with set abutments leaves the floodplain beyond them open
