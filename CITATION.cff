@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If this tool informs a paper, a thesis, a lecture or a studio brief, please cite it as software."
+type: software
+title: "River Flow Lab: A browser-based teaching tool for river flow, water level, obstructions and bridges"
+version: 0.1.0
+abstract: >-
+  A teaching tool for architecture and urban design students that shows how a
+  river's water level and speed respond to its flow and to what is built in
+  and beside it: obstructions, bridges, flood walls, buildings and floating
+  objects. It runs entirely in the browser, shipped as a single self-contained
+  HTML file. The water surface is solved for one steady flow by the
+  standard-step method in one dimension, following HEC-RAS's steady-flow
+  method: conveyance subdivision with Manning's equation, contraction and
+  expansion losses, the energy method through a bridge with Yarnell's pier
+  equation alongside, a broad-crested weir over an overtopped deck, and eddy
+  zones sized by expansion and contraction ratios. Every result is read as a
+  change against the same river without the design. The river can be a
+  template reach, a line drawn on a map or taken from OpenStreetMap, a terrain
+  model, or surveyed sections, and a flow can come from a simple float survey.
+  The method notes in docs/method-notes.html document every assumption, name
+  every source the code implements, and declare what the tool does not model.
+  It is a teaching model, not a flood risk assessment.
+authors:
+  - family-names: Al-Obaidi
+    given-names: Karam M.
+    orcid: "https://orcid.org/0000-0002-4379-6964"
+    affiliation: "Sheffield Hallam University"
+license:
+  - MIT
+  - CC-BY-4.0
+repository-code: "https://github.com/arch85-km/river-flow-lab"
+url: "https://karam.me.uk/applications/river-flow-lab/"
+keywords:
+  - river hydraulics
+  - open-channel flow
+  - standard step method
+  - bridge hydraulics
+  - afflux
+  - flooding
+  - architectural education
+  - urban design
+  - three.js

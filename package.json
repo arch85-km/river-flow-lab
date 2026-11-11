@@ -6,10 +6,12 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "node tests/engine.test.mjs && node tests/overpass-proxy.mjs && node tests/ui.test.mjs",
+    "test": "node tools/check-release-metadata.mjs && node tests/release-guard.test.mjs && node tests/engine.test.mjs && node tests/overpass-proxy.mjs && node tests/ui.test.mjs",
     "test:engine": "node tests/engine.test.mjs",
     "test:proxy": "node tests/overpass-proxy.mjs",
-    "test:ui": "node tests/ui.test.mjs"
+    "test:ui": "node tests/ui.test.mjs",
+    "check-release": "node tools/check-release-metadata.mjs",
+    "test:release": "node tests/release-guard.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

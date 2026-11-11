@@ -5,9 +5,18 @@ obstructions and bridges interact, for architecture and urban design
 students. The first site is a reach of the River Sheaf at Heeley,
 Sheffield.
 
-**Status: in development.** The engine and the interface work on a
-template reach or on sections you type in, with a 3D view. The River
-Sheaf site data follows.
+**Status: in development, before the first release (1.0.0).** The engine
+and the interface work on a template reach, a river drawn on the map or
+taken from OpenStreetMap, a terrain model, or sections you type in. The
+River Sheaf site data follows.
+
+![The 3D view: the example bridge at a major flood, raising the water 15 cm upstream](docs/screenshot-3d.png)
+
+![The Plan view coloured by water speed: faster through the bridge opening](docs/screenshot-plan-speed.png)
+
+More in [`docs/`](docs/): the Section and Profile views, the guided tour
+and the phone layout. `node tools/make-screenshots.mjs` remakes them all
+from `index.html`.
 
 ## Using it
 
@@ -188,6 +197,12 @@ The licence notice is in `NOTICE`.
 npm test
 ```
 
+`tools/check-release-metadata.mjs` runs first: the release guard (22
+checks). It holds the version, the release date, the title, the repository
+and the DOI to one value across `CITATION.cff`, `.zenodo.json`,
+`package.json`, `package-lock.json`, the app (`VERSION`, `RELEASED`, its
+citation) and both method-notes pages. `tests/release-guard.test.mjs` (25
+checks) proves each of its checks by breaking it. Then
 `tests/engine.test.mjs` (65 checks), `tests/overpass-proxy.mjs` (19 checks;
 skipped where PHP is not installed) and `tests/ui.test.mjs` (252 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
@@ -199,6 +214,17 @@ The engine checks compare the engine with closed-form results (Manning
 normal depth, critical depth) and with an independent RK4 integration of the
 gradually varied flow equation. Agreement shows the engine is consistent
 with open-channel theory; it is not validation against measured levels.
+
+### Stamping a release
+
+Set the new version, and the release date as `yyyy-mm-dd`, in
+`CITATION.cff` (`version`, `date-released`), `.zenodo.json`, `package.json`
+and `package-lock.json`, and in `index.html` (`VERSION`, `RELEASED`). In
+both method-notes pages, change the byline to `Version X · d Month yyyy` and
+the version in the APA and BibTeX citations. `npm test` fails until they
+all agree. Once Zenodo has archived the release, add the concept and version
+DOIs to `CITATION.cff` and cite the version DOI in the notes and in the
+app's © card; the guard holds those together too.
 
 ## How this was developed
 

@@ -152,15 +152,21 @@ Projects and terrain files stay in the browser; nothing is uploaded.
 ```
 index.html                     the application
 README.md                      what it is, how to use it, the method in brief
+DESIGN.md                      the reasons behind the design
+CITATION.cff, .zenodo.json     how to cite it, and what Zenodo archives each release under
+docs/                          the method notes (full and in brief) and the screenshots
 NOTICE                         the two licences (MIT code, CC BY 4.0 documentation) and three.js's notice
 LICENSE                        MIT, for the code
 package.json, package-lock.json  test and build dependencies: esbuild, three
 server/overpass-proxy.php      same-site proxy and 30-day cache for OpenStreetMap waterways
+tests/release-guard.test.mjs   proves each release-guard check by breaking it
 tests/engine.test.mjs          engine checks against closed-form results and an independent integration
 tests/ui.test.mjs              the page in headless Chromium, both themes, four sizes
 tests/overpass-proxy.mjs       the proxy under php -S against a stand-in Overpass
 tests/fixtures/                a tile image and a synthetic Overpass answer
 tools/build-three.mjs          bundles three.js into index.html
+tools/check-release-metadata.mjs  the release guard: version, date, title, repository and DOI agree everywhere
+tools/make-screenshots.mjs     remakes the screenshots in docs/
 tools/three-entry.js           the parts of three.js the page uses
 ```
 
@@ -170,7 +176,8 @@ tools/three-entry.js           the parts of three.js the page uses
 npm test
 ```
 
-runs the three suites. At this version: `tests/engine.test.mjs` 65 checks,
+runs the release guard and its proof (22 and 25 checks), then the three
+suites. At this version: `tests/engine.test.mjs` 65 checks,
 `tests/ui.test.mjs` 252 checks, `tests/overpass-proxy.mjs` 19 checks (skipped
 where PHP is not installed). The engine checks compare with closed-form
 results (normal and critical depth), an independent RK4 integration of the

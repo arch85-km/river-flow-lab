@@ -1,0 +1,27 @@
+{
+  "upload_type": "software",
+  "title": "River Flow Lab: A browser-based teaching tool for river flow, water level, obstructions and bridges",
+  "version": "0.1.0",
+  "language": "eng",
+  "license": "MIT",
+  "creators": [
+    {
+      "name": "Al-Obaidi, Karam M.",
+      "affiliation": "Sheffield Hallam University",
+      "orcid": "0000-0002-4379-6964"
+    }
+  ],
+  "description": "<p>River Flow Lab is a teaching tool for architecture and urban design students that shows how a river's water level and speed respond to its flow and to what is built in and beside it: obstructions, bridges, flood walls, buildings and floating objects. It runs entirely in the browser and ships as a single self-contained HTML file, with no install.</p><p>The water surface is solved for one steady flow by the standard-step method in one dimension, following HEC-RAS's steady-flow method: conveyance subdivision with Manning's equation, contraction and expansion losses, the energy method through a bridge with Yarnell's pier equation alongside, a broad-crested weir over an overtopped deck, and eddy zones sized by expansion and contraction ratios. Every result is read as a change against the same river without the design.</p><p>The river can be a template reach, a line drawn on a map or taken from OpenStreetMap, a terrain model, or surveyed sections, and a flow can come from a simple float survey. The method notes in docs/method-notes.html document every assumption, name every source the code implements, and declare what the tool does not model. It is a teaching model, not a flood risk assessment.</p>",
+  "notes": "Dual-licensed. The software (index.html, tools/, server/ and tests/) is released under the MIT Licence. The documentation and teaching material (README.md, DESIGN.md, ARCHITECTURE.md, docs/ and the screenshots) is released under CC BY 4.0. three.js is bundled under its own MIT licence; see NOTICE.\n\nHow this was developed. I designed the application: I defined the problem and the scope, and chose the methods and the sources. I tested it in use, found its bugs, and decided what was released and when. The code was written with an AI coding assistant working to my specification and direction: it wrote most of the code, drafted the documentation for my review, diagnosed bugs and proposed fixes that I then tested, and wrote and ran the automated tests and release checks. I retain full intellectual responsibility for the design, the methods and the results, including any errors.",
+  "keywords": [
+    "river hydraulics",
+    "open-channel flow",
+    "standard step method",
+    "bridge hydraulics",
+    "afflux",
+    "flooding",
+    "architectural education",
+    "urban design",
+    "three.js"
+  ]
+}

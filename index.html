@@ -5436,6 +5436,9 @@ if (typeof module !== 'undefined') module.exports = RFL;
 (() => {
   'use strict';
   const APP = 'River Flow Lab', VERSION = '0.1.0';
+  // The day this version was released, as yyyy-mm-dd; null until the first release.
+  // tools/check-release-metadata.mjs holds it to CITATION.cff's date-released.
+  const RELEASED = null;
   const CAUTION = 'Teaching model — not a flood risk assessment. Do not use for planning, insurance or construction decisions.';
   const THEME_KEY = 'riverflowlab.theme.v1';
   const $ = id => document.getElementById(id);
@@ -8721,7 +8724,7 @@ onmessage = e => {
   const About = (() => {
     let lastFocus = null;
     function open() {
-      $('rf-about-rel').textContent = `Version ${VERSION} · not yet released`;
+      $('rf-about-rel').textContent = `Version ${VERSION} · ${RELEASED ? new Date(RELEASED + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'not yet released'}`;
       $('rf-about-apa').textContent = `Al-Obaidi, K. M. (2026). ${TITLE} (Version ${VERSION}) [Computer software]. ${REPO}`;
       $('rf-about-bib').textContent = ['@software{alobaidi2026riverflowlab,', '  author  = {Al-Obaidi, Karam M.},', `  title   = {${TITLE}},`,
         '  year    = {2026},', `  version = {${VERSION}},`, `  url     = {${REPO}},`, '  note    = {Code MIT licensed; accompanying material CC BY 4.0}', '}'].join('\n');
