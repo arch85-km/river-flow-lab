@@ -1,0 +1,560 @@
+<!-- ==========================================================================
+     River Flood Lab — "Method notes in brief"
+     A short companion to the full method notes.
+     Paste into an HTML block on its own page.
+     
+     IF YOU PASTE THIS ON THE SAME PAGE AS THE FULL NOTES, delete the <style>
+     block below: the full notes already define every rule it contains.
+     © Karam Al-Obaidi
+     ========================================================================== -->
+<style>
+     block below — the full notes already define every rule it contains.
+
+     THE CITATION STRIP JUMPS HERE: the "How to cite" heading carries
+     id="how-to-cite". Only ONE element per page may hold that id.
+     ====================================================================== -->
+
+<style>
+
+.rf-doc{
+  --rf-paper:#F1F2EE; --rf-surface:#FBFBF9; --rf-surface2:#E8EAE4;
+  --rf-ink:#16191B; --rf-ink2:#4C555A; --rf-ink3:#5F696E;
+  --rf-rule:#D6D9D1; --rf-rule2:#E5E7E1;
+  --rf-accent:#1D5A73; --rf-accent-soft:rgba(29,90,115,.10);
+  --rf-ok:#3F6B47;  --rf-ok-soft:rgba(63,107,71,.12);
+  --rf-warn:#8A6410;--rf-warn-soft:rgba(138,100,16,.13);
+  --rf-no:#8E3A32;  --rf-no-soft:rgba(142,58,50,.11);
+  --rf-fd:"Poppins",system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --rf-fb:inherit;
+  --rf-fm:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --rf-measure:90ch; --rf-rail:4.75rem;
+
+  background:var(--rf-paper); color:var(--rf-ink);
+  font-family:var(--rf-fb); font-size:17px; line-height:1.65; font-weight:400;
+  max-width:1040px; margin:0 auto; padding:0 20px 3rem;
+  -webkit-font-smoothing:antialiased; text-align:left;
+}
+@media (prefers-color-scheme:dark){
+  .rf-doc.rf-auto-dark{
+    --rf-paper:#121517; --rf-surface:#191D20; --rf-surface2:#21262A;
+    --rf-ink:#E9EBE6; --rf-ink2:#A6AFB4; --rf-ink3:#79838A;
+    --rf-rule:#2C3235; --rf-rule2:#232829;
+    --rf-accent:#74B6D0; --rf-accent-soft:rgba(116,182,208,.14);
+    --rf-ok:#7FB88C;  --rf-ok-soft:rgba(127,184,140,.14);
+    --rf-warn:#D6A748;--rf-warn-soft:rgba(214,167,72,.15);
+    --rf-no:#DD8479;  --rf-no-soft:rgba(221,132,121,.14);
+  }
+}
+.rf-doc *,.rf-doc *::before,.rf-doc *::after{box-sizing:border-box;}
+.rf-doc h1,.rf-doc h2,.rf-doc h3,.rf-doc h4,.rf-doc p,.rf-doc ul,.rf-doc ol,
+.rf-doc dl,.rf-doc dt,.rf-doc dd{margin:0;padding:0;}
+.rf-doc ul,.rf-doc ol{list-style-position:outside;}
+.rf-doc li{margin:0;}
+.rf-doc a{color:var(--rf-accent);text-decoration:underline;text-underline-offset:2px;}
+.rf-doc code,.rf-doc .rf-mono{font-family:var(--rf-fm);font-size:.855em;}
+.rf-doc b,.rf-doc strong{font-weight:600;}
+.rf-doc code{background:var(--rf-accent-soft);color:var(--rf-accent);
+  padding:.1em .34em;border-radius:2px;border:0;}
+
+/* masthead */
+.rf-doc .rf-masthead{padding:2.75rem 0 1.9rem;border-bottom:2px solid var(--rf-ink);}
+.rf-doc .rf-eyebrow{font-family:var(--rf-fm);font-size:.70rem;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--rf-accent);margin:0 0 1.1rem;}
+.rf-doc h1,.rf-doc .rf-title{font-family:var(--rf-fd);font-weight:600;
+  font-size:clamp(1.9rem,5.2vw,2.75rem);line-height:1.04;letter-spacing:-.028em;
+  text-wrap:balance;margin:0 0 1.1rem;color:var(--rf-ink);}
+.rf-doc .rf-standfirst{max-width:var(--rf-measure);font-size:1.14rem;line-height:1.6;
+  color:var(--rf-ink2);margin:0;}
+.rf-doc .rf-standfirst strong{color:var(--rf-ink);font-weight:600;}
+.rf-doc .rf-byline{display:flex;flex-wrap:wrap;gap:.5rem 1.6rem;margin-top:1.9rem;
+  font-family:var(--rf-fm);font-size:.74rem;letter-spacing:.04em;color:var(--rf-ink3);}
+.rf-doc .rf-byline b{color:var(--rf-ink2);font-weight:500;}
+
+/* trap notice */
+.rf-doc .rf-traps{margin:2.5rem 0;border:1px solid var(--rf-rule);
+  border-left:4px solid var(--rf-no);background:var(--rf-surface);padding:1.5rem 1.6rem;}
+.rf-doc .rf-traps h2{font-family:var(--rf-fd);font-size:.82rem;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--rf-no);margin:0 0 .9rem;}
+.rf-doc .rf-traps ol{margin:0;padding-left:1.15rem;display:grid;gap:.6rem;}
+.rf-doc .rf-traps li{max-width:var(--rf-measure);}
+
+/* sections */
+.rf-doc .rf-sec{padding:2.5rem 0 0;}
+.rf-doc .rf-sechead{display:grid;grid-template-columns:var(--rf-rail) 1fr;
+  align-items:baseline;gap:0 1rem;border-top:1px solid var(--rf-rule);
+  padding-top:1.4rem;margin-bottom:1.6rem;}
+.rf-doc .rf-secnum{font-family:var(--rf-fm);font-size:.95rem;font-weight:600;
+  color:var(--rf-accent);letter-spacing:.02em;font-variant-numeric:tabular-nums;}
+.rf-doc .rf-sechead h2{font-family:var(--rf-fd);font-weight:600;
+  font-size:clamp(1.3rem,2.9vw,1.7rem);line-height:1.12;letter-spacing:-.02em;
+  text-wrap:balance;margin:0;color:var(--rf-ink);}
+.rf-doc .rf-secbody{display:grid;grid-template-columns:var(--rf-rail) minmax(0,1fr);gap:0 1rem;}
+.rf-doc .rf-secbody>*{grid-column:2;}
+.rf-doc .rf-secbody>p,.rf-doc .rf-secbody>ul,.rf-doc .rf-secbody>ol{max-width:var(--rf-measure);}
+.rf-doc .rf-secbody>p{margin:0 0 1.05rem;}
+.rf-doc .rf-secbody>ul,.rf-doc .rf-secbody>ol{margin:0 0 1.15rem;padding-left:1.15rem;
+  display:grid;gap:.5rem;}
+.rf-doc h3{font-family:var(--rf-fd);font-weight:600;font-size:1.06rem;
+  letter-spacing:-.005em;margin:1.9rem 0 .7rem;color:var(--rf-ink);}
+.rf-doc h4{font-family:var(--rf-fm);font-weight:600;font-size:.74rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--rf-ink3);margin:1.7rem 0 .7rem;}
+.rf-doc .rf-footer h4:first-of-type{margin-top:1.1rem;}
+.rf-doc .rf-note{font-size:.9rem;color:var(--rf-ink2);border-left:2px solid var(--rf-rule);
+  padding-left:.95rem;margin:0 0 1.2rem;max-width:var(--rf-measure);}
+
+/* tables */
+.rf-doc .rf-tbl{overflow-x:auto;margin:0 0 1.4rem;border:1px solid var(--rf-rule);
+  background:var(--rf-surface);}
+.rf-doc .rf-tbl table{border-collapse:collapse;width:100%;font-size:.845rem;
+  line-height:1.45;background:transparent;}
+.rf-doc .rf-tbl th,.rf-doc .rf-tbl td{padding:.5rem .7rem;text-align:left;
+  vertical-align:top;border:0;border-bottom:1px solid var(--rf-rule2);color:var(--rf-ink);}
+.rf-doc .rf-tbl thead th{font-family:var(--rf-fm);font-size:.68rem;font-weight:600;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--rf-ink3);
+  background:var(--rf-surface2);border-bottom:1px solid var(--rf-rule);white-space:nowrap;}
+.rf-doc .rf-tbl tbody tr:last-child td{border-bottom:0;}
+.rf-doc .rf-tbl tbody tr{background:transparent;}
+.rf-doc .rf-tbl .rf-n{text-align:right;font-family:var(--rf-fm);
+  font-variant-numeric:tabular-nums;white-space:nowrap;}
+.rf-doc .rf-tbl .rf-p{font-family:var(--rf-fm);font-size:.8rem;white-space:nowrap;}
+.rf-doc .rf-tbl .rf-d{font-family:var(--rf-fm);font-variant-numeric:tabular-nums;
+  white-space:nowrap;color:var(--rf-accent);font-weight:500;text-align:right;}
+.rf-doc .rf-tbl caption{caption-side:bottom;text-align:left;padding:.6rem .7rem;
+  font-size:.78rem;color:var(--rf-ink3);border-top:1px solid var(--rf-rule2);}
+
+/* chips + ledger */
+.rf-doc .rf-chip{display:inline-block;font-family:var(--rf-fm);font-size:.64rem;
+  font-weight:600;letter-spacing:.07em;text-transform:uppercase;padding:.15em .5em;
+  border-radius:2px;white-space:nowrap;}
+.rf-doc .rf-chip.is-in{background:var(--rf-ok-soft);color:var(--rf-ok);}
+.rf-doc .rf-chip.is-part{background:var(--rf-warn-soft);color:var(--rf-warn);}
+.rf-doc .rf-chip.is-out{background:var(--rf-no-soft);color:var(--rf-no);}
+.rf-doc .rf-ledger{display:grid;gap:0;border:1px solid var(--rf-rule);
+  background:var(--rf-surface);margin-bottom:1.4rem;}
+.rf-doc .rf-ledger>div{display:grid;grid-template-columns:7.5rem minmax(0,1fr);
+  gap:.2rem .9rem;padding:.8rem 1rem;border-bottom:1px solid var(--rf-rule2);}
+.rf-doc .rf-ledger>div:last-child{border-bottom:0;}
+.rf-doc .rf-ledger dt{font-family:var(--rf-fd);font-weight:600;font-size:.95rem;
+  grid-column:2;margin:0;color:var(--rf-ink);}
+.rf-doc .rf-ledger .rf-chip{grid-row:1;grid-column:1;align-self:start;margin-top:.18rem;}
+.rf-doc .rf-ledger dd{grid-column:2;margin:0;font-size:.93rem;color:var(--rf-ink2);
+  line-height:1.55;}
+
+/* footer */
+.rf-doc .rf-footer{margin-top:3rem;padding-top:1.6rem;border-top:2px solid var(--rf-ink);
+  font-size:.86rem;color:var(--rf-ink2);}
+.rf-doc .rf-footer p{max-width:var(--rf-measure);margin:0 0 .8rem;}
+.rf-doc .rf-cite{font-family:var(--rf-fm);font-size:.78rem;color:var(--rf-ink3);line-height:1.7;}
+.rf-doc .rf-ref{border-left:2px solid var(--rf-rule);padding-left:.95rem;margin:0 0 1rem;
+  max-width:var(--rf-measure);font-size:.92rem;color:var(--rf-ink2);}
+.rf-doc pre{margin:0 0 1rem;padding:.9rem 1rem;background:var(--rf-surface);
+  border:1px solid var(--rf-rule);overflow-x:auto;font-family:var(--rf-fm);
+  font-size:.78rem;line-height:1.6;color:var(--rf-ink);white-space:pre;}
+
+/* exercises */
+.rf-doc .rf-ex{border:1px solid var(--rf-rule);background:var(--rf-surface);
+  padding:1.5rem 1.6rem;margin-bottom:1.5rem;}
+.rf-doc .rf-ex-n{font-family:var(--rf-fm);font-size:.7rem;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--rf-accent);
+  display:block;margin-bottom:.35rem;}
+.rf-doc .rf-ex h3{margin:0 0 .9rem;font-size:1.18rem;}
+.rf-doc .rf-steps{margin:0;padding-left:1.2rem;display:grid;gap:.5rem;font-size:.95rem;}
+.rf-doc .rf-principle{font-size:.93rem;color:var(--rf-ink2);
+  border-top:1px solid var(--rf-rule2);padding-top:.85rem;margin:.95rem 0 0;}
+.rf-doc .rf-principle b{color:var(--rf-ink);font-weight:600;}
+
+/* diagrams. The SVGs paint from the same custom properties as everything
+   else, so they invert with the page instead of staying light in dark mode. */
+/* Figures. A host theme usually styles <figure> and <figcaption> itself, and
+   its rules can be specific enough to win here — which is where an italic
+   caption and a caption sitting hard against the next paragraph come from.
+   The four properties that decide that are pinned, so the caption keeps this
+   page's own monospace label style wherever the fragment is pasted. */
+.rf-doc .rf-fig{margin:0 0 1.9rem !important;font-style:normal;}
+.rf-doc .rf-fig svg{display:block;width:100%;height:auto;font-style:normal;
+  background:var(--rf-paper);border:1px solid var(--rf-rule);}
+.rf-doc .rf-fig figcaption{font-family:var(--rf-fm) !important;
+  font-style:normal !important;font-size:.68rem;letter-spacing:.06em;line-height:1.5;
+  text-align:left;text-transform:uppercase;color:var(--rf-ink3);
+  margin:.7rem 0 0 !important;}
+
+/* Large screens. Most sizes here are in rem, which is relative to the ROOT
+   font size, not to .rf-doc — so raising .rf-doc alone would scale the body
+   copy and leave the byline, notes and references behind. They are stepped up
+   together. */
+@media (min-width:1280px){
+  .rf-doc{font-size:18.5px;max-width:1140px;}
+  .rf-doc .rf-standfirst{font-size:1.22rem;}
+  .rf-doc .rf-byline{font-size:.84rem;}
+  .rf-doc h3{font-size:1.14rem;}
+  .rf-doc .rf-note{font-size:.97rem;}
+  .rf-doc .rf-ref{font-size:1rem;}
+  .rf-doc .rf-cite{font-size:.86rem;}
+  .rf-doc pre{font-size:.86rem;}
+  .rf-doc .rf-ledger dt{font-size:1.02rem;}
+  .rf-doc .rf-ledger dd{font-size:1rem;}
+  .rf-doc .rf-chip{font-size:.70rem;}
+  .rf-doc .rf-traps h2{font-size:.88rem;}
+  .rf-doc .rf-steps{font-size:1rem;}
+  .rf-doc .rf-principle{font-size:.99rem;}
+  .rf-doc .rf-ex-n{font-size:.76rem;}
+}
+@media (max-width:720px){
+  .rf-doc{--rf-rail:0px;font-size:16px;}
+  .rf-doc .rf-sechead{grid-template-columns:1fr;gap:.35rem;}
+  .rf-doc .rf-secbody{grid-template-columns:minmax(0,1fr);}
+  .rf-doc .rf-secbody>*{grid-column:1;}
+  .rf-doc .rf-traps,.rf-doc .rf-ex{padding:1.15rem;}
+}
+@media (max-width:560px){
+  .rf-doc .rf-ledger>div{grid-template-columns:1fr;}
+  .rf-doc .rf-ledger .rf-chip{grid-row:auto;grid-column:1;justify-self:start;margin-bottom:.3rem;}
+  .rf-doc .rf-ledger dt,.rf-doc .rf-ledger dd{grid-column:1;}
+}
+
+/* ---- Site style ---------------------------------------------------------
+   The rules above are the page's own design system. This block sets it in
+   karam.me.uk's style instead: its palette and red, Poppins headings and
+   labels over Source Serif 4 body text, hairlines rather than boxes, and
+   section titles set as small labels over a hairline, as the applications
+   page sets its tiers ("01 SET UP"). The site has no dark mode, so neither
+   has this page. Monospace is kept for formulas and code only. */
+.rf-doc,
+.rf-doc.rf-auto-dark{
+  --rf-paper:transparent; --rf-surface:#f4f6f9; --rf-surface2:#eceef1;
+  --rf-ink:#12161d; --rf-ink2:#4e5765; --rf-ink3:#5f6875;
+  --rf-rule:rgba(10,12,16,.16); --rf-rule2:rgba(10,12,16,.07);
+  --rf-accent:#b41f1f; --rf-accent-soft:rgba(180,31,31,.07);
+  --rf-ok:#2f6b3f; --rf-ok-soft:transparent;
+  --rf-warn:#8a6410; --rf-warn-soft:transparent;
+  --rf-no:#b41f1f; --rf-no-soft:transparent;
+  --rf-fd:"Poppins",system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --rf-fb:"Source Serif 4",Georgia,serif;
+  --rf-fl:"Poppins",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  .rf-doc.rf-auto-dark{
+    --rf-paper:transparent; --rf-surface:#f4f6f9; --rf-surface2:#eceef1;
+    --rf-ink:#333; --rf-ink2:#333; --rf-ink3:#5f6875;
+    --rf-rule:rgba(10,12,16,.16); --rf-rule2:rgba(10,12,16,.07);
+    --rf-accent:#b41f1f; --rf-accent-soft:rgba(180,31,31,.07);
+    --rf-ok:#2f6b3f; --rf-ok-soft:transparent;
+    --rf-warn:#8a6410; --rf-warn-soft:transparent;
+    --rf-no:#b41f1f; --rf-no-soft:transparent;
+  }
+}
+.rf-doc{line-height:1.6;}
+/* labels: small uppercase Poppins, not monospace */
+.rf-doc .rf-eyebrow,.rf-doc .rf-byline,.rf-doc .rf-secnum,.rf-doc h4,.rf-doc .rf-chip,
+.rf-doc .rf-ex-n,.rf-doc .rf-fig figcaption,.rf-doc .rf-tbl thead th,.rf-doc .rf-cite{
+  font-family:var(--rf-fl) !important;}
+.rf-doc .rf-eyebrow{font-size:.72rem;font-weight:500;letter-spacing:.07em;}
+.rf-doc .rf-byline{font-size:.78rem;letter-spacing:0;}
+.rf-doc h4,.rf-doc .rf-tbl thead th{font-weight:500;letter-spacing:.07em;}
+.rf-doc .rf-chip{background:none !important;padding:0;font-weight:500;letter-spacing:.07em;}
+.rf-doc .rf-fig figcaption{text-transform:none;letter-spacing:0;font-size:.8rem;}
+.rf-doc .rf-tbl .rf-n,.rf-doc .rf-tbl .rf-d,.rf-doc .rf-tbl .rf-p{
+  font-family:var(--rf-fb);font-variant-numeric:tabular-nums;}
+.rf-doc h1,.rf-doc h3,.rf-doc .rf-ledger dt{font-weight:500;letter-spacing:-.01em;}
+/* hairlines, not boxes or heavy rules */
+.rf-doc .rf-masthead{border-bottom:1px solid var(--rf-rule);}
+.rf-doc .rf-footer{border-top:1px solid var(--rf-rule);}
+.rf-doc .rf-traps{border:0;background:none;padding:0;}
+.rf-doc .rf-traps h2{font-weight:500;letter-spacing:.07em;color:var(--rf-ink);}
+.rf-doc .rf-ex{border:0;border-top:1px solid var(--rf-rule);background:none;padding:1.3rem 0 0;}
+.rf-doc .rf-ledger{border:0;background:none;}
+.rf-doc .rf-ledger>div{padding:.8rem 0;}
+.rf-doc .rf-tbl{border:0;}
+.rf-doc code{background:var(--rf-surface);color:var(--rf-ink);}
+.rf-doc .rf-fig svg{border:0;background:var(--rf-surface);}
+/* section titles as tier labels: number, title, hairline */
+.rf-doc .rf-sec{padding-top:2.2rem;}
+.rf-doc .rf-sechead{display:flex;gap:10px;align-items:baseline;border-top:0;
+  border-bottom:1px solid var(--rf-rule);padding:0 0 7px;margin-bottom:1.3rem;}
+.rf-doc .rf-secnum{font-size:.72rem;font-weight:600;color:var(--rf-ink);letter-spacing:.04em;}
+.rf-doc .rf-sechead h2{font-family:var(--rf-fl);font-size:.72rem;font-weight:500;
+  letter-spacing:.07em;text-transform:uppercase;line-height:1.4;color:var(--rf-ink3);}
+.rf-doc .rf-secbody{display:block;}
+.rf-doc .rf-secnum:empty{display:none;}
+/* long addresses in the references break rather than push the page sideways on a phone */
+.rf-doc a{overflow-wrap:anywhere;}
+/* a column of figures has its heading over the figures, not at the far edge */
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(2), tbody td.rf-d:nth-child(2)) thead th:nth-child(2),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(3), tbody td.rf-d:nth-child(3)) thead th:nth-child(3),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(4), tbody td.rf-d:nth-child(4)) thead th:nth-child(4),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(5), tbody td.rf-d:nth-child(5)) thead th:nth-child(5),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(6), tbody td.rf-d:nth-child(6)) thead th:nth-child(6),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(7), tbody td.rf-d:nth-child(7)) thead th:nth-child(7),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(8), tbody td.rf-d:nth-child(8)) thead th:nth-child(8){text-align:right;}
+/* the first column names the row, so it reads from the left like the text, even when it holds a number (unless its heading is marked as a figure) */
+.rf-doc .rf-tbl table:not(:has(thead th.rf-n:first-child)) tr > :first-child{text-align:left;}
+/* the site theme stripes table rows and tints them on hover; the notes keep one even tint */
+.rf-doc .rf-tbl th,.rf-doc .rf-tbl td{background-color:transparent;}
+/* formulas are <pre>, not <div>: the site's HTML minifier leaves <pre> alone but collapses the line breaks in a <div> */
+/* no side padding of its own: the Elementor section sets the margins, so the notes line up with the blocks above them on every screen */
+.rf-doc{padding-left:0;padding-right:0;}
+/* and no width cap of its own: on a wide screen a capped, centred block starts further in than the blocks above it */
+.rf-doc,.rf-doc.rf-auto-dark{max-width:none;margin-left:0;margin-right:0;}
+/* text runs the full width of the column, as the exercises do */
+.rf-doc,.rf-doc.rf-auto-dark{--rf-measure:none;}
+/* the title and text as the site's own page headings and body set them */
+.rf-doc,.rf-doc.rf-auto-dark{--rf-ink:#333;--rf-ink2:#333;}
+.rf-doc h1,.rf-doc .rf-title{font-size:2em;font-weight:600;line-height:1.15;letter-spacing:0;color:#333;}
+.rf-doc .rf-standfirst{color:#333;}
+/* each ledger item reads as one block: its tag above its title, not in a side column */
+.rf-doc .rf-ledger>div{grid-template-columns:minmax(0,1fr);}
+.rf-doc .rf-ledger .rf-chip{grid-row:auto;grid-column:1;justify-self:start;margin:0 0 .25rem;}
+.rf-doc .rf-ledger dt,.rf-doc .rf-ledger dd{grid-column:1;}
+/* inline interface terms and figure labels in Poppins too; <code> and formulas stay monospace */
+.rf-doc .rf-mono{font-family:var(--rf-fl);font-size:.9em;}
+.rf-doc .rf-fig svg text{font-family:var(--rf-fl);}
+/* every section heading in one style, the footer's "Licence": Poppins 500, sentence case,
+   dark, with a hairline under it. The section number, where there is one, matches it in grey. */
+.rf-doc .rf-traps h2,.rf-doc .rf-sechead h2,.rf-doc .rf-footer h3{font-family:var(--rf-fd);
+  font-size:1.06rem;font-weight:500;letter-spacing:-.01em;text-transform:none;color:var(--rf-ink);line-height:1.3;}
+@media (min-width:1280px){.rf-doc .rf-traps h2,.rf-doc .rf-sechead h2,.rf-doc .rf-footer h3{font-size:1.14rem;}}
+.rf-doc .rf-traps h2,.rf-doc .rf-footer h3{border-bottom:1px solid var(--rf-rule);padding-bottom:7px;}
+.rf-doc .rf-secnum{font-family:var(--rf-fd);font-size:1.06rem;font-weight:500;letter-spacing:0;color:var(--rf-ink3);line-height:1.3;}
+@media (min-width:1280px){.rf-doc .rf-secnum{font-size:1.14rem;}}
+/* on the app's page the title sits under the app's own heading, so it names only the notes */
+.rf-doc h1,.rf-doc .rf-title{font-size:1.5em;}
+/* light grey panels: the warnings, then every other section. The exercises always stay
+   white (marked rf-sec-ex in the markup), so their figures keep their own grey and are not a
+   box inside a box. The section part is wrapped in :is(), so a browser that cannot read it
+   drops only that part and still draws the warnings panel. The panels are
+   there so a long page reads in steps. Each panel reaches a little into the margin, so its
+   text stays in line with the rest; on a phone, where there is no margin to spare, it stays
+   inside the column. */
+.rf-doc .rf-traps,.rf-doc :is(.rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec)){background:var(--rf-surface);border:0;border-radius:4px;
+  margin-left:-1.25rem;margin-right:-1.25rem;padding:1.4rem 1.25rem 1.1rem;}
+/* the same space before every section heading, white or grey: 2rem between sections and
+   1.4rem above the heading inside each */
+.rf-doc .rf-traps,.rf-doc .rf-sec{margin-top:2rem;margin-bottom:2rem;}
+.rf-doc .rf-traps,.rf-doc .rf-sec{padding-top:1.4rem;}
+/* and no extra space at the foot of a panel */
+.rf-doc .rf-traps > :last-child,.rf-doc :is(.rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec)) .rf-secbody > :last-child{margin-bottom:0;}
+.rf-doc .rf-traps h2,.rf-doc :is(.rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec)) .rf-sechead{border-bottom-color:rgba(10,12,16,.12);}
+/* what already sits on grey turns white inside a grey panel, so it still stands out */
+.rf-doc .rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec) .rf-tbl,.rf-doc .rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec) .rf-formula,
+.rf-doc .rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec) .rf-fig svg,.rf-doc .rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec) code{background:#fff;}
+@media (max-width:700px){
+  .rf-doc .rf-traps,.rf-doc :is(.rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec)){margin-left:0;margin-right:0;padding-left:.9rem;padding-right:.9rem;}
+}
+</style>
+
+<div class="rf-doc rf-auto-dark">
+
+  <div class="rf-masthead">
+    <h2 class="rf-title">Method Notes in Brief</h2>
+    <p class="rf-standfirst">The short version: what the tool computes, and &mdash; the part that
+      matters most when you cite it &mdash; <strong>what it does not model at all</strong>. It solves
+      one steady water surface along a river, section by section; it has no time in it and no second
+      dimension, and those two absences shape every limitation below. The
+      <a href="https://github.com/arch85-km/river-flood-lab" target="_blank" rel="noopener">full method
+      notes</a> give the equations, the measurements and the references behind every statement
+      here.</p>
+    <div class="rf-byline">
+      <span><b>Audience</b> Architecture and urban design students and staff</span>
+      <span><b>Engine</b> Steady 1D standard step &middot; Manning</span>
+      <span><b>Runs</b> Entirely in the browser</span>
+      <span><b>Version</b> 0.1.0 &middot; in development</span>
+    </div>
+  </div>
+
+  <div class="rf-traps">
+    <h2>Four things to know before you cite a number</h2>
+    <ol>
+      <li><b>It is a teaching model, not a flood risk assessment.</b> A template or drawn river has
+        idealised levels, and a channel carved into a terrain model is an estimate of a bed the model
+        does not record.</li>
+      <li><b>The flow is steady.</b> The peak you set is held for ever, with no storage and no timing,
+        so a short flood would not reach the levels shown.</li>
+      <li><b>It is one-dimensional.</b> It cannot follow water round the end of a wall or across a
+        floodplain, and buildings report a depth but do not block the flow.</li>
+      <li><b>Results near a bridge depend on section spacing.</b> On a test reach the afflux read
+        255&nbsp;mm with sections 100&nbsp;m apart and 188&nbsp;mm from 10&nbsp;m. Compare designs on
+        the same sections and read the change.</li>
+    </ol>
+  </div>
+
+  <section class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum"></span><h2>What it calculates</h2></div>
+    <div class="rf-secbody">
+      <p>One water surface along a reach for one steady flow, and the same reach without your design,
+        so every result reads as a change. From the water surface come the figures below, section by
+        section.</p>
+      <div class="rf-tbl"><table>
+        <thead><tr><th>Result</th><th>Unit</th><th>Where</th></tr></thead>
+        <tbody>
+          <tr><td><b>Water level</b>, depth, energy level</td><td class="rf-p">m</td><td>Every section</td></tr>
+          <tr><td><b>Velocity</b>, mean and in the channel</td><td class="rf-p">m/s</td><td>Every section</td></tr>
+          <tr><td><b>Froude number</b></td><td class="rf-p">&ndash;</td><td>Every section; the model holds it at or below 1</td></tr>
+          <tr><td><b>Change against no design</b></td><td class="rf-p">m</td><td>Every section, when there is a design</td></tr>
+          <tr><td><b>Afflux</b>, soffit clearance, flow regime</td><td class="rf-p">m</td><td>Each bridge</td></tr>
+          <tr><td><b>Flow over the deck</b> and through the opening</td><td class="rf-p">m&sup3;/s</td><td>Each overtopped bridge</td></tr>
+          <tr><td><b>Pier rise by Yarnell's equation</b></td><td class="rf-p">m</td><td>Each bridge with piers, as a check</td></tr>
+          <tr><td><b>Depth over the floor</b></td><td class="rf-p">m</td><td>Each building</td></tr>
+          <tr><td><b>Water level against flow</b></td><td class="rf-p">m</td><td>The chosen section, 28 flows</td></tr>
+        </tbody>
+        <caption>The CSV carries every row above to three decimals, with the settings in its header.</caption>
+      </table></div>
+      <p>The water surface is found by the <b>standard-step method</b>: from the downstream end
+        upwards, each section's level balances the energy equation with friction and with
+        contraction and expansion losses. Each section is split at its banks into channel and
+        floodplains with their own roughness, so a shallow floodplain carries little flow beside a
+        deep channel.</p>
+      <p class="rf-note"><b>The three flow buttons are anchors, not return periods.</b> <i>River
+        full</i> is the flow that brings the river to its lower bank top at the chosen section;
+        <i>Normal day</i> is a quarter of it and <i>Major flood</i> twice it. The tool has no
+        hydrology: a design flow has to come from elsewhere.</p>
+    </div>
+  </section>
+
+  <section class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum"></span><h2>Not modelled at all</h2></div>
+    <div class="rf-secbody">
+      <div class="rf-ledger">
+        <div><span class="rf-chip is-out">The big one</span><dt>Time</dt>
+          <dd>No hydrograph, no storage on the floodplain, no travel time. The peak is held for ever,
+            which overstates the levels a short, sharp flood would reach.</dd></div>
+        <div><span class="rf-chip is-out">Out</span><dt>A second dimension</dt>
+          <dd>Water moves along the river only. Flow round the end of a flood wall is judged by a
+            rule &mdash; a wet floodplain just past an open end counts as reaching the building
+            behind &mdash; not calculated.</dd></div>
+        <div><span class="rf-chip is-out">Out</span><dt>Supercritical flow</dt>
+          <dd>Where the flow is squeezed too hard, the section is held at critical depth and flagged.
+            The flag marks where a fuller model would be needed.</dd></div>
+        <div><span class="rf-chip is-out">Out</span><dt>Culverts, sediment, debris, rain on the site</dt>
+          <dd>River flooding through open channels and bridges only. A blocked bridge opening can be
+            imitated with an obstruction. Where scour and settling are most likely is named from the
+            water speed alone, as a hint.</dd></div>
+        <div><span class="rf-chip is-part">Partly</span><dt>Buildings and eddies</dt>
+          <dd>Buildings report the depth over their floor but do not block the flow; add an
+            obstruction to make one an obstacle. Eddy zones behind a blockage are sized by ratios
+            and carry no flow below its top; the swirl inside them is not computed.</dd></div>
+        <div><span class="rf-chip is-part">Partly</span><dt>The river bed in a terrain model</dt>
+          <dd>Most terrain models record the water surface. Unless told otherwise, the tool carves a
+            channel of the depth and width you give and labels the reach as estimated.</dd></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum"></span><h2>How exact the numbers are</h2></div>
+    <div class="rf-secbody">
+      <div class="rf-ledger">
+        <div><span class="rf-chip is-part">0.03 mm</span><dt>Backwater curve</dt>
+          <dd>The worst difference over 1&nbsp;km, with sections 20&nbsp;m apart, from an independent
+            RK4 integration of the gradually varied flow equation. Normal and critical depth match
+            their closed forms to four decimals.</dd></div>
+        <div><span class="rf-chip is-part">+5%</span><dt>Section spacing at a bridge</dt>
+          <dd>The afflux on a test reach was 197&nbsp;mm at the template's 15&nbsp;m spacing against
+            188&nbsp;mm once settled at 10&nbsp;m, and 255&nbsp;mm at 100&nbsp;m. Closer sections
+            near a structure give a steadier figure.</dd></div>
+        <div><span class="rf-chip is-part">1.44</span><dt>Weir over a bridge deck</dt>
+          <dd>When water goes over a deck, the flow divides between the opening and a broad-crested
+            weir with HEC-RAS's coefficient for decks, drowned by a high level below. The head is the
+            depth over the deck, without the approach velocity head, which errs towards a higher
+            level. It matches a hand summation to 0.1&nbsp;m&sup3;/s.</dd></div>
+        <div><span class="rf-chip is-part">check</span><dt>Yarnell's pier equation</dt>
+          <dd>Reported beside the energy method at each bridge with piers, as a second opinion on the
+            rise the piers alone cause. It matches a hand calculation exactly.</dd></div>
+        <div><span class="rf-chip is-part">m AOD</span><dt>Terrain positions</dt>
+          <dd>A GeoTIFF in British National Grid keeps its real position, good to a few metres; one
+            in another grid is not placed on the map. An ASC file cannot say, so the grid is assumed
+            and the window says so.</dd></div>
+      </div>
+      <p class="rf-note"><b>These figures are internal consistency, not validation.</b> They come from
+        the tool's own checks against closed-form results and independent calculations. None is a
+        comparison with measured river levels or with another model's run.</p>
+    </div>
+  </section>
+
+  <section class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum"></span><h2>Against HEC-RAS</h2></div>
+    <div class="rf-secbody">
+      <p class="rf-note"><b>Provenance.</b> A comparison of methods as the code states them. No run of
+        HEC-RAS on the same reach stands behind it.</p>
+      <p>The engine follows HEC-RAS's steady-flow method: the standard step, conveyance subdivision,
+        blocked obstructions, levees and ineffective areas, the energy method through a bridge with
+        Yarnell's equation alongside, and a weir over an overtopped deck. It differs in making eddy
+        zones automatically from fixed ratios and clearing them gradually, in leaving the approach
+        velocity out of the weir head, in drowning the deck weir by Villemonte's equation rather than
+        HEC-RAS's curve, in offering the energy method only at bridges, and in having no supercritical
+        or mixed-flow regime.</p>
+    </div>
+  </section>
+
+  <section class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum"></span><h2>Where it stops</h2></div>
+    <div class="rf-secbody">
+      <p>The tool is for teaching relationships and orders of magnitude &mdash; why a bridge opening
+        raises the water upstream and not downstream, what a flood wall does to the next street,
+        how a floodplain changes a river's response to more flow. For a flood risk assessment, a
+        planning submission or any figure someone will rely on, use a validated model run by someone
+        qualified to run it. <b>A steady, one-dimensional model is too simple to serve that
+        purpose.</b></p>
+    </div>
+  </section>
+
+  <div class="rf-footer">
+
+    <h3>Licence</h3>
+    <p>&copy; Karam Al-Obaidi. The code is licensed <b>MIT</b>; the accompanying material &mdash;
+      this page, the documentation and the screenshots &mdash; is
+      <b><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></b>.
+      Both permit any use, including commercial, and ask only that you credit the author.</p>
+    <p><b>Further notices travel with the work.</b> three.js (also MIT) is <b>bundled into the
+      file</b>; its notice is in <span class="rf-mono">NOTICE</span>. River lines from OpenStreetMap,
+      and screenshots that include the map, carry &copy; OpenStreetMap contributors under the Open
+      Database License. A terrain model you load carries its own licence.</p>
+    <p>A model you make with the tool is <b>yours</b>. None of these licences claims anything over
+      your river, your results, your CSV or the images you export.</p>
+
+    <h3 id="how-this-was-developed" style="scroll-margin-top:100px;">How this was developed</h3>
+    <p>I design the application: I define the problem and the scope, and choose the methods and the
+      sources. I test it in use, find its bugs, and decide what is released and when. The code is
+      written with an AI coding assistant working to my specification and direction: it writes most
+      of the code, drafts the documentation for my review, diagnoses bugs and proposes fixes that I
+      test, and writes and runs the automated tests and release checks. I retain full intellectual
+      responsibility for the design, the methods and the results, including any errors.</p>
+
+    <h3 id="how-to-cite" style="scroll-margin-top:100px;">How to cite</h3>
+    <p>Cite it as software. Keeping the copyright notice in the file satisfies the licence; a
+      citation is the scholarly act on top of that.</p>
+    <p class="rf-ref">Al-Obaidi, K. M. (2026). <i>River Flood Lab: A browser-based teaching tool for
+      river flow, water level, obstructions and bridges</i> (Version 0.1.0) [Computer software].
+      <a href="https://github.com/arch85-km/river-flood-lab" target="_blank" rel="noopener">https://github.com/arch85-km/river-flood-lab</a></p>
+<pre>@software{alobaidi2026riverfloodlab,
+  author    = {Al-Obaidi, Karam M.},
+  title     = {River Flood Lab: A browser-based teaching tool for river flow, water level, obstructions and bridges},
+  year      = {2026},
+  version   = {0.1.0},
+  url       = {https://github.com/arch85-km/river-flood-lab},
+  note      = {Code MIT licensed; accompanying material CC BY 4.0}
+}</pre>
+    <p>The tool has not yet been released. A DOI will be added when the first release is archived on
+      Zenodo.</p>
+    <p><b>Report five things alongside any figure:</b> the flow and climate allowance, the downstream
+      boundary, the eddy-zone settings, where the river's levels came from, and the section spacing
+      near any structure. The CSV header carries the first four.</p>
+
+    <h3>References</h3>
+    <p class="rf-ref">Chow, V. T. (1959). <i>Open-Channel Hydraulics</i>. New York: McGraw-Hill,
+      chapters 3 and 10.
+      <span style="color:var(--rf-ink3)">&mdash; Critical depth (chapter 3) and the standard-step method
+      (chapter 10).</span></p>
+    <p class="rf-ref">Brunner, G. W. (2016). <i>HEC-RAS River Analysis System: Hydraulic Reference
+      Manual</i>, Version 5.0, CPD-69. Davis, CA: US Army Corps of Engineers, Hydrologic Engineering
+      Center, chapters 2, 3 and 5.
+      <span style="color:var(--rf-ink3)">&mdash; Energy losses and their coefficients, conveyance,
+      bridges and the deck weir coefficient.</span></p>
+    <p class="rf-ref">Yarnell, D. L. (1934). <i>Bridge Piers as Channel Obstructions</i>. Technical
+      Bulletin No. 442. Washington, DC: US Department of Agriculture.
+      <span style="color:var(--rf-ink3)">&mdash; The pier check.</span></p>
+    <p class="rf-ref">Villemonte, J. R. (1947). &lsquo;Submerged weir discharge studies&rsquo;,
+      <i>Engineering News-Record</i>, 139(26).
+      <span style="color:var(--rf-ink3)">&mdash; Drowning of the deck weir.</span></p>
+
+  </div>
+</div>

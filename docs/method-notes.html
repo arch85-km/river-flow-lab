@@ -1,0 +1,829 @@
+<!-- ==========================================================================
+     River Flood Lab — Method Notes
+     Paste into an HTML block.
+     
+     Everything is scoped to .rf-doc, so nothing here can touch the rest of
+     your theme. The style is Solar Analysis Lab's with the prefix changed,
+     followed by the karam.me.uk site-style and heading blocks.
+     © Karam Al-Obaidi
+     ========================================================================== -->
+<style>
+.rf-doc{
+  --rf-paper:#F1F2EE; --rf-surface:#FBFBF9; --rf-surface2:#E8EAE4;
+  --rf-ink:#16191B; --rf-ink2:#4C555A; --rf-ink3:#5F696E;
+  --rf-rule:#D6D9D1; --rf-rule2:#E5E7E1;
+  --rf-accent:#1D5A73; --rf-accent-soft:rgba(29,90,115,.10);
+  --rf-ok:#3F6B47;  --rf-ok-soft:rgba(63,107,71,.12);
+  --rf-warn:#8A6410;--rf-warn-soft:rgba(138,100,16,.13);
+  --rf-no:#8E3A32;  --rf-no-soft:rgba(142,58,50,.11);
+  /* Headings and body follow the site's own typeface. `inherit` resolves where
+     it is used — inside .rf-doc, whose parent is the page container — so
+     this keeps working if the theme font ever changes.
+     The monospace stack must NOT inherit: the table number columns use
+     font-variant-numeric:tabular-nums and align on fixed-width digits, and the
+     formulas and BibTeX block depend on their spacing. */
+  --rf-fd:"Poppins",system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --rf-fb:inherit;
+  --rf-fm:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --rf-measure:90ch; --rf-rail:4.75rem;
+
+  background:var(--rf-paper); color:var(--rf-ink);
+  font-family:var(--rf-fb); font-size:17px; line-height:1.65; font-weight:400;
+  max-width:1040px; margin:0 auto; padding:0 20px 4rem;
+  -webkit-font-smoothing:antialiased; text-align:left;
+}
+@media (prefers-color-scheme:dark){
+  .rf-doc.rf-auto-dark{
+    --rf-paper:#121517; --rf-surface:#191D20; --rf-surface2:#21262A;
+    --rf-ink:#E9EBE6; --rf-ink2:#A6AFB4; --rf-ink3:#79838A;
+    --rf-rule:#2C3235; --rf-rule2:#232829;
+    --rf-accent:#74B6D0; --rf-accent-soft:rgba(116,182,208,.14);
+    --rf-ok:#7FB88C;  --rf-ok-soft:rgba(127,184,140,.14);
+    --rf-warn:#D6A748;--rf-warn-soft:rgba(214,167,72,.15);
+    --rf-no:#DD8479;  --rf-no-soft:rgba(221,132,121,.14);
+  }
+}
+
+/* local reset — only inside .rf-doc */
+.rf-doc *,.rf-doc *::before,.rf-doc *::after{box-sizing:border-box;}
+.rf-doc h1,.rf-doc h2,.rf-doc h3,.rf-doc h4,.rf-doc p,.rf-doc ul,.rf-doc ol,
+.rf-doc dl,.rf-doc dt,.rf-doc dd,.rf-doc table,.rf-doc figure{margin:0;padding:0;}
+.rf-doc ul,.rf-doc ol{list-style-position:outside;}
+.rf-doc li{margin:0;}
+.rf-doc img{max-width:100%;height:auto;}
+.rf-doc a{color:var(--rf-accent);text-decoration:underline;text-underline-offset:2px;}
+.rf-doc a:focus-visible{outline:2px solid var(--rf-accent);outline-offset:3px;}
+.rf-doc code,.rf-doc .rf-mono{font-family:var(--rf-fm);font-size:.855em;}
+/* Inline bold defaults to 700. A site that ships only 400/500/600 has no such
+   face, so the browser either drops to 600 or fakes one by smearing the 400.
+   Pin it to a weight that exists. */
+.rf-doc b,.rf-doc strong{font-weight:600;}
+.rf-doc code{background:var(--rf-accent-soft);color:var(--rf-accent);
+  padding:.1em .34em;border-radius:2px;border:0;}
+
+/* masthead */
+.rf-doc .rf-masthead{padding:3.5rem 0 2.25rem;border-bottom:2px solid var(--rf-ink);}
+/* The document's own title is an h2, not an h1: the host page supplies the h1,
+   and two of those on one page give a screen reader competing document titles.
+   Styled by class so it keeps the masthead scale regardless of tag. */
+.rf-doc .rf-title{font-family:var(--rf-fd);font-weight:600;
+  font-size:clamp(2.1rem,6.2vw,3.35rem);line-height:1.02;letter-spacing:-.028em;
+  text-wrap:balance;margin:0 0 1.1rem;color:var(--rf-ink);}
+.rf-doc .rf-standfirst{max-width:var(--rf-measure);font-size:1.14rem;line-height:1.6;
+  color:var(--rf-ink2);margin:0;}
+.rf-doc .rf-standfirst strong{color:var(--rf-ink);font-weight:600;}
+.rf-doc .rf-byline{display:flex;flex-wrap:wrap;gap:.5rem 1.6rem;margin-top:1.9rem;
+  font-family:var(--rf-fm);font-size:.74rem;letter-spacing:.04em;color:var(--rf-ink3);}
+.rf-doc .rf-byline b{color:var(--rf-ink2);font-weight:500;}
+/* The version line takes the whole width, so the three descriptor items keep one
+   row and it sits under them rather than wrapping into the gap after the last. */
+.rf-doc .rf-byline .rf-brow{flex-basis:100%;}
+
+/* trap notice */
+.rf-doc .rf-traps{margin:2.5rem 0;border:1px solid var(--rf-rule);
+  border-left:4px solid var(--rf-no);background:var(--rf-surface);padding:1.5rem 1.6rem;}
+.rf-doc .rf-traps h2{font-family:var(--rf-fd);font-size:.82rem;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--rf-no);margin:0 0 .9rem;}
+.rf-doc .rf-traps ol{margin:0;padding-left:1.15rem;display:grid;gap:.6rem;}
+.rf-doc .rf-traps li{max-width:var(--rf-measure);}
+
+/* sections */
+.rf-doc .rf-sec{padding:3.25rem 0 0;}
+.rf-doc .rf-sechead{display:grid;grid-template-columns:var(--rf-rail) 1fr;
+  align-items:baseline;gap:0 1rem;border-top:1px solid var(--rf-rule);
+  padding-top:1.4rem;margin-bottom:1.6rem;}
+.rf-doc .rf-secnum{font-family:var(--rf-fm);font-size:.95rem;font-weight:600;
+  color:var(--rf-accent);letter-spacing:.02em;font-variant-numeric:tabular-nums;}
+.rf-doc .rf-sechead h2{font-family:var(--rf-fd);font-weight:600;
+  font-size:clamp(1.45rem,3.3vw,1.95rem);line-height:1.12;letter-spacing:-.02em;
+  text-wrap:balance;margin:0;color:var(--rf-ink);}
+.rf-doc .rf-secbody{display:grid;grid-template-columns:var(--rf-rail) minmax(0,1fr);gap:0 1rem;}
+.rf-doc .rf-secbody>*{grid-column:2;}
+.rf-doc .rf-secbody>p,.rf-doc .rf-secbody>ul,.rf-doc .rf-secbody>ol{max-width:var(--rf-measure);}
+.rf-doc .rf-secbody>p{margin:0 0 1.05rem;}
+.rf-doc .rf-secbody>ul,.rf-doc .rf-secbody>ol{margin:0 0 1.15rem;padding-left:1.15rem;
+  display:grid;gap:.5rem;}
+.rf-doc h3{font-family:var(--rf-fd);font-weight:600;font-size:1.06rem;
+  letter-spacing:-.005em;margin:1.9rem 0 .7rem;color:var(--rf-ink);}
+.rf-doc .rf-secbody>h3:first-child{margin-top:0;}
+.rf-doc h4{font-family:var(--rf-fm);font-weight:600;font-size:.74rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--rf-ink3);margin:1.6rem 0 .6rem;}
+
+.rf-doc .rf-formula{font-family:var(--rf-fm);font-size:.84rem;line-height:1.75;
+  background:var(--rf-surface);border:1px solid var(--rf-rule);
+  border-left:3px solid var(--rf-accent);padding:.95rem 1.1rem;margin:0 0 1.2rem;
+  overflow-x:auto;white-space:pre;color:var(--rf-ink);}
+.rf-doc .rf-formula em{color:var(--rf-ink3);font-style:normal;}
+.rf-doc .rf-note{font-size:.9rem;color:var(--rf-ink2);border-left:2px solid var(--rf-rule);
+  padding-left:.95rem;margin:0 0 1.2rem;max-width:var(--rf-measure);}
+
+/* tables */
+.rf-doc .rf-tbl{overflow-x:auto;margin:0 0 1.4rem;border:1px solid var(--rf-rule);
+  background:var(--rf-surface);}
+.rf-doc .rf-tbl table{border-collapse:collapse;width:100%;font-size:.845rem;
+  line-height:1.45;background:transparent;}
+.rf-doc .rf-tbl th,.rf-doc .rf-tbl td{padding:.5rem .7rem;text-align:left;
+  vertical-align:top;border:0;border-bottom:1px solid var(--rf-rule2);color:var(--rf-ink);}
+.rf-doc .rf-tbl thead th{font-family:var(--rf-fm);font-size:.68rem;font-weight:600;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--rf-ink3);
+  background:var(--rf-surface2);border-bottom:1px solid var(--rf-rule);white-space:nowrap;}
+.rf-doc .rf-tbl tbody tr:last-child td{border-bottom:0;}
+.rf-doc .rf-tbl tbody tr{background:transparent;}
+.rf-doc .rf-tbl .rf-n{text-align:right;font-family:var(--rf-fm);
+  font-variant-numeric:tabular-nums;white-space:nowrap;}
+.rf-doc .rf-tbl .rf-p{font-family:var(--rf-fm);font-size:.8rem;white-space:nowrap;}
+.rf-doc .rf-tbl .rf-d{font-family:var(--rf-fm);font-variant-numeric:tabular-nums;
+  white-space:nowrap;color:var(--rf-accent);font-weight:500;text-align:right;}
+.rf-doc .rf-tbl caption{caption-side:bottom;text-align:left;padding:.6rem .7rem;
+  font-size:.78rem;color:var(--rf-ink3);border-top:1px solid var(--rf-rule2);}
+
+/* chips + ledger */
+.rf-doc .rf-chip{display:inline-block;font-family:var(--rf-fm);font-size:.64rem;
+  font-weight:600;letter-spacing:.07em;text-transform:uppercase;padding:.15em .5em;
+  border-radius:2px;white-space:nowrap;}
+.rf-doc .rf-chip.is-in{background:var(--rf-ok-soft);color:var(--rf-ok);}
+.rf-doc .rf-chip.is-part{background:var(--rf-warn-soft);color:var(--rf-warn);}
+.rf-doc .rf-chip.is-out{background:var(--rf-no-soft);color:var(--rf-no);}
+.rf-doc .rf-ledger{display:grid;gap:0;border:1px solid var(--rf-rule);
+  background:var(--rf-surface);margin-bottom:1.4rem;}
+.rf-doc .rf-ledger>div{display:grid;grid-template-columns:7.5rem minmax(0,1fr);
+  gap:.2rem .9rem;padding:.8rem 1rem;border-bottom:1px solid var(--rf-rule2);}
+.rf-doc .rf-ledger>div:last-child{border-bottom:0;}
+.rf-doc .rf-ledger dt{font-family:var(--rf-fd);font-weight:600;font-size:.95rem;
+  grid-column:2;margin:0;color:var(--rf-ink);}
+.rf-doc .rf-ledger .rf-chip{grid-row:1;grid-column:1;align-self:start;margin-top:.18rem;}
+.rf-doc .rf-ledger dd{grid-column:2;margin:0;font-size:.93rem;color:var(--rf-ink2);
+  line-height:1.55;}
+
+/* exercises */
+.rf-doc .rf-ex{border:1px solid var(--rf-rule);background:var(--rf-surface);
+  padding:1.5rem 1.6rem;margin-bottom:1.5rem;}
+.rf-doc .rf-ex-n{font-family:var(--rf-fm);font-size:.7rem;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--rf-accent);
+  display:block;margin-bottom:.35rem;}
+.rf-doc .rf-ex h3{margin:0 0 .9rem;font-size:1.18rem;}
+.rf-doc .rf-steps{margin:0;padding-left:1.2rem;display:grid;gap:.5rem;font-size:.95rem;}
+.rf-doc .rf-steps code{font-size:.8rem;}
+.rf-doc .rf-principle{font-size:.93rem;color:var(--rf-ink2);
+  border-top:1px solid var(--rf-rule2);padding-top:.85rem;margin:.95rem 0 0;}
+.rf-doc .rf-principle b{color:var(--rf-ink);font-weight:600;}
+
+/* footer */
+.rf-doc .rf-footer{margin-top:4rem;padding-top:1.6rem;border-top:2px solid var(--rf-ink);
+  font-size:.86rem;color:var(--rf-ink2);}
+.rf-doc .rf-footer p{max-width:var(--rf-measure);margin:0 0 .8rem;}
+.rf-doc .rf-cite{font-family:var(--rf-fm);font-size:.78rem;color:var(--rf-ink3);line-height:1.7;}
+.rf-doc .rf-refs{max-width:var(--rf-measure);margin:0 0 1.2rem;padding-left:1.15rem;
+  display:grid;gap:.55rem;font-size:.9rem;color:var(--rf-ink2);}
+.rf-doc .rf-refs b{color:var(--rf-ink);font-weight:600;}
+.rf-doc .rf-refs .rf-chip{margin-right:.4rem;vertical-align:.08em;}
+.rf-doc .rf-ref{border-left:2px solid var(--rf-rule);padding-left:.95rem;margin:0 0 1rem;
+  max-width:var(--rf-measure);font-size:.92rem;color:var(--rf-ink2);}
+.rf-doc pre{margin:0 0 1rem;padding:.9rem 1rem;background:var(--rf-surface);
+  border:1px solid var(--rf-rule);overflow-x:auto;font-family:var(--rf-fm);
+  font-size:.78rem;line-height:1.6;color:var(--rf-ink);white-space:pre;}
+
+@media (max-width:720px){
+  .rf-doc{--rf-rail:0px;font-size:16px;}
+  .rf-doc .rf-sechead{grid-template-columns:1fr;gap:.35rem;}
+  .rf-doc .rf-secbody{grid-template-columns:minmax(0,1fr);}
+  .rf-doc .rf-secbody>*{grid-column:1;}
+  .rf-doc .rf-traps,.rf-doc .rf-ex{padding:1.15rem;}
+}
+@media (max-width:560px){
+  .rf-doc .rf-ledger>div{grid-template-columns:1fr;}
+  .rf-doc .rf-ledger .rf-chip{grid-row:auto;grid-column:1;justify-self:start;margin-bottom:.3rem;}
+  .rf-doc .rf-ledger dt,.rf-doc .rf-ledger dd{grid-column:1;}
+}
+@media (prefers-reduced-motion:reduce){
+  .rf-doc *{animation-duration:.01ms !important;transition-duration:.01ms !important;}
+}
+
+/* ---- Site style ---------------------------------------------------------
+   The rules above are the page's own design system. This block sets it in
+   karam.me.uk's style instead: its palette and red, Poppins headings and
+   labels over Source Serif 4 body text, hairlines rather than boxes, and
+   section titles set as small labels over a hairline, as the applications
+   page sets its tiers ("01 SET UP"). The site has no dark mode, so neither
+   has this page. Monospace is kept for formulas and code only. */
+.rf-doc,
+.rf-doc.rf-auto-dark{
+  --rf-paper:transparent; --rf-surface:#f4f6f9; --rf-surface2:#eceef1;
+  --rf-ink:#12161d; --rf-ink2:#4e5765; --rf-ink3:#5f6875;
+  --rf-rule:rgba(10,12,16,.16); --rf-rule2:rgba(10,12,16,.07);
+  --rf-accent:#b41f1f; --rf-accent-soft:rgba(180,31,31,.07);
+  --rf-ok:#2f6b3f; --rf-ok-soft:transparent;
+  --rf-warn:#8a6410; --rf-warn-soft:transparent;
+  --rf-no:#b41f1f; --rf-no-soft:transparent;
+  --rf-fd:"Poppins",system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --rf-fb:"Source Serif 4",Georgia,serif;
+  --rf-fl:"Poppins",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  .rf-doc.rf-auto-dark{
+    --rf-paper:transparent; --rf-surface:#f4f6f9; --rf-surface2:#eceef1;
+    --rf-ink:#333; --rf-ink2:#333; --rf-ink3:#5f6875;
+    --rf-rule:rgba(10,12,16,.16); --rf-rule2:rgba(10,12,16,.07);
+    --rf-accent:#b41f1f; --rf-accent-soft:rgba(180,31,31,.07);
+    --rf-ok:#2f6b3f; --rf-ok-soft:transparent;
+    --rf-warn:#8a6410; --rf-warn-soft:transparent;
+    --rf-no:#b41f1f; --rf-no-soft:transparent;
+  }
+}
+.rf-doc{line-height:1.6;}
+/* labels: small uppercase Poppins, not monospace */
+.rf-doc .rf-eyebrow,.rf-doc .rf-byline,.rf-doc .rf-secnum,.rf-doc h4,.rf-doc .rf-chip,
+.rf-doc .rf-ex-n,.rf-doc .rf-fig figcaption,.rf-doc .rf-tbl thead th,.rf-doc .rf-cite{
+  font-family:var(--rf-fl) !important;}
+.rf-doc .rf-eyebrow{font-size:.72rem;font-weight:500;letter-spacing:.07em;}
+.rf-doc .rf-byline{font-size:.78rem;letter-spacing:0;}
+.rf-doc h4,.rf-doc .rf-tbl thead th{font-weight:500;letter-spacing:.07em;}
+.rf-doc .rf-chip{background:none !important;padding:0;font-weight:500;letter-spacing:.07em;}
+.rf-doc .rf-fig figcaption{text-transform:none;letter-spacing:0;font-size:.8rem;}
+.rf-doc .rf-tbl .rf-n,.rf-doc .rf-tbl .rf-d,.rf-doc .rf-tbl .rf-p{
+  font-family:var(--rf-fb);font-variant-numeric:tabular-nums;}
+.rf-doc h1,.rf-doc h3,.rf-doc .rf-ledger dt{font-weight:500;letter-spacing:-.01em;}
+/* hairlines, not boxes or heavy rules */
+.rf-doc .rf-masthead{border-bottom:1px solid var(--rf-rule);}
+.rf-doc .rf-footer{border-top:1px solid var(--rf-rule);}
+.rf-doc .rf-traps{border:0;background:none;padding:0;}
+.rf-doc .rf-traps h2{font-weight:500;letter-spacing:.07em;color:var(--rf-ink);}
+.rf-doc .rf-ex{border:0;border-top:1px solid var(--rf-rule);background:none;padding:1.3rem 0 0;}
+.rf-doc .rf-ledger{border:0;background:none;}
+.rf-doc .rf-ledger>div{padding:.8rem 0;}
+.rf-doc .rf-tbl{border:0;}
+.rf-doc code{background:var(--rf-surface);color:var(--rf-ink);}
+.rf-doc .rf-fig svg{border:0;background:var(--rf-surface);}
+/* section titles as tier labels: number, title, hairline */
+.rf-doc .rf-sec{padding-top:2.2rem;}
+.rf-doc .rf-sechead{display:flex;gap:10px;align-items:baseline;border-top:0;
+  border-bottom:1px solid var(--rf-rule);padding:0 0 7px;margin-bottom:1.3rem;}
+.rf-doc .rf-secnum{font-size:.72rem;font-weight:600;color:var(--rf-ink);letter-spacing:.04em;}
+.rf-doc .rf-sechead h2{font-family:var(--rf-fl);font-size:.72rem;font-weight:500;
+  letter-spacing:.07em;text-transform:uppercase;line-height:1.4;color:var(--rf-ink3);}
+.rf-doc .rf-secbody{display:block;}
+.rf-doc .rf-secnum:empty{display:none;}
+/* long addresses in the references break rather than push the page sideways on a phone */
+.rf-doc a{overflow-wrap:anywhere;}
+/* a column of figures has its heading over the figures, not at the far edge */
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(2), tbody td.rf-d:nth-child(2)) thead th:nth-child(2),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(3), tbody td.rf-d:nth-child(3)) thead th:nth-child(3),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(4), tbody td.rf-d:nth-child(4)) thead th:nth-child(4),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(5), tbody td.rf-d:nth-child(5)) thead th:nth-child(5),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(6), tbody td.rf-d:nth-child(6)) thead th:nth-child(6),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(7), tbody td.rf-d:nth-child(7)) thead th:nth-child(7),
+.rf-doc .rf-tbl table:has(tbody td.rf-n:nth-child(8), tbody td.rf-d:nth-child(8)) thead th:nth-child(8){text-align:right;}
+/* the first column names the row, so it reads from the left like the text, even when it holds a number (unless its heading is marked as a figure) */
+.rf-doc .rf-tbl table:not(:has(thead th.rf-n:first-child)) tr > :first-child{text-align:left;}
+/* the site theme stripes table rows and tints them on hover; the notes keep one even tint */
+.rf-doc .rf-tbl th,.rf-doc .rf-tbl td{background-color:transparent;}
+/* formulas are <pre>, not <div>: the site's HTML minifier leaves <pre> alone but collapses the line breaks in a <div> */
+/* no side padding of its own: the Elementor section sets the margins, so the notes line up with the blocks above them on every screen */
+.rf-doc{padding-left:0;padding-right:0;}
+/* and no width cap of its own: on a wide screen a capped, centred block starts further in than the blocks above it */
+.rf-doc,.rf-doc.rf-auto-dark{max-width:none;margin-left:0;margin-right:0;}
+/* text runs the full width of the column, as the exercises do */
+.rf-doc,.rf-doc.rf-auto-dark{--rf-measure:none;}
+/* the title and text as the site's own page headings and body set them */
+.rf-doc,.rf-doc.rf-auto-dark{--rf-ink:#333;--rf-ink2:#333;}
+.rf-doc h1,.rf-doc .rf-title{font-size:2em;font-weight:600;line-height:1.15;letter-spacing:0;color:#333;}
+.rf-doc .rf-standfirst{color:#333;}
+/* each ledger item reads as one block: its tag above its title, not in a side column */
+.rf-doc .rf-ledger>div{grid-template-columns:minmax(0,1fr);}
+.rf-doc .rf-ledger .rf-chip{grid-row:auto;grid-column:1;justify-self:start;margin:0 0 .25rem;}
+.rf-doc .rf-ledger dt,.rf-doc .rf-ledger dd{grid-column:1;}
+/* inline interface terms and figure labels in Poppins too; <code> and formulas stay monospace */
+.rf-doc .rf-mono{font-family:var(--rf-fl);font-size:.9em;}
+.rf-doc .rf-fig svg text{font-family:var(--rf-fl);}
+/* every section heading in one style, the footer's "Licence": Poppins 500, sentence case,
+   dark, with a hairline under it. The section number, where there is one, matches it in grey. */
+.rf-doc .rf-traps h2,.rf-doc .rf-sechead h2,.rf-doc .rf-footer h3{font-family:var(--rf-fd);
+  font-size:1.32rem;font-weight:500;letter-spacing:-.01em;text-transform:none;color:var(--rf-ink);line-height:1.3;}
+@media (min-width:1280px){.rf-doc .rf-traps h2,.rf-doc .rf-sechead h2,.rf-doc .rf-footer h3{font-size:1.42rem;}}
+.rf-doc .rf-traps h2,.rf-doc .rf-footer h3{border-bottom:1px solid var(--rf-rule);padding-bottom:7px;}
+.rf-doc .rf-secnum{font-family:var(--rf-fd);font-size:1.32rem;font-weight:500;letter-spacing:0;color:var(--rf-ink3);line-height:1.3;}
+@media (min-width:1280px){.rf-doc .rf-secnum{font-size:1.42rem;}}
+/* light grey panels: the warnings, then every other section. The exercises always stay
+   white (marked rf-sec-ex in the markup), so their figures keep their own grey and are not a
+   box inside a box. The section part is wrapped in :is(), so a browser that cannot read it
+   drops only that part and still draws the warnings panel. The panels are
+   there so a long page reads in steps. Each panel reaches a little into the margin, so its
+   text stays in line with the rest; on a phone, where there is no margin to spare, it stays
+   inside the column. */
+.rf-doc .rf-traps,.rf-doc :is(.rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec)){background:var(--rf-surface);border:0;border-radius:4px;
+  margin-left:-1.25rem;margin-right:-1.25rem;padding:1.4rem 1.25rem 1.1rem;}
+/* the same space before every section heading, white or grey: 2rem between sections and
+   1.4rem above the heading inside each */
+.rf-doc .rf-traps,.rf-doc .rf-sec{margin-top:2rem;margin-bottom:2rem;}
+.rf-doc .rf-traps,.rf-doc .rf-sec{padding-top:1.4rem;}
+/* and no extra space at the foot of a panel */
+.rf-doc .rf-traps > :last-child,.rf-doc :is(.rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec)) .rf-secbody > :last-child{margin-bottom:0;}
+.rf-doc .rf-traps h2,.rf-doc :is(.rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec)) .rf-sechead{border-bottom-color:rgba(10,12,16,.12);}
+/* what already sits on grey turns white inside a grey panel, so it still stands out */
+.rf-doc .rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec) .rf-tbl,.rf-doc .rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec) .rf-formula,
+.rf-doc .rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec) .rf-fig svg,.rf-doc .rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec) code{background:#fff;}
+@media (max-width:700px){
+  .rf-doc .rf-traps,.rf-doc :is(.rf-sec:not(.rf-sec-ex):nth-child(even of .rf-sec)){margin-left:0;margin-right:0;padding-left:.9rem;padding-right:.9rem;}
+}
+</style>
+
+<div class="rf-doc">
+
+  <div class="rf-masthead">
+    <h2 class="rf-title">River Flood Lab &mdash; Method Notes</h2>
+    <p class="rf-standfirst">
+      What this tool computes, how it computes it, and &mdash; the part that matters most when you
+      cite it &mdash; <strong>what it does not model at all</strong>. Everything below is read from the
+      source code and the tool's own checks, not from what a river model is generally assumed to do.
+    </p>
+    <div class="rf-byline">
+      <span><b>Audience</b> Architecture and urban design students and staff</span>
+      <span><b>Engine</b> Steady 1D standard step &middot; Manning</span>
+      <span><b>Runs</b> Entirely in the browser</span>
+      <span><b>Version</b> 0.1.0 &middot; in development</span>
+    </div>
+  </div>
+
+  <div class="rf-traps">
+    <h2>Four things to know before you cite a number</h2>
+    <ol>
+      <li><b>It is a teaching model, not a flood risk assessment.</b> The template reach and a river
+        drawn on the map have idealised levels, not a survey, and a channel carved into a terrain
+        model is an estimate of a bed the model does not record. Every page and export says so.</li>
+      <li><b>The flow is steady.</b> The peak flow you set is held for ever: there is no hydrograph,
+        no storage on the floodplain and no timing. A short, sharp flood would not reach the levels
+        shown; a long one could.</li>
+      <li><b>It is one-dimensional.</b> Water moves along the river only. It cannot follow a flood
+        round the end of a wall or across a floodplain, so the tool judges those cases with simple
+        rules and says when it has. Buildings report the depth over their floor but do not block the
+        flow.</li>
+      <li><b>Results near a bridge depend on how far apart the sections are.</b> On a test reach the
+        afflux read 255&nbsp;mm with sections 100&nbsp;m apart and settled at 188&nbsp;mm from
+        10&nbsp;m. Compare designs on the same sections, read the change rather than the level, and
+        state the spacing.</li>
+    </ol>
+  </div>
+
+  <!-- 01 -->
+  <div class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum">01</span><h2>What it calculates</h2></div>
+    <div class="rf-secbody">
+      <p>One water surface along a reach of river for one steady flow, then the same reach without
+        your design, so that every result can be read as a change. From the water surface it derives
+        the figures below, section by section.</p>
+      <div class="rf-tbl"><table>
+        <thead><tr><th>Result</th><th>Unit</th><th>Where</th></tr></thead>
+        <tbody>
+          <tr><td><b>Water level</b>, depth, energy level</td><td class="rf-p">m</td><td>Every section</td></tr>
+          <tr><td><b>Velocity</b>, mean and in the channel</td><td class="rf-p">m/s</td><td>Every section</td></tr>
+          <tr><td><b>Froude number</b></td><td class="rf-p">&ndash;</td><td>Every section; the model holds it at or below 1</td></tr>
+          <tr><td><b>Change against no design</b></td><td class="rf-p">m</td><td>Every section, when there is a design</td></tr>
+          <tr><td><b>Afflux</b>, soffit clearance, flow regime</td><td class="rf-p">m</td><td>Each bridge</td></tr>
+          <tr><td><b>Flow over the deck</b> and through the opening</td><td class="rf-p">m&sup3;/s</td><td>Each overtopped bridge</td></tr>
+          <tr><td><b>Pier rise by Yarnell's equation</b></td><td class="rf-p">m</td><td>Each bridge with piers, as a check</td></tr>
+          <tr><td><b>Depth over the floor</b></td><td class="rf-p">m</td><td>Each building</td></tr>
+          <tr><td><b>Water level against flow</b></td><td class="rf-p">m</td><td>The chosen section, 28 flows</td></tr>
+        </tbody>
+        <caption>The CSV carries every row above to three decimals, with the settings in its header.</caption>
+      </table></div>
+      <p>The three flow buttons are set from the river itself. <b>River full</b> is the flow at which
+        the river without your design reaches the lower of its two bank tops at the chosen section,
+        found by bisection. <b>Normal day</b> is a quarter of that and <b>Major flood</b> twice it.
+        These are teaching anchors, not return periods: the tool has no hydrology, and a 1-in-100-year
+        flow has to come from somewhere else. A climate allowance in per cent multiplies whatever flow
+        is set.</p>
+      <h3>A flow from a float survey</h3>
+      <p>A flow measured on site can be entered from a simple survey: the channel's width and mean
+        depth, and the time a float takes over a measured distance. The surface runs faster than the
+        water near the bed, so the mean speed is taken as a fraction of the float's, 0.85 unless
+        changed (0.8 to 0.9 is usual). The climate allowance is set to 0, as a survey measures the
+        flow on the day.</p>
+<pre class="rf-formula">V_float = distance / time
+V_mean  = 0.85 · V_float
+Q       = V_mean · width · mean depth</pre>
+      <p>The tool then compares its own channel speed at the chosen section with the survey's mean
+        speed. Where the river's width and depth match the site, a large difference points to the
+        roughness: Manning's <i>n</i> can be adjusted until the two agree, a simple calibration.</p>
+    </div>
+  </div>
+
+  <!-- 02 -->
+  <div class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum">02</span><h2>The river as cross-sections</h2></div>
+    <div class="rf-secbody">
+      <p>The river is a row of cross-sections. Each is a ground line of offset and level pairs, read
+        left to right looking downstream, with two bank positions and three Manning's <i>n</i> values.
+        Chainage is measured upstream from the downstream end. Where a design element or an eddy zone
+        needs a section the survey does not have, one is interpolated between its neighbours, point by
+        point on the union of their fractional offsets.</p>
+      <p>At a trial water level each section is split at its banks into the left overbank, the
+        channel and the right overbank, and each part carries its own conveyance:</p>
+<pre class="rf-formula">K = (1/n) · A · R^(2/3),    R = A / P                          <em>per part</em>
+α = (ΣA)² · Σ(Kᵢ³ / Aᵢ²) / (ΣK)³                                <em>velocity-head coefficient</em></pre>
+      <p>Splitting the section this way is what lets a shallow, rough floodplain carry little flow
+        beside a deep channel. Without it a section that spills onto a floodplain would gain a large
+        area and look faster than it is.</p>
+      <h3>Water that cannot join the flow</h3>
+      <ul>
+        <li><b>Low ground behind a natural ridge</b> carries no flow, and is shown dry, until the water
+          rises over the ground between. The test is made on the natural ground, so a design element
+          does not cut off water that could pass it.</li>
+        <li><b>Behind a flood wall</b>, the ground carries no flow until the water overtops the crest;
+          then all of it does.</li>
+        <li><b>Water above the end of a ground line</b> is held by a vertical wall, flagged in the
+          table, which adds to the wetted perimeter. If this appears, the section is too narrow for
+          the flood.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 03 -->
+  <div class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum">03</span><h2>The water profile</h2></div>
+    <div class="rf-secbody">
+      <p>The profile is solved by the standard-step method, from the downstream end upwards, one
+        section at a time. At each step the level upstream is found that balances the energy
+        equation:</p>
+<pre class="rf-formula">WS₂ + α₂V₂²/2g  =  WS₁ + α₁V₁²/2g + hₑ
+hₑ = L · S̄f + C · | α₂V₂²/2g − α₁V₁²/2g |
+S̄f = ( 2Q / (K₁ + K₂) )²                                    <em>average conveyance</em>
+L  = (L_lob·Q̄_lob + L_ch·Q̄_ch + L_rob·Q̄_rob) / Q̄            <em>discharge-weighted</em></pre>
+      <p>The reach lengths differ for the two overbanks on a bend, worked out from the line on the
+        map. <i>C</i> is a contraction coefficient where the flow speeds up and an expansion
+        coefficient where it slows: 0.1 and 0.3, or 0.3 and 0.5 between a bridge and its neighbouring
+        sections &mdash; the values HEC-RAS recommends for gradual transitions and for typical bridges.
+        They are not shown in the interface.</p>
+      <h3>The downstream end</h3>
+      <p>The level at the downstream end is <b>normal depth</b> on the river bed's own fall there:
+        2&nbsp;in&nbsp;1,000 on the template, and the fall of the shape or the fitted bed on a drawn or
+        terrain reach. It is set with the reach and not shown in the interface, to keep it simple for
+        students; a project file can still carry a fixed level. Either way it is never below critical
+        depth: if it would be, the tool uses critical depth and flags the section. Its influence fades
+        upstream, and the runs with and without a design share it, so the change a design makes
+        depends on it far less than the levels themselves. Keep a design well upstream of the
+        downstream end.</p>
+      <h3>Critical depth and choking</h3>
+      <p>Critical depth is the level of least specific energy, found by scanning 400 levels from the
+        bed to 20&nbsp;m above the highest ground and refining the best one. Where no subcritical
+        level upstream can satisfy the energy equation &mdash; the flow is squeezed harder than the
+        section can pass at the energy available &mdash; the section is set to critical depth and
+        flagged, and the status says <i>The flow is squeezed</i>. The model does not compute
+        supercritical flow; a flagged section marks where a fuller model would be needed.</p>
+    </div>
+  </div>
+
+  <!-- 04 -->
+  <div class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum">04</span><h2>Obstructions and eddy zones</h2></div>
+    <div class="rf-secbody">
+      <p>An obstruction is a <b>blocked area</b>: over its length along the river, the ground under
+        it is raised to its top. The section loses that area and gains its sides as wetted perimeter.
+        An imported 3D model is treated the same way, as solid from the ground up to its top, cut
+        along the flow into strips.</p>
+      <p>Beside and behind a blockage the flow separates, leaving <b>eddy zones</b> of dead water.
+        The tool sizes them from the expansion and contraction ratios of the HEC-RAS bridge
+        method:</p>
+<pre class="rf-formula">downstream length = ER · w      <em>blockage against a side;  ER · w / 2 in mid-stream</em>
+upstream length   = CR · w      <em>CR · w / 2 in mid-stream</em>
+ER = 2,  CR = 1                  <em>this tool's defaults; both can be changed</em></pre>
+      <p>HEC-RAS gives no single value for either ratio. It reports expansion ratios from about 0.8
+        to 3.6, depending on the opening and the flow, and treats a contraction ratio of 1 as a rule of
+        thumb. ER&nbsp;2 and CR&nbsp;1 are this tool's choices within those ranges, not HEC-RAS
+        defaults.</p>
+      <p>Within a zone the dead water narrows in a straight line as the flow re-expands. Below the top
+        of the blockage the zone carries no flow. <b>Above it, the dead water stays still and only the
+        layer over it flows</b>, as its own part of the section, so the zone clears gradually as the
+        water rises. The swirl inside the zone is not computed. A zone shorter than the section
+        spacing is given a section of its own, so it is never missed. Strips of an imported model make
+        no eddy zones.</p>
+    </div>
+  </div>
+
+  <!-- 05 -->
+  <div class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum">05</span><h2>Bridges</h2></div>
+    <div class="rf-secbody">
+      <p>A bridge is an opening between two abutments, with piers inside it, under a deck with a
+        soffit (its underside) and a top. Abutments and piers block the section up to the deck top.
+        An abutment runs to the valley side unless given a length; past a short abutment the flood
+        passes round the bridge.</p>
+      <h3>Through the opening</h3>
+      <p>The flow through the opening is found by the same energy equation, with the bridge's own
+        loss coefficients. When the water reaches the soffit, the soffit closes the section
+        (<b>pressure flow</b>): water above it is cut off and the soffit becomes wetted perimeter.
+        The soffit acts only where the deck is.</p>
+      <h3>Over the deck</h3>
+      <p>When the water at the section above the bridge is higher than the deck, the flow divides
+        between the opening and the deck, which acts as a broad-crested weir. The division is found
+        by bisection until both routes give the same level upstream:</p>
+<pre class="rf-formula">Q_weir = Σ  C · H^1.5 · Δy · (1 − (h_d / H)^1.5)^0.385         <em>summed in strips across the deck</em>
+C   = 1.44 m^0.5/s                                              <em>HEC-RAS, for bridge decks</em>
+H   = upstream level − max(deck top, ground)                    <em>depth over the deck</em>
+h_d = downstream level − max(deck top, ground)                  <em>drowning, Villemonte 1947</em></pre>
+      <p>The head is the <b>depth of water over the deck</b>, without the approach velocity head.
+        That keeps the level from jumping as overtopping starts, and errs towards a higher level.
+        A high water level below the bridge drowns the weir and passes less over it, by Villemonte's
+        equation; HEC-RAS uses a different curve here (section 11).</p>
+      <h3>What is reported</h3>
+      <ul>
+        <li><b>Afflux</b>: the biggest rise above the same river with no bridges, from the bridge's
+          upstream face to the next bridge upstream. The section just above a bridge can sit in the
+          drawdown as the flow speeds into the opening, so it is not read alone.</li>
+        <li><b>Soffit clearance</b>: the soffit level less the highest water under the bridge.</li>
+        <li><b>Flow regime</b>: open, pressure flow, or overtopping, with how much goes over the deck.</li>
+        <li><b>Yarnell's pier rise</b>, as a check on the energy method, with the pier shape factor
+          <i>K</i> = 1.25 (square nose), 0.9 (semicircular) or 1.05 (triangular, 90&deg;), as HEC-RAS
+          tabulates them:</li>
+      </ul>
+<pre class="rf-formula">Δy = 2K · (K + 10ω − 0.6) · (a + 15a⁴) · V²/2g,    ω = V²/(2g·y)
+<em>V and y downstream of the bridge;  a = the share of the open area the piers take up</em></pre>
+    </div>
+  </div>
+
+  <!-- 06 -->
+  <div class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum">06</span><h2>Flood walls, buildings and floating objects</h2></div>
+    <div class="rf-secbody">
+      <p>A <b>flood wall</b> runs along one bank between two chainages. The ground behind it carries
+        no flow until the water overtops its crest. Where a wall is too short to reach a section, it is
+        given one.</p>
+      <p>A <b>building</b> reports the water level at its own chainage and the depth over its floor.
+        It is dry if it stands on low ground cut off by a natural ridge, or behind a wall that holds
+        at its own chainage on its own side &mdash; unless the floodplain just past an open end of the
+        wall is wet, in which case water is taken to come round the end and the status says so. A
+        wall tied into high ground still protects. This is a rule, not a calculation: a 1D model
+        cannot follow water along the back of a wall. <b>Buildings do not block the flow</b>; to make
+        one an obstacle, add an obstruction or import its model.</p>
+      <p>A <b>floating object</b> is a moored box. Only the part below the water blocks the flow:
+        the water above its underside is removed, its underside and sides become wetted perimeter,
+        and flow passes beneath it. It rises and falls with the water but cannot drift, because the
+        model is steady. A float deeper than the water blocks down to the bed. Its depth below the
+        water can be given directly or as a weight: a floating box sinks until it pushes aside its own
+        weight of water, so the depth is the weight divided by 1,000&nbsp;kg/m&sup3; and by its length
+        and width in plan. Its height above the water changes nothing in the results.</p>
+      <p>The underside acts like an ice cover: it adds friction to the flow beneath it. A hull is far
+        smoother than a river bed, so its wetted perimeter carries its own roughness, Manning's
+        <i>n</i>&nbsp;0.013 unless changed in Advanced, combined with the bed's by Horton's rule as
+        HEC-RAS combines roughness across a channel:</p>
+<pre class="rf-formula">n = ( Σ Pᵢ · nᵢ^1.5  /  Σ Pᵢ )^(2/3)          <em>Pᵢ the wetted perimeter of the bed and of the hull</em></pre>
+      <p>So a float only millimetres deep changes the water very little, and a heavier one raises it
+        mainly by the flow area it blocks.</p>
+    </div>
+  </div>
+
+  <!-- 07 -->
+  <div class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum">07</span><h2>Where the river comes from</h2></div>
+    <div class="rf-secbody">
+      <div class="rf-tbl"><table>
+        <thead><tr><th>Source</th><th>Levels</th><th>Labelled</th></tr></thead>
+        <tbody>
+          <tr><td><b>Template reach</b></td><td>An idealised channel and floodplains from the shape dialog: depth, bank slope, bed width, fall, floodplain width, rise to the valley side, roughness</td><td>Idealised, not surveyed</td></tr>
+          <tr><td><b>A line drawn on the map</b>, or a river from OpenStreetMap</td><td>The same shape, laid along the line, with sections square to it</td><td>Template levels, not surveyed</td></tr>
+          <tr><td><b>A terrain model</b>: GeoTIFF, ASC or OBJ</td><td>The ground from the file; a channel carved in unless the model holds the real bed</td><td>Channel estimated, not surveyed</td></tr>
+          <tr><td><b>Sections you type in</b></td><td>Your own survey, one section at a time</td><td>As you name it</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Building from a terrain model</h3>
+      <p>Most terrain models, including LIDAR, record the water surface rather than the river bed.
+        So by default the tool <b>carves a channel</b> of the depth, bed width and bank slope given,
+        and labels the reach as estimated. The bank tops are read from the model and smoothed over
+        seven sections, so one rough cell does not set the depth. The bed is fitted so it never rises
+        going downstream and stays at least 0.3&nbsp;m below the lower bank. Site measurements of
+        width and depth, by distance from the upstream end, override the sliders. The roughness of a
+        terrain reach is the template's, 0.035 in the channel and 0.06 on the floodplains.</p>
+      <p>The ground each side is read out to the width asked for, across gaps up to 10&nbsp;m wide
+        where the model has no data, as where LIDAR masks out the water. If the model is said to hold
+        the real bed but has no levels across the river, the tool says so rather than drawing a
+        straight line over the gap.</p>
+      <h3>Positions and distances</h3>
+      <p>A GeoTIFF is read for the grid it declares. In British National Grid it keeps its real
+        position and its levels are labelled m AOD; in any other grid, or with coordinates outside
+        Great Britain, it is not placed on the map. An ASC file cannot say which grid it uses, so
+        British National Grid is assumed and the window says so. The conversion to latitude and
+        longitude uses the Ordnance Survey formulae, good to a few metres &mdash; enough to mark a
+        place, not to set out a site. Distances on the map use the length of a degree on the WGS84
+        ellipsoid at the river's latitude.</p>
+    </div>
+  </div>
+
+  <!-- 08 -->
+  <div class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum">08</span><h2>What is and isn't modelled</h2></div>
+    <div class="rf-secbody">
+      <div class="rf-tbl"><table>
+        <thead><tr><th>Effect</th><th>Status</th><th>Consequence</th></tr></thead>
+        <tbody>
+          <tr><td><b>Time</b>: hydrograph, floodplain storage, travel time</td><td>Not modelled</td><td>The peak is held for ever; levels for a short flood are overstated</td></tr>
+          <tr><td><b>Supercritical and mixed flow</b></td><td>Not modelled</td><td>Held at critical depth and flagged</td></tr>
+          <tr><td><b>Flow across the floodplain and round wall ends</b></td><td>A rule, not a calculation</td><td>See section 06</td></tr>
+          <tr><td><b>Buildings as obstacles</b></td><td>Not modelled</td><td>Add an obstruction or import the model</td></tr>
+          <tr><td><b>Swirl inside an eddy zone</b></td><td>Not modelled</td><td>The zone's extent is set by ratios, its flow by a dead-water rule</td></tr>
+          <tr><td><b>Culverts, sluices, weirs in the river</b></td><td>Not modelled</td><td>A culvert in OpenStreetMap is drawn and named in the status, not computed</td></tr>
+          <tr><td><b>Sediment and scour</b></td><td>Not modelled; hints only</td><td>Places are named from the channel speed alone: 1.5 times faster or 0.6 times slower than the reach's median, changed by the design by 10% or more, and wet eddy zones. Whether a bed scours depends on its material, which the tool does not know</td></tr>
+          <tr><td><b>Debris blocking a bridge</b></td><td>Not modelled</td><td>A blocked opening can be imitated with an obstruction</td></tr>
+          <tr><td><b>Rain on the site, drains, groundwater</b></td><td>Not modelled</td><td>River flooding only</td></tr>
+          <tr><td><b>Wind, waves, ice</b></td><td>Not modelled</td><td>&ndash;</td></tr>
+          <tr><td><b>Velocity across a part of the section</b></td><td>Not modelled</td><td>One mean velocity per part, so water coloured by speed changes along the river and at the banks, not around a pier</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- 09 -->
+  <div class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum">09</span><h2>Resolution and accuracy</h2></div>
+    <div class="rf-secbody">
+      <p>Each figure below comes from the tool's own engine checks, which compare the engine with a
+        closed-form result, an independent calculation written in the test, or itself under a
+        changed setting.</p>
+      <div class="rf-tbl"><table>
+        <thead><tr><th>Check</th><th class="rf-n">Engine</th><th class="rf-n">Against</th><th>Against what</th></tr></thead>
+        <tbody>
+          <tr><td>Normal depth, rectangle 10&nbsp;m wide, 20&nbsp;m&sup3;/s</td><td class="rf-n">1.6456&nbsp;m</td><td class="rf-n">1.6456&nbsp;m</td><td>Manning's equation</td></tr>
+          <tr><td>Normal depth, trapezoid 6&nbsp;m base, 2:1 sides, 35&nbsp;m&sup3;/s</td><td class="rf-n">2.1278&nbsp;m</td><td class="rf-n">2.1278&nbsp;m</td><td>Manning's equation</td></tr>
+          <tr><td>Critical depth, rectangle 8&nbsp;m wide, 30&nbsp;m&sup3;/s</td><td class="rf-n">1.1275&nbsp;m</td><td class="rf-n">1.1275&nbsp;m</td><td>Closed form</td></tr>
+          <tr><td>Backwater curve over 1&nbsp;km, sections 20&nbsp;m apart</td><td class="rf-n">0.03&nbsp;mm</td><td class="rf-n">&ndash;</td><td>Worst difference from an RK4 integration of the gradually varied flow equation</td></tr>
+          <tr><td>Yarnell's pier rise</td><td class="rf-n">86.36&nbsp;mm</td><td class="rf-n">86.36&nbsp;mm</td><td>Hand calculation</td></tr>
+          <tr><td>Flow over an overtopped deck</td><td class="rf-n">1,244.6&nbsp;m&sup3;/s</td><td class="rf-n">1,244.7&nbsp;m&sup3;/s</td><td>The weir equation summed by hand over the deck</td></tr>
+          <tr><td>Afflux</td><td class="rf-n">204.17&nbsp;mm</td><td class="rf-n">204.17&nbsp;mm</td><td>The biggest rise found from two separate runs</td></tr>
+        </tbody>
+        <caption>From <span class="rf-mono">tests/engine.test.mjs</span>, 65 checks.</caption>
+      </table></div>
+      <h3>The spacing of sections</h3>
+      <p>A bridge or a blockage acts on the sections that cross it, and its losses are spread over the
+        reach lengths either side. So the result depends on how close the sections are. Measured on a
+        1&nbsp;km test reach with a bridge, at 150&nbsp;m&sup3;/s:</p>
+      <div class="rf-tbl"><table>
+        <thead><tr><th>Section spacing</th><th class="rf-n">Afflux</th><th class="rf-n">Rise 300&nbsp;m upstream</th></tr></thead>
+        <tbody>
+          <tr><td>100&nbsp;m</td><td class="rf-n">255&nbsp;mm</td><td class="rf-n">244&nbsp;mm</td></tr>
+          <tr><td>50&nbsp;m</td><td class="rf-n">237&nbsp;mm</td><td class="rf-n">227&nbsp;mm</td></tr>
+          <tr><td>25&nbsp;m</td><td class="rf-n">217&nbsp;mm</td><td class="rf-n">207&nbsp;mm</td></tr>
+          <tr><td>15&nbsp;m (the template)</td><td class="rf-n">197&nbsp;mm</td><td class="rf-n">188&nbsp;mm</td></tr>
+          <tr><td>10&nbsp;m</td><td class="rf-n">188&nbsp;mm</td><td class="rf-n">179&nbsp;mm</td></tr>
+          <tr><td>5&nbsp;m</td><td class="rf-n">188&nbsp;mm</td><td class="rf-n">179&nbsp;mm</td></tr>
+        </tbody>
+        <caption>The figure settles from about 10&nbsp;m. At the template's 15&nbsp;m it is about 5 per cent high.</caption>
+      </table></div>
+      <h3>Steadiness</h3>
+      <p>As the flow rises the level upstream of a bridge rises with it, without jumps, through
+        pressure flow and into overtopping: by at most 0.11&nbsp;m for each 10&nbsp;m&sup3;/s with eddy
+        zones off, and 0.20&nbsp;m for each 20&nbsp;m&sup3;/s with them on, on the test reach.</p>
+      <p class="rf-note"><b>These figures are internal consistency, not validation.</b> They show the
+        engine solves the equations it states, correctly and steadily. None is a comparison with
+        measured river levels or with a run of another model, and they should not be described as
+        validation.</p>
+    </div>
+  </div>
+
+  <!-- 10 -->
+  <div class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum">10</span><h2>Inputs you control</h2></div>
+    <div class="rf-secbody">
+      <div class="rf-tbl"><table>
+        <thead><tr><th>Input</th><th>Default</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><b>Flow</b> and climate allowance</td><td>15&nbsp;m&sup3;/s, 0%</td><td>The flow used is the flow times (1 + allowance/100)</td></tr>
+          <tr><td><b>Downstream boundary</b></td><td>Normal depth on the bed's own fall (0.002 on the template)</td><td>Set with the reach, not in the interface; recorded in the CSV header (section 03)</td></tr>
+          <tr><td><b>Eddy zones</b></td><td>On, ER 2, CR 1</td><td>Turning them off lets the flow re-expand at once behind a blockage</td></tr>
+          <tr><td><b>Manning's <i>n</i></b>, per section</td><td>0.035 channel, 0.06 floodplain</td><td>The single largest unknown in any real reach</td></tr>
+          <tr><td><b>Section spacing</b></td><td>15&nbsp;m</td><td>See section 09</td></tr>
+          <tr><td><b>Floating object</b>: weight or depth below the water, hull roughness</td><td>0.5&nbsp;m deep, <i>n</i>&nbsp;0.013</td><td>Weight and depth are the same setting; height above the water changes nothing</td></tr>
+          <tr><td><b>Pier shape</b></td><td>Square nose, <i>K</i> 1.25, for a new bridge</td><td>Yarnell's check only</td></tr>
+          <tr><td><b>Abutment length</b></td><td>15&nbsp;m for a new bridge; left blank, to the valley sides</td><td>A short abutment lets the flood pass round the bridge</td></tr>
+        </tbody>
+      </table></div>
+      <p><b>Report these alongside any figure:</b> the flow and allowance, the downstream boundary, the
+        eddy settings, where the river's levels came from (template, drawn, terrain or survey), and the
+        section spacing near any structure. The CSV header carries the first three and the source of
+        the levels; its chainages show the spacing.</p>
+    </div>
+  </div>
+
+  <!-- 11 -->
+  <div class="rf-sec">
+    <div class="rf-sechead"><span class="rf-secnum">11</span><h2>Compared with HEC-RAS</h2></div>
+    <div class="rf-secbody">
+      <p class="rf-note"><b>Provenance.</b> This section compares the methods as the code states them
+        with HEC-RAS's published method. No run of HEC-RAS on the same reach stands behind it.</p>
+      <p>The engine follows HEC-RAS's steady-flow method closely: the standard step, conveyance
+        subdivision at the banks, average-conveyance friction slope, discharge-weighted reach lengths,
+        contraction and expansion losses, blocked obstructions, ineffective flow areas and levees
+        that carry no flow until overtopped, the energy method through a bridge with Yarnell's
+        equation alongside, and a weir over an overtopped deck with the coefficient HEC-RAS gives for
+        decks. Where it differs:</p>
+      <ul>
+        <li><b>Eddy zones</b> are made from the contraction and expansion ratios automatically, and
+          clear gradually above the blockage, where HEC-RAS asks the modeller to place ineffective
+          areas and switches them on or off at a level.</li>
+        <li><b>The ratios</b> for eddy zones are fixed defaults, ER&nbsp;2 and CR&nbsp;1, where HEC-RAS
+          gives ranges and regression equations for the modeller to choose from.</li>
+        <li><b>The weir head</b> leaves out the approach velocity head.</li>
+        <li><b>A drowned deck</b> passes less flow by Villemonte's equation. HEC-RAS uses the
+          submergence curve for trapezoidal weirs from <i>Hydraulics of Bridge Waterways</i>
+          (Bradley 1978), and by default passes to the energy method above 95 per cent
+          submergence.</li>
+        <li><b>Bridges</b> use the energy method only. HEC-RAS also offers the momentum method,
+          WSPRO, and orifice equations for pressure flow.</li>
+        <li><b>No mixed-flow regime</b>: supercritical flow is not computed.</li>
+      </ul>
+      <p>For a flood risk assessment, a planning submission or any figure someone will rely on, use a
+        validated model run by someone qualified to run it.</p>
+    </div>
+  </div>
+
+  <div class="rf-footer">
+
+    <h3>Licence</h3>
+    <p>&copy; Karam Al-Obaidi. The code is licensed <b>MIT</b>; the accompanying material &mdash;
+      this page, the documentation and the screenshots &mdash; is
+      <b><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></b>.
+      Both permit any use, including commercial, and ask only that you credit the author.</p>
+    <p><b>Further notices travel with the work.</b> three.js (also MIT) is <b>bundled into the
+      file</b>, so every copy redistributes three.js code; its notice is in
+      <span class="rf-mono">NOTICE</span>, with its licence header inside the bundled block. River
+      lines from OpenStreetMap, and screenshots that include the map, carry &copy; OpenStreetMap
+      contributors under the Open Database License. A terrain model you load carries its own licence
+      &mdash; for Environment Agency LIDAR, the Open Government Licence.</p>
+    <p>A model you make with the tool is <b>yours</b>. None of these licences claims anything over
+      your river, your results, your CSV or the images you export.</p>
+
+    <h3 id="how-this-was-developed" style="scroll-margin-top:100px;">How this was developed</h3>
+    <p>I design the application: I define the problem and the scope, and choose the methods and the
+      sources. I test it in use, find its bugs, and decide what is released and when. The code is
+      written with an AI coding assistant working to my specification and direction: it writes most
+      of the code, drafts the documentation for my review, diagnoses bugs and proposes fixes that I
+      test, and writes and runs the automated tests and release checks. I retain full intellectual
+      responsibility for the design, the methods and the results, including any errors.</p>
+
+    <h3 id="how-to-cite" style="scroll-margin-top:100px;">How to cite</h3>
+    <p>Cite it as software. Keeping the copyright notice in the file satisfies the licence; a
+      citation is the scholarly act on top of that.</p>
+    <p class="rf-ref">Al-Obaidi, K. M. (2026). <i>River Flood Lab: A browser-based teaching tool for
+      river flow, water level, obstructions and bridges</i> (Version 0.1.0) [Computer software].
+      <a href="https://github.com/arch85-km/river-flood-lab" target="_blank" rel="noopener">https://github.com/arch85-km/river-flood-lab</a></p>
+<pre>@software{alobaidi2026riverfloodlab,
+  author    = {Al-Obaidi, Karam M.},
+  title     = {River Flood Lab: A browser-based teaching tool for river flow, water level, obstructions and bridges},
+  year      = {2026},
+  version   = {0.1.0},
+  url       = {https://github.com/arch85-km/river-flood-lab},
+  note      = {Code MIT licensed; accompanying material CC BY 4.0}
+}</pre>
+    <p>The tool has not yet been released. A DOI will be added when the first release is archived on
+      Zenodo.</p>
+
+    <h3>References</h3>
+    <p>The sources the code itself names, with one added for the comparison with HEC-RAS. The code
+      names chapters but rarely bibliographic detail, which was added from the published record.</p>
+
+    <h4>The method</h4>
+    <p class="rf-ref">Chow, V. T. (1959). <i>Open-Channel Hydraulics</i>. New York: McGraw-Hill,
+      chapters 3 and 10.
+      <span style="color:var(--rf-ink3)">&mdash; Chapter 10: the standard-step method for gradually
+      varied flow. Chapter 3: specific energy, and critical depth as the level of least specific
+      energy. The code cites chapter 10 only.</span></p>
+    <p class="rf-ref">Brunner, G. W. (2016). <i>HEC-RAS River Analysis System: Hydraulic Reference
+      Manual</i>, Version 5.0, CPD-69. Davis, CA: US Army Corps of Engineers, Hydrologic Engineering
+      Center, chapters 2, 3 and 5.
+      <span style="color:var(--rf-ink3)">&mdash; Chapter 2: the energy equation, conveyance subdivision,
+      composite Manning's <i>n</i> (used here for a floating object's hull), average-conveyance
+      friction slope, discharge-weighted reach length, contraction and expansion
+      losses. Chapter 3: the recommended contraction and expansion coefficients. Chapter 5: the energy
+      method at bridges, contraction and expansion reach lengths, Yarnell's equation and its pier
+      shape factors, and the weir coefficient for bridge decks (2.6 in US units, 1.44 metric). The
+      code names chapters 2 and 5 but no edition; the chapter numbers are those of version 5.0, and
+      the later online manual keeps the same order.</span></p>
+    <p class="rf-ref">Yarnell, D. L. (1934). <i>Bridge Piers as Channel Obstructions</i>. Technical
+      Bulletin No. 442. Washington, DC: US Department of Agriculture.
+      <span style="color:var(--rf-ink3)">&mdash; The pier equation, reported as a check.</span></p>
+    <p class="rf-ref">Villemonte, J. R. (1947). &lsquo;Submerged weir discharge studies&rsquo;,
+      <i>Engineering News-Record</i>, 139(26).
+      <span style="color:var(--rf-ink3)">&mdash; The reduction in flow over a drowned weir. Secondary
+      sources disagree on the page numbers, so none are given here.</span></p>
+
+    <h4>For the comparison with HEC-RAS</h4>
+    <p class="rf-ref">Bradley, J. N. (1978). <i>Hydraulics of Bridge Waterways</i>. Hydraulic Design
+      Series No. 1, 2nd edition, revised. Washington, DC: Federal Highway Administration.
+      <span style="color:var(--rf-ink3)">&mdash; The submergence curve HEC-RAS uses for an overtopped
+      deck. Not used by this tool.</span></p>
+
+    <h4>Places and data</h4>
+    <p class="rf-ref">Ordnance Survey (2020). <i>A Guide to Coordinate Systems in Great Britain</i>,
+      v3.6. Southampton: Ordnance Survey.
+      <span style="color:var(--rf-ink3)">&mdash; The Helmert shift and transverse Mercator formulae
+      between British National Grid and latitude and longitude. The guide gives a single Helmert
+      shift as good to about 3&nbsp;m.</span></p>
+    <p class="rf-ref">OpenStreetMap contributors, under the Open Database License; Nominatim; the
+      Overpass API.
+      <span style="color:var(--rf-ink3)">&mdash; The map, place search, and river lines. Used only when
+      asked for.</span></p>
+
+    <h4>Named, but not cited</h4>
+    <p class="rf-ref"><span style="color:var(--rf-ink3)">Manning's equation is named throughout the code
+      without a source. The length of a degree on the WGS84 ellipsoid is computed from the standard
+      series, which the code does not attribute.</span></p>
+
+  </div>
+</div>
