@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If this tool informs a paper, a thesis, a lecture or a studio brief, please cite it as software."
 type: software
-title: "River Flow Lab: A browser-based teaching tool for river flow, water level, obstructions and bridges"
+title: "River Flow Lab: An interactive teaching tool for river hydraulics and design"
 version: 0.1.0
 abstract: >-
   A teaching tool for architecture and urban design students that shows how a
