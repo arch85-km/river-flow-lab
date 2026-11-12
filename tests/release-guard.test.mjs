@@ -34,7 +34,6 @@ const re = (files, f, pattern, b) => { if (!pattern.test(files[f])) throw new Er
 const json = (files, f, fn) => { const j = JSON.parse(files[f]); fn(j); files[f] = JSON.stringify(j, null, 2); };
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const longDate = iso => { const d = new Date(iso + 'T00:00:00Z'); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
-const BIB_END = "'}'].join('\\n');";   // the end of the © card's BibTeX lines in index.html
 
 // The version the files carry now.
 const V = readFileSync(join(ROOT, 'CITATION.cff'), 'utf8').match(/^version:[ \t]*"?([^"\s]+)/m)[1];
@@ -43,10 +42,11 @@ const V = readFileSync(join(ROOT, 'CITATION.cff'), 'utf8').match(/^version:[ \t]
 function unreleased(f) {
   f['CITATION.cff'] = f['CITATION.cff'].replace(/^date-released:.*\n/m, '').replace(/^doi:.*\n/m, '').replace(/^identifiers:\n(?:[ \t]+.*\n)*/m, '');
   re(f, 'index.html', /const RELEASED = (?:null|'[^']*');/, 'const RELEASED = null;');
-  f['index.html'] = f['index.html'].replace(/'  doi     = \{[^}]*\},', /g, '');
+  re(f, 'index.html', /const DOI = (?:null|'[^']*');/, 'const DOI = null;');
   for (const n of NOTES) {
     re(f, n, /(<b>Version<\/b>\s*[0-9.]+\s*&middot;\s*)[^<]+/, '$1in development');
-    f[n] = f[n].replace(/\n  doi       = \{[^}]*\},/g, '');
+    // no DOI cited and none mentioned: the BibTeX line goes, and any link or mention is blanked
+    f[n] = f[n].replace(/\n  doi       = \{[^}]*\},/g, '').replace(/10\.5281\/zenodo\.\d+/g, 'not-yet-minted');
   }
 }
 // A released state: from unreleased, version `to` on date `date`, with a concept
@@ -62,7 +62,7 @@ function released(f, { to = '9.9.9', date = '2026-12-01', concept = false, versi
   sub(f, 'index.html', `VERSION = '${V}'`, `VERSION = '${to}'`);
   sub(f, 'index.html', 'const RELEASED = null;', `const RELEASED = '${date}';`);
   const doi = versionDoi ? '10.5281/zenodo.101' : '10.5281/zenodo.100';
-  if (concept) sub(f, 'index.html', BIB_END, `'  doi     = {${doi}},', ${BIB_END}`);
+  if (concept) sub(f, 'index.html', 'const DOI = null;', `const DOI = '${doi}';`);
   for (const n of NOTES) {
     sub(f, n, `${V} &middot; in development`, `${to} &middot; ${longDate(date)}`);
     sub(f, n, `(Version ${V})`, `(Version ${to})`);
@@ -96,7 +96,7 @@ const BREAKS = [
   ["the app's citation with another title", "the app's citation names the title", f => sub(f, 'index.html', "const TITLE = 'River Flow Lab: An interactive", "const TITLE = 'River Flow Lab: A browser-based")],
   ['the app linking the old repository', "the app's citation links the repository", f => sub(f, 'index.html', "const REPO = 'https://github.com/arch85-km/river-flow-lab'", "const REPO = 'https://github.com/arch85-km/river-flood-lab'")],
   ['a DOI before a release date', 'a DOI only once released', f => { unreleased(f); re(f, 'CITATION.cff', /^version:.*\n/m, `version: ${V}\ndoi: 10.5281/zenodo.100\n`); }],
-  ['the © card citing a DOI before one exists', '© card cites no DOI before one exists', f => { released(f); sub(f, 'index.html', BIB_END, `'  doi     = {10.5281/zenodo.999},', ${BIB_END}`); }],
+  ['the © card citing a DOI before one exists', '© card cites no DOI before one exists', f => { released(f); sub(f, 'index.html', 'const DOI = null;', "const DOI = '10.5281/zenodo.999';"); }],
   ['the full notes on an old version', 'method-notes.html byline names', f => { released(f); sub(f, NOTES[0], '9.9.9 &middot;', '0.0.9 &middot;'); }],
   ['the short notes dated though unreleased', 'method-notes-summary.html byline reads', f => { unreleased(f); sub(f, NOTES[1], `${V} &middot; in development`, `${V} &middot; 1 December 2026`); }],
   ['the notes still "in development" after the release', 'method-notes.html byline reads "1 December 2026"', f => { released(f); sub(f, NOTES[0], '9.9.9 &middot; 1 December 2026', '9.9.9 &middot; in development'); }],
@@ -108,7 +108,7 @@ const BREAKS = [
   ['the notes citing a DOI before one exists', 'method-notes.html cites no DOI before one exists', f => { released(f); sub(f, NOTES[0], 'version   = {9.9.9},', 'version   = {9.9.9},\n  doi       = {10.5281/zenodo.999},'); }],
   ['DOIs recorded but the notes citing none', "method-notes.html cites this release's version DOI", f => { released(f, { concept: true, versionDoi: true }); sub(f, NOTES[0], '\n  doi       = {10.5281/zenodo.101},', ''); }],
   ['the notes citing the concept DOI once the version DOI exists', "method-notes-summary.html cites this release's version DOI", f => { released(f, { concept: true, versionDoi: true }); sub(f, NOTES[1], 'doi       = {10.5281/zenodo.101}', 'doi       = {10.5281/zenodo.100}'); }],
-  ['DOIs recorded but the © card citing none', '© card cites a DOI CITATION.cff declares', f => { released(f, { concept: true, versionDoi: true }); sub(f, 'index.html', "'  doi     = {10.5281/zenodo.101},', ", ''); }],
+  ['DOIs recorded but the © card citing none', '© card cites a DOI CITATION.cff declares', f => { released(f, { concept: true, versionDoi: true }); sub(f, 'index.html', "const DOI = '10.5281/zenodo.101';", 'const DOI = null;'); }],
 ];
 for (const [what, expect, edit] of BREAKS) {
   const r = run(edit);

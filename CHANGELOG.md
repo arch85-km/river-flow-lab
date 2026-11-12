@@ -3,9 +3,12 @@
 Every release of River Flow Lab, newest first. Each entry is a summary; the
 release page linked from its heading has the full notes, and once a release is
 archived on Zenodo its version DOI resolves to the archived copy of exactly
-that build.
+that build. To cite the software in general rather than one build, use the
+concept DOI [10.5281/zenodo.24170674](https://doi.org/10.5281/zenodo.24170674).
 
 ## [1.0.0](https://github.com/arch85-km/river-flow-lab/releases/tag/v1.0.0) — 12 November 2026
+
+Version DOI [10.5281/zenodo.24170675](https://doi.org/10.5281/zenodo.24170675)
 
 The first release: a steady, one-dimensional river model for teaching what a
 bridge, a wall, a building or a blockage does to a river. It is a teaching

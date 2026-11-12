@@ -1,5 +1,7 @@
 # River Flow Lab
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24170674.svg)](https://doi.org/10.5281/zenodo.24170674)
+
 A single-file browser tool for teaching how river flow, water level,
 obstructions and bridges interact, for architecture and urban design
 students. The first site is a reach of the River Sheaf at Heeley,
@@ -232,7 +234,7 @@ both method-notes pages, change the byline to `Version X · d Month yyyy` and
 the version in the APA and BibTeX citations. `npm test` fails until they
 all agree. Once Zenodo has archived the release, add the concept and version
 DOIs to `CITATION.cff` and cite the version DOI in the notes and in the
-app's © card; the guard holds those together too.
+app's © card (its `DOI` value in `index.html`); the guard holds those together too.
 
 ## How this was developed
 

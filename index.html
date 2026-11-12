@@ -8921,13 +8921,15 @@ onmessage = e => {
   // ---------- about: licence, release and how to cite (click the © line) ----------
   const TITLE = 'River Flow Lab: An interactive teaching tool for river hydraulics and design';
   const REPO = 'https://github.com/arch85-km/river-flow-lab';
+  // This release's version DOI on Zenodo (null before it is archived); CITATION.cff declares it.
+  const DOI = '10.5281/zenodo.24170675';
   const About = (() => {
     let lastFocus = null;
     function open() {
       $('rf-about-rel').textContent = `Version ${VERSION} · ${RELEASED ? new Date(RELEASED + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'not yet released'}`;
-      $('rf-about-apa').textContent = `Al-Obaidi, K. M. (2026). ${TITLE} (Version ${VERSION}) [Computer software]. ${REPO}`;
+      $('rf-about-apa').textContent = `Al-Obaidi, K. M. (2026). ${TITLE} (Version ${VERSION}) [Computer software]. ` + (DOI ? `Zenodo. https://doi.org/${DOI}` : REPO);
       $('rf-about-bib').textContent = ['@software{alobaidi2026riverflowlab,', '  author  = {Al-Obaidi, Karam M.},', `  title   = {${TITLE}},`,
-        '  year    = {2026},', `  version = {${VERSION}},`, `  url     = {${REPO}},`, '  note    = {Code MIT licensed; accompanying material CC BY 4.0}', '}'].join('\n');
+        '  year    = {2026},', `  version = {${VERSION}},`, ...(DOI ? ['  publisher = {Zenodo},', `  doi     = {${DOI}},`] : []), `  url     = {${REPO}},`, '  note    = {Code MIT licensed; accompanying material CC BY 4.0}', '}'].join('\n');
       lastFocus = document.activeElement;
       $('rf-about-veil').hidden = false; $('rf-about').hidden = false;
       $('rf-about-close').focus({ preventScroll: true }); // or the card opens scrolled to its foot

@@ -4,6 +4,14 @@ type: software
 title: "River Flow Lab: An interactive teaching tool for river hydraulics and design"
 version: 1.0.0
 date-released: 2026-11-12
+doi: 10.5281/zenodo.24170674
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.24170674
+    description: "Concept DOI — always resolves to the latest version"
+  - type: doi
+    value: 10.5281/zenodo.24170675
+    description: "Version DOI — 1.0.0; cite this when quoting a figure"
 abstract: >-
   A teaching tool for architecture and urban design students that shows how a
   river's water level and speed respond to its flow and to what is built in
