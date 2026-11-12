@@ -1,41 +1,256 @@
-River Flow Lab
-© 2026 Karam Al-Obaidi
+River Flow Lab — river flow, water level, obstructions and bridges
+Copyright © 2026 Karam Al-Obaidi
 
-Two licences
-------------
-Software (index.html, server/, tools/, tests/): MIT License — see LICENSE.
-Documentation and teaching material (README, docs/, screenshots, figures):
-Creative Commons Attribution 4.0 International (CC BY 4.0),
-https://creativecommons.org/licenses/by/4.0/
-Attribution: River Flow Lab © 2026 Karam Al-Obaidi, licensed under CC BY 4.0.
+This project is released under two licences, because software and writing want
+different terms. Both permit commercial use. Both require credit.
 
-A model or result you make with the tool is yours.
+    SOFTWARE                                                 MIT
+      index.html  server/  tools/  and tests/
 
-Teaching model — not a flood risk assessment. Do not use for planning,
-insurance or construction decisions.
+    DOCUMENTATION AND TEACHING MATERIAL                      CC BY 4.0
+      README.md  DESIGN.md  ARCHITECTURE.md  CHANGELOG.md
+      docs/  the method notes pages  the screenshots and other figures
 
-Third-party software bundled in index.html
-------------------------------------------
-three.js 0.186.1 (selected modules, bundled by tools/build-three.mjs)
+In plain terms: use it, change it, put it on your own site, build it into
+something else, teach with it, sell what you build — just keep the credit. The
+copyright notice embedded in the interface and in every export satisfies that on
+its own when left in place.
 
-The MIT License
+A model or result you make with the tool is yours. Neither licence claims
+anything over your river, your results, your CSV or the images you export.
 
-Copyright © 2010-2026 three.js authors
+The full MIT text for the software is in LICENSE, beside this file. That file is
+kept as the plain MIT text with no preamble, so that GitHub and other tooling
+can identify it automatically; everything that qualifies it lives here instead.
+This file is deliberately not named LICENSE-something, because GitHub reads any
+such file as a second licence for the repository and then reports the licence as
+ambiguous. Where the two halves meet — a README that quotes code, say — the code
+samples stay MIT.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
+================================================================================
+DOCUMENTATION — Creative Commons Attribution 4.0 International
+================================================================================
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+Copyright © 2026 Karam Al-Obaidi
+
+Licensed CC BY 4.0.   https://creativecommons.org/licenses/by/4.0/
+
+  WHAT IT COVERS
+    - README.md, DESIGN.md, ARCHITECTURE.md, CHANGELOG.md and any other
+      documentation pages
+    - docs/: the method notes and the method notes in brief, and the
+      screenshots in it
+    - teaching exercises, handouts and worksheets distributed with the app
+
+  YOU MAY
+    - share it: copy and redistribute in any medium or format
+    - adapt it: remix, transform and build upon it
+    - do so for any purpose, including commercially
+
+  PROVIDED THAT
+    - You give appropriate credit to Karam Al-Obaidi, link to the licence, and
+      indicate if changes were made. You may do so in any reasonable manner, but
+      not in any way that suggests the author endorses you or your use.
+    - You impose no additional restrictions on anyone else.
+
+  THE ATTRIBUTION LINE TO USE
+    River Flow Lab © 2026 Karam Al-Obaidi, licensed under CC BY 4.0
+    https://creativecommons.org/licenses/by/4.0/
+
+  THE LICENCE ITSELF
+    Human-readable summary:  https://creativecommons.org/licenses/by/4.0/
+    Full legal text:         https://creativecommons.org/licenses/by/4.0/legalcode
+
+    Creative Commons asks that the legal code be linked rather than copied into
+    a project, so it is referenced here rather than reproduced.
+
+  WHAT IT DOES NOT GRANT
+    An image exported from the Map view shows OpenStreetMap data, which is
+    © OpenStreetMap contributors and licensed under the Open Database License
+    (ODbL); a reach built from a terrain model shows that model's data, under
+    its own licence. Those credits travel with the images and are not granted
+    by this licence; see THIRD-PARTY COMPONENTS below. The screenshots in docs/
+    leave the Map view out.
+
+Attribution is not the same as academic citation. If the tool informs a paper, a
+thesis or a course, please also cite it — see CITATION.cff, the "How to cite"
+entry at the foot of docs/method-notes.html, or the copyright card in the app.
+
+
+================================================================================
+NO WARRANTY, AND A LIMIT ON WHAT THIS TOOL IS FOR
+================================================================================
+
+Provided as-is, without warranty of any kind. Built to teach relationships and
+orders of magnitude: what a bridge, a wall, a building or a blockage does to a
+river's water level and speed, and roughly where the bed moves or builds up.
+
+It is a teaching model, NOT a flood risk assessment, and it is NOT validated
+against measured river levels. It solves one steady flow in one dimension: it
+has no time in it, so a short flood would not reach the levels shown; it cannot
+follow water round the end of a wall or across a floodplain; buildings report a
+depth but do not block the flow; and how deep a bed scours is not modelled. Its
+accuracy figures show the engine is consistent with open-channel theory, not
+that it matches real rivers. Read docs/method-notes.html, which states every
+assumption the code makes and declares what it leaves out.
+
+Do not use it for planning, insurance or construction decisions. For a flood
+risk assessment, a planning submission or any figure someone will rely on, use
+a validated model, such as HEC-RAS, Flood Modeller or InfoWorks ICM, run by
+someone qualified to run it.
+
+
+================================================================================
+THIRD-PARTY COMPONENTS
+================================================================================
+
+The terms above cover this project's own work. They do not cover the following,
+which carry their own licences and remain under them.
+
+
+--------------------------------------------------------------------------------
+three.js — the only runtime dependency
+--------------------------------------------------------------------------------
+
+Bundled into index.html — 0.186.1, only the parts the page uses (the renderer,
+scene, geometry, materials and lights, and the OrbitControls add-on), minified
+by tools/build-three.mjs from tools/three-entry.js, with its licence header
+intact. The app therefore contains and redistributes three.js code, so this
+notice travels with every copy of the file, as the licence requires. Nothing is
+fetched from a CDN at runtime. The OBJ reader for imported models is the app's
+own, not three.js's.
+
+Project: https://github.com/mrdoob/three.js
+
+    The MIT License
+
+    Copyright © 2010-2026 three.js authors
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+
+
+--------------------------------------------------------------------------------
+OpenStreetMap — map tiles, place search and river lines, only when asked for
+--------------------------------------------------------------------------------
+
+River Flow Lab redistributes no OpenStreetMap data. It asks OpenStreetMap's
+services only while the Map view is open or a search is made:
+
+  - map tiles from tile.openstreetmap.org, within the OpenStreetMap Foundation's
+    tile usage policy;
+  - place search from Nominatim (nominatim.openstreetmap.org), within its usage
+    policy, at most one search a second;
+  - rivers and streams from the Overpass API (overpass-api.de, or
+    overpass.private.coffee if the first fails), or from this site's own proxy,
+    server/overpass-proxy.php, where it is installed.
+
+That data is © OpenStreetMap contributors and licensed under the Open Database
+License (ODbL), https://www.openstreetmap.org/copyright. The app credits it on
+screen and in every export that holds it, and a reach built from an
+OpenStreetMap river says so in its name. A tile service you set yourself in Advanced is used under that
+service's terms, with the credit line you give it.
+
+
+--------------------------------------------------------------------------------
+Terrain models and other files you load
+--------------------------------------------------------------------------------
+
+River Flow Lab redistributes no terrain data. A GeoTIFF, ASC or OBJ terrain
+model, a 3D model or a project file is read in the browser; nothing is
+uploaded anywhere. A terrain model keeps its own licence: Environment Agency
+LIDAR, for example, is released under the Open Government Licence v3.0 and
+asks for the credit "© Environment Agency copyright and/or database right",
+which then travels with images made from it.
+
+
+--------------------------------------------------------------------------------
+Test fixtures and fonts
+--------------------------------------------------------------------------------
+
+The test suite answers the map and search requests from tests/fixtures/: a
+plain 256 × 256 image made for the tests, not an OpenStreetMap tile, and an
+Overpass answer that is synthetic, not OpenStreetMap data.
+
+No web fonts are loaded. The interface uses a system font stack, so no font
+licence applies to a deployment of this app.
+
+
+================================================================================
+METHODS — CREDITED, NOT REDISTRIBUTED
+================================================================================
+
+Implementing a published method is not reproducing the document that describes
+it. These are scientific methods and correlations rather than licensed software:
+they are implemented from their published descriptions and cited here as good
+practice. Consult the originals for authoritative wording.
+
+  Gradually varied flow, the standard-step method, critical depth
+      Chow, V. T. (1959). Open-Channel Hydraulics. New York: McGraw-Hill,
+      chapters 3 and 10.
+
+  Energy losses, conveyance, composite roughness, bridges, the deck weir
+      Brunner, G. W. (2016). HEC-RAS River Analysis System: Hydraulic Reference
+      Manual, Version 5.0, CPD-69. Davis, CA: US Army Corps of Engineers,
+      Hydrologic Engineering Center, chapters 2, 3 and 5. A US federal work.
+
+  The pier check
+      Yarnell, D. L. (1934). Bridge Piers as Channel Obstructions. Technical
+      Bulletin No. 442. Washington, DC: US Department of Agriculture.
+
+  The drowned deck weir
+      Villemonte, J. R. (1947). Submerged weir discharge studies.
+      Engineering News-Record, 139(26).
+
+  The threshold of motion for a river bed
+      Shields, A. (1936). Anwendung der Ähnlichkeitsmechanik und der
+      Turbulenzforschung auf die Geschiebebewegung. Mitteilungen der
+      Preußischen Versuchsanstalt für Wasserbau und Schiffbau, Heft 26. Berlin.
+      Soulsby, R. L. (1997). Dynamics of Marine Sands: A Manual for Practical
+      Applications. London: Thomas Telford (the fit to Shields' curve, with
+      Whitehouse).
+
+  British National Grid and latitude and longitude
+      Ordnance Survey (2020). A Guide to Coordinate Systems in Great Britain,
+      v3.6: the Helmert shift and transverse Mercator formulae.
+
+docs/method-notes.html names every one of these against what the code takes
+from it.
+
+
+================================================================================
+
+Not legal advice. If your institution has an IP policy covering teaching
+materials, that policy governs and this licence choice should be checked
+against it.
+
+------------------------------------------------------------------------------
+
+THE CUBE DEVICE
+
+The cube device — the author's logo, shown on karam.me.uk where this app is
+published — is the author's own mark. River Flow Lab's own icon, the blue wave
+in its header, is not the cube device.
+
+The cube device is NOT covered by the MIT licence or by CC BY 4.0, and neither
+licence grants any right to use it. All rights in it are reserved.
+
+Do not adopt it as your own badge, put it in your own project's branding, or use
+it in any way that suggests your work is this project or is endorsed by its
+author.

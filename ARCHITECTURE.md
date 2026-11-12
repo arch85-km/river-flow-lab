@@ -157,6 +157,7 @@ index.html                     the application
 README.md                      what it is, how to use it, the method in brief
 DESIGN.md                      the reasons behind the design
 CITATION.cff, .zenodo.json     how to cite it, and what Zenodo archives each release under
+CHANGELOG.md                   every release, newest first
 docs/                          the method notes (full and in brief) and the screenshots
 NOTICE                         the two licences (MIT code, CC BY 4.0 documentation) and three.js's notice
 LICENSE                        MIT, for the code
@@ -179,7 +180,7 @@ tools/three-entry.js           the parts of three.js the page uses
 npm test
 ```
 
-runs the release guard and its proof (22 and 25 checks), then the three
+runs the release guard and its proof (22 and 29 checks), then the three
 suites. At this version: `tests/engine.test.mjs` 73 checks,
 `tests/ui.test.mjs` 288 checks, `tests/overpass-proxy.mjs` 19 checks (skipped
 where PHP is not installed). The engine checks compare with closed-form
@@ -190,6 +191,6 @@ theory, not that it matches measured river levels. The UI checks run with
 WebGL through SwiftShader and refuse every request off the page's origin
 except the map tiles, place search and Overpass, which come from fixtures.
 
-The app has not been released yet. `CITATION.cff`, `.zenodo.json` and the
-release guard are in place; `CHANGELOG.md` starts with the first release.
-The README's "Stamping a release" lists every file a release changes.
+The first release is 1.0.0, of 12 November 2026; `CHANGELOG.md` records every
+release. The README's "Stamping a release" lists every file a release
+changes, and the release guard holds them together.

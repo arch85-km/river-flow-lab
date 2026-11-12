@@ -1,6 +1,6 @@
 {
   "name": "river-flow-lab",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "River Flow Lab: a single-file browser teaching tool for river flow, water level, obstructions and bridges.",
   "license": "MIT",

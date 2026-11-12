@@ -772,6 +772,11 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
 }
 
 // ---- guided tour and the © card ----
+// What the © card should say about this file: its version, and its release date or "not yet released".
+const releaseLine = (() => {
+  const src = html.toString(), v = src.match(/VERSION = '([^']+)'/)[1], d = (src.match(/const RELEASED = '([^']+)'/) || [])[1];
+  return `Version ${v} · ` + (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'not yet released');
+})();
 for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
   const tag = size.width < 900 ? 'phone' : 'desktop';
   const ctx = await browser.newContext({ viewport: size });
@@ -810,7 +815,7 @@ for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) 
   check(`tour (${tag}): Escape closes it`, await page.locator('#rf-tour').isHidden());
   await page.click('#rf-credit');
   const about = await page.evaluate(() => ({ text: document.getElementById('rf-about').textContent, over: (() => { const r = document.getElementById('rf-about').getBoundingClientRect(); return r.left < 0 || r.right > innerWidth + 1; })() }));
-  check(`about (${tag}): clicking © shows licence, release and citation`, await page.locator('#rf-about').isVisible() && /MIT/.test(about.text) && /CC BY 4\.0/.test(about.text) && /Version 0\.1\.0/.test(about.text) && /@software\{alobaidi2026riverflowlab/.test(about.text) && /Al-Obaidi, K\. M\. \(2026\)/.test(about.text));
+  check(`about (${tag}): clicking © shows licence, release and citation`, await page.locator('#rf-about').isVisible() && /MIT/.test(about.text) && /CC BY 4\.0/.test(about.text) && about.text.includes(releaseLine) && /@software\{alobaidi2026riverflowlab/.test(about.text) && /Al-Obaidi, K\. M\. \(2026\)/.test(about.text));
   check(`about (${tag}): fits the window`, !about.over);
   await page.keyboard.press('Escape');
   check(`about (${tag}): Escape closes it`, await page.locator('#rf-about').isHidden());

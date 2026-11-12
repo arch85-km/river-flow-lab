@@ -5,8 +5,8 @@ obstructions and bridges interact, for architecture and urban design
 students. The first site is a reach of the River Sheaf at Heeley,
 Sheffield.
 
-**Status: in development, before the first release (1.0.0).** The engine
-and the interface work on a template reach, a river drawn on the map or
+**Version 1.0.0, released 12 November 2026.** See [`CHANGELOG.md`](CHANGELOG.md).
+The engine and the interface work on a template reach, a river drawn on the map or
 taken from OpenStreetMap, a terrain model, or sections you type in. The
 River Sheaf site data follows.
 
@@ -208,8 +208,9 @@ npm test
 checks). It holds the version, the release date, the title, the repository
 and the DOI to one value across `CITATION.cff`, `.zenodo.json`,
 `package.json`, `package-lock.json`, the app (`VERSION`, `RELEASED`, its
-citation) and both method-notes pages. `tests/release-guard.test.mjs` (25
-checks) proves each of its checks by breaking it. Then
+citation) and both method-notes pages. `tests/release-guard.test.mjs` (29
+checks) proves each of its checks by breaking it, before a release, after it
+and once its DOIs are recorded. Then
 `tests/engine.test.mjs` (73 checks), `tests/overpass-proxy.mjs` (19 checks;
 skipped where PHP is not installed) and `tests/ui.test.mjs` (288 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
@@ -249,4 +250,46 @@ is organised is in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Licence
 
-Code: MIT (see `LICENSE`). Documentation: CC BY 4.0.
+Two licences, because the app and the teaching material around it are different
+kinds of thing:
+
+**The code is MIT** — © 2026 Karam Al-Obaidi. `index.html`, `server/`, `tools/` and
+`tests/`. Use it, adapt it, host it on your own site, hand it to students, free
+of charge and for any purpose, commercial or not; the only condition is that the
+copyright notice travels with copies you distribute. Full text in
+[`LICENSE`](LICENSE).
+
+**The accompanying material is CC BY 4.0** — this README, `DESIGN.md`,
+`ARCHITECTURE.md`, `CHANGELOG.md`, `docs/` with the method notes and the
+screenshots, and the exercises and handouts distributed with the app. Share and
+adapt it freely, including commercially, as long as you credit it, link the
+licence and say if you changed anything. MIT is a software licence and says
+nothing sensible about a worksheet or a screenshot, which is why those are
+covered separately; see [`NOTICE`](NOTICE). The attribution line to use:
+
+> River Flow Lab © 2026 Karam Al-Obaidi, licensed under
+> [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+
+A model you make with the tool is yours: neither licence claims anything over
+your river, your results, your CSV or the images you export.
+
+The app builds on licensed work of others, all permissive and all compatible
+with the above:
+
+- **three.js** 0.186.1 (MIT) — the only runtime dependency, bundled into
+  `index.html` with its licence header intact, so the file carries its own copy
+  and needs no CDN.
+- **OpenStreetMap** (ODbL) — optional map tiles, place search and river lines,
+  credited on screen and in every export that holds them, and used within the
+  OpenStreetMap Foundation's tile and Nominatim policies.
+- **A terrain model you load** keeps its own licence: Environment Agency LIDAR,
+  for example, is under the Open Government Licence v3.0.
+
+The methods — the standard step, HEC-RAS's losses and bridge method, Yarnell,
+Villemonte, Shields and Soulsby, the Ordnance Survey formulae — are published
+science, credited rather than licensed; [`NOTICE`](NOTICE) and the method notes
+list them. The cube device, the author's logo on karam.me.uk, is reserved from
+both licences; see [`NOTICE`](NOTICE).
+
+It is provided as-is, without warranty: a teaching model, not a flood risk
+assessment.
