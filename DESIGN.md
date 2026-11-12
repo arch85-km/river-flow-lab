@@ -37,6 +37,23 @@ The tool is a single HTML file for the same reasons as my other teaching apps:
 - **One family of apps.** It looks and behaves like my other teaching apps, so
   students who know one can find their way in another.
 
+## The name and the title
+
+The tool was first called River Flood Lab. I renamed it **River Flow Lab**
+before the first release:
+
+- **It fits the caution.** "Flood" sat awkwardly beside the statement that
+  the tool is not a flood risk assessment.
+- **It fits the brief.** My brief is about how water moves through the
+  channel at a site, its speed, and where the bed scours and settles, at low
+  and typical flows as well as in a flood.
+
+Its title, *An interactive teaching tool for river hydraulics and design*:
+
+- **It fits the family.** "Interactive" as in Urban Wind Lab's title.
+- **It indexes well.** A more formal title, of the kind a repository or a
+  journal indexes.
+
 ## Method
 
 ### A steady, one-dimensional model, following HEC-RAS
@@ -62,9 +79,10 @@ the river's own bankfull flow rather than from return periods:
   first having to find a design flow for their site.
 - **It scales to any river.** Anchored to the channel's own size, the buttons
   make sense on a stream and on a large river alike.
-- **There is no hydrology in a browser.** Estimating a 1-in-100-year flow needs
-  catchment data and methods, such as the Flood Estimation Handbook's, that the
-  tool cannot carry.
+- **It is a hydraulics tool, not a hydrology tool.** It works out how a given
+  flow moves through the river. Estimating how much flow arrives, such as a
+  1-in-100-year flow, needs catchment data and methods, such as the Flood
+  Estimation Handbook's, that the tool does not carry.
 - **Real flows are still possible.** A student with a real flow, or with a
   float survey of the site, can enter it.
 
@@ -83,22 +101,39 @@ Here the eddy zones are made automatically behind every blockage:
 - **They can be switched off.** In Advanced they can be resized, or turned off
   to compare.
 
+### Floating objects: by weight, with a smooth hull
+
+A floating object can be given its weight in tonnes, and its underside carries
+the roughness of a smooth hull:
+
+- **Weight comes from teaching.** Students think of a pontoon or a boat in
+  tonnes, not in how deep it sits in the water, so weight is the natural
+  input; the depth follows from it.
+- **The hull comes from checking.** Testing showed a float only millimetres
+  deep raising the water by more than a centimetre, because its underside was
+  as rough as the river bed. A smooth hull, combined with the bed's roughness,
+  puts that right.
+
 ## Teaching
 
-I use the tool, or will, in undergraduate and postgraduate teaching, and in my
-own research. Several features come directly from teaching:
+I use the tool in undergraduate and postgraduate teaching, and in my own
+research. Several features come directly from teaching:
 
 - **Basic and Advanced.** Students start with plain words and fewer controls;
   the technical settings, results and terms are one switch away.
 - **The guided tour.** Students need to know where to start, as in my other
   apps.
-- **The float survey, speed colours and scour hints.** My brief asks students
-  to describe how water moves through the channel at their site under low,
-  typical and flood flow, using a simple survey, and to show where the flow
-  speeds up, eddies, scours and settles. The float-survey helper, the water
-  coloured by speed, and the hints on scour and settling support that brief.
+- **The float survey, speed and bed colouring, and the sediment hints.** My
+  brief asks students to describe how water moves through the channel at their
+  site under low, typical and flood flow, using a simple survey, and to show
+  where the flow speeds up, eddies, scours and settles. The float-survey
+  helper, the water coloured by speed or by the bed, and the hints on where the
+  bed moves, builds up or is stable support that brief.
 - **Fewer settings.** The downstream boundary and the slider range were taken
   off the screen to keep the tool easy for students.
+- **A cleaner screen.** The caution line was taken out of the footer; the
+  headline, the method notes and every export still say the tool is a
+  teaching model, not a flood risk assessment.
 
 ## What it deliberately leaves out
 
@@ -122,6 +157,8 @@ Before I teach with a release:
 - **I use the live site myself**, as a student would.
 - **I check it against the brief**: I run the module's own brief on a site and
   check that the outputs still make sense.
+- **The changes are reviewed before a version is cut**: the physics, the
+  interface and the documents, against each other.
 
 ## Licensing and archiving
 
