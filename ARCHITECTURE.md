@@ -35,8 +35,10 @@ server or from disk.
   north**, so it sits as on the map; a reach without one runs along X.
   Heights are multiplied by the vertical exaggeration.
 - The version is the `VERSION` constant at the top of the application
-  script and `version` in `package.json`, both 0.1.0. Nothing yet holds
-  them together (see Testing and release).
+  script, with the release date `RELEASED` beside it (null until the first
+  release), and `version` in `package.json`, `package-lock.json`,
+  `CITATION.cff` and `.zenodo.json`. The release guard holds them together
+  (see Testing and release).
 
 ## The calculation chain
 
@@ -178,8 +180,8 @@ npm test
 ```
 
 runs the release guard and its proof (22 and 25 checks), then the three
-suites. At this version: `tests/engine.test.mjs` 69 checks,
-`tests/ui.test.mjs` 276 checks, `tests/overpass-proxy.mjs` 19 checks (skipped
+suites. At this version: `tests/engine.test.mjs` 73 checks,
+`tests/ui.test.mjs` 288 checks, `tests/overpass-proxy.mjs` 19 checks (skipped
 where PHP is not installed). The engine checks compare with closed-form
 results (normal and critical depth), an independent RK4 integration of the
 gradually varied flow equation, and hand calculations (Yarnell, the weir
@@ -188,5 +190,6 @@ theory, not that it matches measured river levels. The UI checks run with
 WebGL through SwiftShader and refuse every request off the page's origin
 except the map tiles, place search and Overpass, which come from fixtures.
 
-The app has not been released. There is no `CITATION.cff`, `.zenodo.json`,
-`CHANGELOG.md` or release guard yet; they come with the first release.
+The app has not been released yet. `CITATION.cff`, `.zenodo.json` and the
+release guard are in place; `CHANGELOG.md` starts with the first release.
+The README's "Stamping a release" lists every file a release changes.

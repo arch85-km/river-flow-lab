@@ -130,6 +130,8 @@ textarea.rf-pts{width:100%;min-height:8rem;font:12px/1.35 ui-monospace,SFMono-Re
 /* A narrow view area (an embedded page, a small window): the tools take a second row under the view buttons rather than sliding over them. */
 .rf-stage{container:stage/inline-size}
 @container stage (max-width:860px){.rf-stage-tools{top:54px;left:12px;right:12px;justify-content:flex-start}}
+/* Browsers without container queries (Safari before 16, Chrome before 105, Firefox before 110): the view area is the window less the two 300 px panels, so it is narrower than 860 px below a 1460 px window. */
+@supports not (container-type:inline-size){@media (min-width:901px) and (max-width:1460px){.rf-stage-tools{top:54px;left:12px;right:12px;justify-content:flex-start}}}
 .rf-glass{background:var(--rf-panel);border:1px solid var(--rf-line);border-radius:7px;padding:4px 8px}
 .rf-caption{position:absolute;right:12px;bottom:10px;z-index:5;text-align:right;font-size:12px;color:var(--rf-muted);pointer-events:none}
 
@@ -4975,7 +4977,7 @@ const RFL = (() => {
       P += PF;
       const K = (A > 0 && P > 0 ? A * Math.pow(A / P, 2 / 3) / nE : 0) + KL;
       A += LA; P += LP; T += LT;
-      out.sub[key] = { A, P, T, K, n };
+      out.sub[key] = { A, P, T, K, n, nE }; // nE: the bed's and any hull's roughness combined
       out.A += A; out.P += P; out.T += T; out.K += K;
       if (A > 0) sumK3A2 += K * K * K / (A * A);
     }
@@ -5315,14 +5317,19 @@ const RFL = (() => {
   }
 
   // The force of the flow on the channel bed, N/m², as the mean bed shear
-  // stress tau = rho g R Sf: R the channel's hydraulic radius, Sf the friction
+  // stress tau = rho g R Sf (with the bed's share under a hull, below): R the channel's hydraulic radius, Sf the friction
   // slope (Q/K)², the same in every part of a section. In uniform flow Sf is
   // the bed slope and this is the familiar rho g R S.
   const RHO = 1000;
   function bedShear(section) {
     const ch = section && section.sub && section.sub.ch;
     if (!ch || !(ch.A > 0) || !(ch.P > 0) || !(ch.K > 0)) return null;
-    return RHO * G * (ch.A / ch.P) * Math.pow(ch.Q / ch.K, 2);
+    // Under a floating object part of the perimeter is a smooth hull. Horton's rule, which
+    // combines the two roughnesses, assumes the same speed past each surface, so each
+    // carries a share of the friction in proportion to its own n^1.5: the bed's share is
+    // (n_bed / n_combined)^1.5 of the average. With no hull the factor is 1.
+    const share = isNum(ch.nE) && ch.nE > 0 ? Math.pow(ch.n / ch.nE, 1.5) : 1;
+    return RHO * G * (ch.A / ch.P) * Math.pow(ch.Q / ch.K, 2) * share;
   }
   // The force needed to start moving loose grains of median size d (m) on the
   // bed, N/m²: Shields' threshold, with the critical Shields parameter from
@@ -5522,6 +5529,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
   const ARROWS = { n: 6, size: 1 };
   const T = (tech, plain) => level === 'advanced' ? tech : plain;
   let compare = false, showingBefore = false, activePreset = null, lookUp = false, sectionStretch = 0;
+  let sliding = false; // the flow slider is being dragged: its range holds still
   let waterBy = 'depth'; // colour the water in 3D and Plan by 'depth' or 'speed'
   const secZoom = { k: 1, cy: null, cz: null, map: null };
   const proZoom = { k: 1, cx: null, cz: null, map: null };
@@ -5806,7 +5814,13 @@ if (typeof module !== 'undefined') module.exports = RFL;
     for (const e of document.querySelectorAll('.rf-views, .rf-stage-tools')) { const r = e.getBoundingClientRect(); if (r.height && r.top < st.top + st.height / 2) b = Math.max(b, r.bottom - st.top); }
     return Math.round(b + 12);
   };
-  const stageBottom = host => host.hasAttribute('data-fill') ? 26 : 0;
+  // Room at the foot for the caption, and for the view tools where a phone puts them there.
+  const stageBottom = host => {
+    if (!host.hasAttribute('data-fill')) return 0;
+    const st = host.getBoundingClientRect(); let b = 26;
+    for (const e of document.querySelectorAll('.rf-stage-tools')) { const r = e.getBoundingClientRect(); if (r.height && r.top > st.top + st.height / 2) b = Math.max(b, st.bottom - r.top + 8); }
+    return Math.round(b);
+  };
   function svgRoot(host, W, H, label) {
     host.textContent = '';
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': label, 'font-family': 'system-ui, sans-serif', 'font-size': 11 }, host);
@@ -5932,7 +5946,7 @@ if (typeof module !== 'undefined') module.exports = RFL;
         const cuts = [a, ...[s.banks.left, s.banks.right].filter(y => y > a && y < b), b];
         for (let k = 0; k < cuts.length - 1; k++) {
           const p = cuts[k], q = cuts[k + 1];
-          el('rect', { x: x0, y: sy(p), width: Math.max(0.5, x1 - x0), height: Math.max(0.5, sy(q) - sy(p)), fill: waterBy === 'bed' ? BED_COLOURS[bedAt(s, (p + q) / 2)] : SPEED_BANDS[speedBand(speedAt(s, (p + q) / 2), vTop)] }, svg);
+          el('rect', { x: x0, y: sy(p), width: Math.max(0.5, x1 - x0), height: Math.max(0.5, sy(q) - sy(p)), fill: waterBy === 'bed' ? bedColours()[bedAt(s, (p + q) / 2)] : SPEED_BANDS[speedBand(speedAt(s, (p + q) / 2), vTop)] }, svg);
         }
       }
     });
@@ -5979,7 +5993,8 @@ if (typeof module !== 'undefined') module.exports = RFL;
       const hit = el('line', { x1: sx(s.x), x2: sx(s.x), y1: box.t, y2: box.b, stroke: 'transparent', 'stroke-width': 8, style: 'cursor:pointer' }, svg);
       hit.addEventListener('click', () => selectView(s.id));
     }
-    el('text', { x: box.r - 4, y: box.t + 14, 'text-anchor': 'end', fill: C.muted }, top).textContent = noteText;
+    // at the foot of the frame: bridge names sit along its top
+    el('text', { x: box.r - 4, y: box.b - 6, 'text-anchor': 'end', fill: C.muted }, top).textContent = noteText;
   }
 
   // ---------- cross-section ----------
@@ -7587,7 +7602,7 @@ onmessage = e => {
   function showDepth(ev) {
     const tip = $('rf-depth-tip'), g = groundUnder(ray3D(ev)), R = before() ? BASE : RES;
     let d = -1, v = null, bed = null;
-    if (g) { const q = R.sections.reduce((m, s) => Math.abs(s.x - g.x) < Math.abs(m.x - g.x) ? s : m); d = reached(q).some(([a, b]) => g.y >= a && g.y <= b) ? RFL.wsAt(R, g.x) - groundAtLocal(q.raw, g.y) : -1; v = speedAt(q, g.y); bed = bedAt(q, g.y); }
+    if (g) { const q = R.sections.reduce((m, s) => Math.abs(s.x - g.x) < Math.abs(m.x - g.x) ? s : m); d = reached(q).some(([a, b]) => g.y >= a && g.y <= b) ? RFL.wsAt(R, g.x) - groundAtLocal(q.raw, g.y) : -1; v = speedAt(q, g.y); bed = bedAt(q, g.y, R); }
     tip.hidden = !(d > 0.005);
     if (tip.hidden) return;
     const r = $('rf-3d').getBoundingClientRect();
@@ -7630,7 +7645,14 @@ onmessage = e => {
   //   stable - it does not, and nothing arrives: still here and still upstream.
   // At the top of the reach nothing is known of what arrives from further up,
   // so a still stretch there counts as stable.
-  const BED_COLOURS = { moves: '#d8453b', builds: '#2f7fd1', stable: '#7e8c9a', plain: '#d7dee6' };
+  // Floodplain water keeps an ordinary water colour (the light theme's, in both themes: the dark
+  // theme's navy is too close to 'building up'); stable is a dark slate, so the four differ in
+  // lightness as well as hue and stay apart for colour-blind readers.
+  const BED_LIGHT = { moves: '#d8453b', builds: '#2f7fd1', stable: '#4b5866', plain: '#a9cdf2' };
+  // In the dark theme the slate is lighter, to stand out from the dark page (3:1 or more).
+  const BED_DARK = { ...BED_LIGHT, stable: '#8b98a7' };
+  const darkTheme = () => { const p = (C.panel || '#ffffff').replace('#', ''); return p.length >= 6 && (parseInt(p.slice(0, 2), 16) + parseInt(p.slice(2, 4), 16) + parseInt(p.slice(4, 6), 16)) / 3 < 128; };
+  const bedColours = () => darkTheme() ? BED_DARK : BED_LIGHT;
   const bedMemo = new WeakMap();
   function bedStates(res) {
     const d = bedD(); if (!d || !res || !res.sections) return null;
@@ -7645,9 +7667,10 @@ onmessage = e => {
     bedMemo.set(res, { d, states });
     return states;
   }
-  function bedAt(s, y) {
+  // res: the result the section s belongs to (the run without the design in Without).
+  function bedAt(s, y, res = RES) {
     if (!bedD() || y < s.banks.left || y > s.banks.right) return 'plain';
-    const st = bedStates(RES);
+    const st = bedStates(res);
     return (st && st.get(s)) || 'stable';
   }
   function maxSpeed(secs) {
@@ -7697,7 +7720,7 @@ onmessage = e => {
         tCol.push(...mixHex(inCh ? '#8d7b5f' : '#a9b07f', '#d9cfb3', inCh ? 0 : Math.min(1, Math.max(0, (z - s.ws) / 3))));
         wPos.push(...P(s.x, y, inRiver ? s.ws : Math.min(s.ws, z - 0.3)));
         const d = s.ws - z;
-        wCol.push(...(waterBy === 'speed' ? hexRGB(SPEED_BANDS[speedBand(speedAt(s, y), vTop)]) : waterBy === 'bed' ? hexRGB(BED_COLOURS[bedAt(s, y)]) : depthColour(d, maxDepth)));
+        wCol.push(...(waterBy === 'speed' ? hexRGB(SPEED_BANDS[speedBand(speedAt(s, y), vTop)]) : waterBy === 'bed' ? hexRGB(bedColours()[bedAt(s, y)]) : depthColour(d, maxDepth)));
       }
     }
     for (let i = 0; i < secs.length - 1; i++) for (let j = 0; j < nJ - 1; j++) {
@@ -7920,17 +7943,21 @@ onmessage = e => {
     if (s && s.sub && s.sub.ch && Math.abs(flowQ() - c.Q) < 0.006 * c.Q + 1e-6) {
       const m = s.sub.ch.V, diff = (m - c.Vm) / c.Vm;
       msg += ` At ${s.id} the model's channel speed is ${m.toFixed(2)} m/s, ${Math.abs(diff) < 0.1 ? 'close to your survey' : `${Math.round(Math.abs(diff) * 100)}% ${diff > 0 ? 'faster' : 'slower'} than your survey`}.` +
-        (Math.abs(diff) < 0.1 ? '' : ` Check that the river's width and depth match the site; if they do, the roughness (Manning's n) is the usual cause: ${diff > 0 ? 'a rougher' : 'a smoother'} channel would bring them closer.`);
+        (Math.abs(diff) < 0.1 ? '' : ` At the same flow that means the model's water is ${diff > 0 ? 'shallower' : 'deeper'} than you measured. Check that the river's shape matches the site; if it does, adjust the roughness (Manning's n): ${diff > 0 ? 'a rougher channel runs deeper and slower' : 'a smoother channel runs shallower and faster'}.`);
     }
     out.textContent = msg;
   }
   function renderFlow() {
     renderSurvey();
+    const bf = bankfullSoon();
+    // The slider runs to 2.5 times the river-full flow, or further when a larger flow is set,
+    // and comes back down when a smaller one is: a mistyped survey or flow cannot leave it
+    // stuck high. It holds still while the slider itself is being dragged.
+    if (!sliding) S.flow.Qmax = Math.max(bf ? Math.ceil(bf.Q * 2.5) : S.flow.Qmax, Math.ceil(S.flow.Q * 1.25));
     const r = $('rf-q-range'), Qmin = Math.max(0.05, S.flow.Qmax / 500);
     r.value = Math.round(1000 * Math.log(Math.max(S.flow.Q, Qmin) / Qmin) / Math.log(S.flow.Qmax / Qmin));
     $('rf-q').value = +S.flow.Q.toFixed(2);
     $('rf-allow').value = S.flow.allowance;
-    const bf = bankfullSoon();
     // Spell out the sum: the box holds the flow you set, the model runs the flow
     // with the climate allowance added, and the two must not look as if they disagree.
     const qf = v => v < 10 ? v.toFixed(2) : v.toFixed(1);
@@ -7941,7 +7968,7 @@ onmessage = e => {
   }
 
   // Bankfull: the flow at which the river without design elements reaches
-  // the lower bank at the chosen section. Found by bisection, cached.
+  // the lower bank at the chosen section. Found by iteration, cached.
   let bfCache = { key: '', val: null };
   function bankfull() {
     const sec = viewSection();
@@ -7953,8 +7980,8 @@ onmessage = e => {
     const m = model(false);
     // Each trial solves the whole river, which is most of the app's start-up
     // time, so the root is found by the Illinois method (regula falsi that
-    // halves a stale end) rather than by bisection: about 6 solves instead of
-    // about 35, stopping when the level is within 0.1 mm of the bank top.
+    // halves a stale end) rather than by bisection: about 13 solves on the
+    // template, the bracketing steps included, instead of about 35, stopping when the level is within 0.1 mm of the bank top.
     const memo = new Map();
     const f = Q => { if (!memo.has(Q)) { const r = RFL.solve(m, Q); memo.set(Q, r.error ? NaN : RFL.wsAt(r, raw.x) - bank); } return memo.get(Q); };
     let lo = 0.01, hi = 1, val = null;
@@ -8074,10 +8101,10 @@ onmessage = e => {
       const bySpeed = waterBy === 'speed';
       host.innerHTML = `<div class="rf-seg" role="group" aria-label="Colour the water by" style="margin-bottom:8px"><button type="button" data-waterby="depth" aria-pressed="${waterBy === 'depth'}">Depth</button><button type="button" data-waterby="speed" aria-pressed="${bySpeed}">Speed</button><button type="button" data-waterby="bed" aria-pressed="${waterBy === 'bed'}"${bedD() ? '' : ' disabled title="Choose what the river bed is made of, in River, first"'}>Bed</button></div>` +
         (waterBy === 'bed' ? `<div class="rf-kv"><span>Does the water move the bed? ${esc(bedLabel())}</span></div>` +
-          line(BED_COLOURS.moves, 'Moving: the water is strong enough to carry the bed along' + T(' (bed shear stress above Shields’ threshold)', '')) +
-          line(BED_COLOURS.builds, 'Building up: material carried down from upstream is dropped here') +
-          line(BED_COLOURS.stable, 'Stable: nothing is worn away and nothing arrives') +
-          line(BED_COLOURS.plain, 'Floodplain: not part of the river bed, so not judged') +
+          line(bedColours().moves, 'Moving: the water is strong enough to carry the bed along' + T(' (bed shear stress above Shields’ threshold)', '')) +
+          line(bedColours().builds, 'Building up: material carried down from upstream is dropped here') +
+          line(bedColours().stable, 'Stable: nothing is worn away and nothing arrives') +
+          line(bedColours().plain, 'Floodplain: ordinary water colour, not judged (not part of the river bed)') +
           '<p class="rf-hint">Red shows where the bed can move, not how much: it wears away most where the water speeds up, as through a bridge opening. Blue builds up most where the water first slows. At the top of the river shown, what arrives from further upstream is not known, so still water there counts as stable.</p>'
         : bySpeed ? `<div class="rf-kv"><span>Water speed</span><span class="rf-lab">m/s</span></div>` + bands(SPEED_BANDS, vstep) +
           '<p class="rf-hint">One mean speed in the channel and one on each floodplain at every section: the colour changes along the river and at the banks, not around a pier.</p>'
@@ -8113,6 +8140,7 @@ onmessage = e => {
   // design, and say so. Whether a bed actually scours depends on its material.
   // ---------- the river bed's material ----------
   const BEDS = [[0.2, 'fine sand'], [0.7, 'coarse sand'], [4, 'fine gravel'], [30, 'coarse gravel'], [100, 'cobbles']];
+  let bedOther = false; // 'Other grain size' chosen, the size not typed yet
   const bedD = () => S.bed && isNum(S.bed.d) && S.bed.d > 0 ? S.bed.d : null;
   function bedLabel() {
     const d = bedD(); if (!d) return null;
@@ -8122,7 +8150,7 @@ onmessage = e => {
   function renderBed() {
     const d = bedD(), preset = d && BEDS.some(([v]) => Math.abs(v - d) < 1e-9);
     const sel = $('rf-bed'), inp = $('rf-bed-d');
-    if (sel.value !== 'other' || preset) sel.value = !d ? '' : preset ? String(d) : 'other';
+    sel.value = !d ? (bedOther ? 'other' : '') : preset ? String(d) : 'other';
     $('rf-bed-d-l').hidden = sel.value !== 'other';
     if (!d && waterBy === 'bed') waterBy = 'depth'; // nothing to colour by
     if (document.activeElement !== inp) inp.value = d || '';
@@ -8335,7 +8363,7 @@ onmessage = e => {
     setback: { get: it => it.setback >= 0 ? it.setback : 1, set: (it, v) => { it.setback = Math.max(0, v); } },
     openAt: { get: SO.start, set: (it, v) => { const n = SO.size(it); it.openLeft = v; it.openRight = v + n; } },
     openW: { get: SO.size, size: true, set: (it, v) => { const a = SO.start(it); it.openLeft = a; it.openRight = a + v; } },
-    tonnes: { get: it => it.draft * floatArea(it), size: true, set: (it, v) => { it.draft = v / floatArea(it); } }, // kept exact: rounding 2.5 mm to 3 mm was a 20% error
+    tonnes: { get: it => it.draft * floatArea(it), size: true, set: (it, v) => { if (floatArea(it) > 0) it.draft = v / floatArea(it); } }, // kept exact: rounding 2.5 mm to 3 mm was a 20% error
   };
   const NOTES = {
     obstructions: 'A solid block in the channel or on the floodplain: a pier, debris, a building or a raised deck. It takes away flow area and raises the water upstream.',
@@ -8493,12 +8521,18 @@ onmessage = e => {
     lines.push(['section', 'chainage_m', 'bed_m', 'water_level_m', 'depth_m', 'energy_level_m', ...(base ? ['change_vs_no_design_m'] : []), 'v_channel_ms', 'v_mean_ms', 'froude', 'bed_force_n_m2', 'notes'].join(','));
     for (const s of RES.sections) lines.push([q(s.id), s.x.toFixed(2), s.bed.toFixed(3), s.ws.toFixed(3), s.depth.toFixed(3), s.egl.toFixed(3), ...(base ? [(s.ws - RFL.wsAt(BASE, s.x)).toFixed(3)] : []), s.sub.ch.V.toFixed(3), s.V.toFixed(3), s.Fr.toFixed(3), isNum(RFL.bedShear(s)) ? RFL.bedShear(s).toFixed(2) : '', q([...s.flags, ...(s.eddies.length ? ['eddy zone'] : [])].join(' '))].join(','));
     if (RES.bridges.length) {
-      lines.push('', 'bridge,soffit_m,deck_m,water_upstream_m,afflux_m,yarnell_pier_rise_m,soffit_freeboard_m,flow');
-      for (const b of RES.bridges) lines.push([q(b.id), b.lowChord, b.highChord, b.wsUpstream.toFixed(3), isNum(b.afflux) ? b.afflux.toFixed(3) : '', b.yarnell ? b.yarnell.rise.toFixed(3) : '', b.freeboard.toFixed(3), b.flow].join(','));
+      lines.push('', 'bridge,soffit_m,deck_m,water_upstream_m,afflux_m,yarnell_pier_rise_m,soffit_freeboard_m,flow,over_deck_m3s,through_opening_m3s');
+      for (const b of RES.bridges) lines.push([q(b.id), b.lowChord, b.highChord, b.wsUpstream.toFixed(3), isNum(b.afflux) ? b.afflux.toFixed(3) : '', b.yarnell ? b.yarnell.rise.toFixed(3) : '', b.freeboard.toFixed(3), b.flow, b.weirFlow.toFixed(2), b.openingFlow.toFixed(2)].join(','));
     }
     if (S.buildings.length) {
       lines.push('', 'building,chainage_m,floor_m,water_level_m,water_over_floor_m,status');
       RFL.buildings(RES, S.buildings).forEach((r, i) => lines.push([q(S.buildings[i].label || r.id), S.buildings[i].x, r.floor, isNum(r.ws) ? r.ws.toFixed(3) : '', isNum(r.depth) ? r.depth.toFixed(3) : '', q(r.cutOff ? 'cut off from the river' : r.flanked ? 'water can come round the wall end' : '')].join(',')));
+    }
+    // Water level against flow at the chosen section, once the chart has been worked out.
+    const rc = $('rf-rc')._rc;
+    if (rc && rc.pts && rc.pts.length && rc.s) {
+      lines.push('', `# water level against flow at ${rc.s.id} (${rc.s.x.toFixed(1)} m along the river)`, ['flow_m3s', 'water_level_m', ...(rc.bpts.length ? ['water_level_no_design_m'] : [])].join(','));
+      rc.pts.forEach(([Q, ws], i) => lines.push([Q.toFixed(2), ws.toFixed(3), ...(rc.bpts.length ? [rc.bpts[i] ? rc.bpts[i][1].toFixed(3) : ''] : [])].join(',')));
     }
     download('river-flow-lab.csv', new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
   }
@@ -8596,7 +8630,7 @@ onmessage = e => {
     const numeric = (list, keys, what) => { for (const e of list || []) if (!keys.every(k => isNum(e[k]))) return `${what} ${e.id || '?'} is not readable.`; return null; };
     const badElement = numeric(st.obstructions, ['x0', 'x1', 'y0', 'y1', 'top'], 'Obstruction') || numeric(st.bridges, ['x', 'length', 'openLeft', 'openRight', 'lowChord', 'highChord'], 'Bridge') || numeric(st.walls, ['x0', 'x1', 'y', 'z'], 'Flood wall') || numeric(st.buildings, ['x', 'y', 'w', 'd', 'floor'], 'Building');
     if (badElement) return badElement;
-    for (const f of st.floats || []) if (![f.x0, f.x1, f.y0, f.y1, f.draft, f.height].every(isNum)) return `Floating object ${f.id || '?'} is not readable.`;
+    for (const f of st.floats || []) if (![f.x0, f.x1, f.y0, f.y1, f.draft, f.height].every(isNum) || f.x0 === f.x1 || f.y0 === f.y1) return `Floating object ${f.id || '?'} is not readable.`;
     if (st.survey !== undefined && (typeof st.survey !== 'object' || st.survey === null || Array.isArray(st.survey) || Object.values(st.survey).some(v => v !== null && !isNum(v)))) return 'The float survey in this project is not readable.';
     if (st.bed !== undefined && (typeof st.bed !== 'object' || st.bed === null || !(st.bed.d === null || st.bed.d === undefined || (isNum(st.bed.d) && st.bed.d >= 0.0625 && st.bed.d <= 500)))) return 'The river bed in this project is not readable.';
     for (const m of st.models || []) {
@@ -8616,7 +8650,7 @@ onmessage = e => {
       try {
         S = { ...d, ...st, flow: { ...d.flow, ...(st.flow || {}) }, eddy: { ...d.eddy, ...(st.eddy || {}) }, boundary: { ...d.boundary, ...(st.boundary || {}) }, survey: { ...d.survey, ...(st.survey || {}) }, bed: { ...d.bed, ...(st.bed || {}) },
           obstructions: st.obstructions || [], bridges: st.bridges || [], walls: st.walls || [], buildings: st.buildings || [], models: st.models || [], floats: st.floats || [] };
-        editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = ''; compare = false; MAP.centred = false;
+        editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = ''; compare = false; MAP.centred = false; bedOther = false;
         renderEditor(); renderElements(); run();
       } catch (e) {
         S = old; editIdx = 0; viewId = null; V3.fitted = false; bfCache.key = ''; MAP.centred = false;
@@ -8708,14 +8742,16 @@ onmessage = e => {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
   $('rf-eddy-on').addEventListener('change', e => { S.eddy.on = e.target.checked; schedule(); });
   for (const k of ['er', 'cr']) $('rf-eddy-' + k).addEventListener('change', e => { const v = +e.target.value; if (isNum(v) && v > 0) { S.eddy[k] = v; schedule(); } });
+  $('rf-q-range').addEventListener('change', () => { sliding = false; renderFlow(); });
   $('rf-q-range').addEventListener('input', e => {
+    sliding = true;
     const Qmin = Math.max(0.05, S.flow.Qmax / 500);
     S.flow.Q = +(Qmin * Math.pow(S.flow.Qmax / Qmin, e.target.value / 1000)).toPrecision(3); schedule();
   });
   $('rf-q').addEventListener('change', e => { const v = parseFloat(e.target.value); if (isNum(v) && v > 0) { S.flow.Q = v; if (v > S.flow.Qmax) S.flow.Qmax = Math.ceil(v); } schedule(); });
   for (const k of SURVEY) $('rf-sv-' + k).addEventListener('input', e => { const v = parseFloat(e.target.value); S.survey = { ...(S.survey || {}), [k]: isNum(v) ? v : null }; renderSurvey(); });
-  $('rf-bed').addEventListener('change', e => { const v = e.target.value; if (v === 'other') { $('rf-bed-d-l').hidden = false; $('rf-bed-d').focus(); return; } S.bed = { d: v ? +v : null }; schedule(); });
-  $('rf-bed-d').addEventListener('change', e => { const v = parseFloat(e.target.value); if (isNum(v) && v >= 0.0625 && v <= 500) { S.bed = { d: v }; schedule(); } else e.target.value = bedD() || ''; });
+  $('rf-bed').addEventListener('change', e => { const v = e.target.value; bedOther = v === 'other'; if (bedOther) { $('rf-bed-d-l').hidden = false; $('rf-bed-d').focus(); return; } S.bed = { d: v ? +v : null }; schedule(); });
+  $('rf-bed-d').addEventListener('change', e => { const v = parseFloat(e.target.value); if (isNum(v) && v >= 0.0625 && v <= 500) { S.bed = { d: v }; bedOther = false; schedule(); } else e.target.value = bedD() || ''; });
   $('rf-sv-use').addEventListener('click', () => {
     const c = surveyCalc(); if (!c) return;
     S.flow.Q = +c.Q.toPrecision(3); S.flow.allowance = 0; activePreset = null;
@@ -8817,7 +8853,7 @@ onmessage = e => {
     proZoom.aim = false; proZoom.cx += dx / (m.box.r - m.box.l) * (m.vb - m.va); proZoom.cz += dy / (m.box.b - m.box.t) * (m.vhi - m.vlo);
     renderProfile();
   });
-  addEventListener('pointerup', () => { if (proDrag) { proDrag = null; $('rf-lp').style.cursor = ''; } });
+  for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, () => { if (proDrag) { proDrag = null; $('rf-lp').style.cursor = ''; } });
   $('rf-lp').addEventListener('dblclick', fitProfile);
   $('rf-pro-in').addEventListener('click', () => zoomProfile(1.5));
   $('rf-pro-out').addEventListener('click', () => zoomProfile(1 / 1.5));
@@ -8848,7 +8884,8 @@ onmessage = e => {
     planZoom.cx += dx / (m.box.r - m.box.l) * (m.vb - m.va); planZoom.cy -= dy / (m.box.b - m.box.t) * (m.vhi - m.vlo);
     renderPlan();
   });
-  addEventListener('pointerup', () => { if (planDrag) { planDrag = null; $('rf-plan').style.cursor = ''; } });
+  // a touch that turns into a page scroll ends with pointercancel, not pointerup
+  for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, () => { if (planDrag) { planDrag = null; $('rf-plan').style.cursor = ''; } });
   $('rf-plan').addEventListener('dblclick', fitPlan);
   $('rf-plan-in').addEventListener('click', () => zoomPlan(1.5));
   $('rf-plan-out').addEventListener('click', () => zoomPlan(1 / 1.5));
@@ -8906,7 +8943,17 @@ onmessage = e => {
   $('rf-credit').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); About.open(); } });
   $('rf-about-close').addEventListener('click', About.close);
   $('rf-about-veil').addEventListener('click', About.close);
-  addEventListener('keydown', e => { if (e.key === 'Escape' && About.isOpen()) { e.stopPropagation(); About.close(); } }, true);
+  addEventListener('keydown', e => {
+    if (!About.isOpen()) return;
+    if (e.key === 'Escape') { e.stopPropagation(); About.close(); return; }
+    // a modal card: Tab cycles through its own links and buttons
+    if (e.key === 'Tab') {
+      const f = [...$('rf-about').querySelectorAll('a[href], button')];
+      const i = f.indexOf(document.activeElement), n = f.length;
+      e.preventDefault(); e.stopPropagation();
+      f[i < 0 ? 0 : (i + (e.shiftKey ? n - 1 : 1)) % n].focus();
+    }
+  }, true);
 
   // ---------- guided tour (as Solar Analysis Lab) ----------
   // Coach marks rather than a modal: the spotlight lets clicks through, so the
@@ -9004,6 +9051,7 @@ onmessage = e => {
       if (!active) was = { opened: new Set(), drawer: $('rf-root').dataset.drawer, scroll: [scrollY, ...['.rf-left', '.rf-right'].map(q => document.querySelector(q).scrollTop)] };
       active = true;
       show(from);
+      $('rf-tour-next').focus({ preventScroll: true }); // keyboard users start on Next
     }
     // Put back what the tour changed: the sections it opened, the drawer that
     // was showing on a phone, and where the panels were scrolled to.
@@ -9034,7 +9082,8 @@ onmessage = e => {
   $('rf-tour-dont').addEventListener('change', e => Tour.suppress(e.target.checked));
   $('rf-help').addEventListener('click', () => Tour.start(0));
   addEventListener('keydown', e => {
-    if (!Tour.isActive() || About.isOpen() || /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+    const a = document.activeElement, typing = /^(SELECT|TEXTAREA)$/.test(a.tagName) || (a.tagName === 'INPUT' && !['checkbox', 'radio', 'button'].includes(a.type));
+    if (!Tour.isActive() || About.isOpen() || typing) return;
     if (e.key === 'Escape') Tour.end();
     else if (e.key === 'ArrowRight') { e.preventDefault(); Tour.next(); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); Tour.back(); }
@@ -9048,7 +9097,10 @@ onmessage = e => {
   document.documentElement.classList.add('rf-ready');
   Tour.maybeAutoStart();
   // Hook for the browser checks.
-  window.RFL_UI = { tour: Tour, about: About, terrain: { geoFrame, terrainReach, gridTerrain, gridFromTiffTags }, bng: { wgsToBng, bngToWgs, tmForward }, get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, setView, get view() { return view; },
+  window.RFL_UI = { tour: Tour, about: About,
+    // the bed state mid-channel at chainage x, in the run with the design or without it
+    bedState: (x, without) => { const R = without ? BASE : RES; const s = R.sections.reduce((m, q) => Math.abs(q.x - x) < Math.abs(m.x - x) ? q : m); return bedAt(s, (s.banks.left + s.banks.right) / 2, R); },
+    terrain: { geoFrame, terrainReach, gridTerrain, gridFromTiffTags }, bng: { wgsToBng, bngToWgs, tmForward }, get state() { return S; }, get result() { return RES; }, get base() { return BASE; }, run, setView, get view() { return view; },
     // screen position (in the map) of the middle of a section, for the checks
     get rivers() { return MAP.rivers ? MAP.rivers.chains.map(c => ({ name: c.name, kind: c.kind, length: Math.round(c.length), points: c.pts.length, culvert: c.culvert })) : null; },
     chainScreen: (i, f) => { const c = MAP.rivers.chains[i]; const q = chainPart(c, 0, c.length * f); return toScreen(...q[q.length - 1]); },

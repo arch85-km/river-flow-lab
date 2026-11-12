@@ -358,7 +358,7 @@
         rules and says when it has. Buildings report the depth over their floor but do not block the
         flow.</li>
       <li><b>Results near a bridge depend on how far apart the sections are.</b> On a test reach the
-        afflux read 255&nbsp;mm with sections 100&nbsp;m apart and settled at 188&nbsp;mm from
+        afflux read 262&nbsp;mm with sections 100&nbsp;m apart and settled at 195&nbsp;mm from
         10&nbsp;m. Compare designs on the same sections, read the change rather than the level, and
         state the spacing.</li>
     </ol>
@@ -384,11 +384,11 @@
           <tr><td><b>Depth over the floor</b></td><td class="rf-p">m</td><td>Each building</td></tr>
           <tr><td><b>Water level against flow</b></td><td class="rf-p">m</td><td>The chosen section, 28 flows</td></tr>
         </tbody>
-        <caption>The CSV carries every row above to three decimals, with the settings in its header.</caption>
+        <caption>The CSV carries every row above, with the settings in its header; levels are given to the millimetre.</caption>
       </table></div>
       <p>The three flow buttons are set from the river itself. <b>River full</b> is the flow at which
         the river without your design reaches the lower of its two bank tops at the chosen section,
-        found by bisection. <b>Normal day</b> is a quarter of that and <b>Major flood</b> twice it.
+        found by iteration (the Illinois method). <b>Normal day</b> is a quarter of that and <b>Major flood</b> twice it.
         These are teaching anchors, not return periods: the tool has no hydrology, and a 1-in-100-year
         flow has to come from somewhere else. A climate allowance in per cent multiplies whatever flow
         is set.</p>
@@ -639,6 +639,10 @@ h_d = downstream level − max(deck top, ground)                  <em>drowning, 
 D*   = d · ( (s − 1) · g / ν² )^(1/3)            <em>s 2.65 (quartz), ν 1.0 × 10⁻⁶ m²/s (water at about 20 °C)</em>
 θ_cr = 0.30 / (1 + 1.2 D*) + 0.055 · (1 − e^(−0.020 D*))
 τ_cr = θ_cr · (s − 1) · ρ · g · d                 <em>force needed to start the grains moving</em></pre>
+      <p>Under a floating object part of the perimeter is the hull. The bed then takes its own share
+        of the friction, as Horton's rule assumes when it combines the two roughnesses: τ is
+        multiplied by (<i>n</i>_bed / <i>n</i>)^1.5, where <i>n</i> is the combined roughness. A
+        smooth hull leaves more of the force on the bed; with no hull the factor is 1.</p>
       <p>Each section of the channel bed is then in one of three states, read from the upstream end
         down:</p>
       <ul>
@@ -681,7 +685,7 @@ D*   = d · ( (s − 1) · g / ν² )^(1/3)            <em>s 2.65 (quartz), ν 1
           <tr><td>Flow over an overtopped deck</td><td class="rf-n">1,244.6&nbsp;m&sup3;/s</td><td class="rf-n">1,244.7&nbsp;m&sup3;/s</td><td>The weir equation summed by hand over the deck</td></tr>
           <tr><td>Afflux</td><td class="rf-n">204.17&nbsp;mm</td><td class="rf-n">204.17&nbsp;mm</td><td>The biggest rise found from two separate runs</td></tr>
         </tbody>
-        <caption>From <span class="rf-mono">tests/engine.test.mjs</span>, 65 checks.</caption>
+        <caption>From <span class="rf-mono">tests/engine.test.mjs</span>, 73 checks.</caption>
       </table></div>
       <h3>The spacing of sections</h3>
       <p>A bridge or a blockage acts on the sections that cross it, and its losses are spread over the
@@ -690,18 +694,18 @@ D*   = d · ( (s − 1) · g / ν² )^(1/3)            <em>s 2.65 (quartz), ν 1
       <div class="rf-tbl"><table>
         <thead><tr><th>Section spacing</th><th class="rf-n">Afflux</th><th class="rf-n">Rise 300&nbsp;m upstream</th></tr></thead>
         <tbody>
-          <tr><td>100&nbsp;m</td><td class="rf-n">255&nbsp;mm</td><td class="rf-n">244&nbsp;mm</td></tr>
-          <tr><td>50&nbsp;m</td><td class="rf-n">237&nbsp;mm</td><td class="rf-n">227&nbsp;mm</td></tr>
-          <tr><td>25&nbsp;m</td><td class="rf-n">217&nbsp;mm</td><td class="rf-n">207&nbsp;mm</td></tr>
-          <tr><td>15&nbsp;m (the template)</td><td class="rf-n">197&nbsp;mm</td><td class="rf-n">188&nbsp;mm</td></tr>
-          <tr><td>10&nbsp;m</td><td class="rf-n">188&nbsp;mm</td><td class="rf-n">179&nbsp;mm</td></tr>
-          <tr><td>5&nbsp;m</td><td class="rf-n">188&nbsp;mm</td><td class="rf-n">179&nbsp;mm</td></tr>
+          <tr><td>100&nbsp;m</td><td class="rf-n">262&nbsp;mm</td><td class="rf-n">252&nbsp;mm</td></tr>
+          <tr><td>50&nbsp;m</td><td class="rf-n">245&nbsp;mm</td><td class="rf-n">236&nbsp;mm</td></tr>
+          <tr><td>25&nbsp;m</td><td class="rf-n">225&nbsp;mm</td><td class="rf-n">216&nbsp;mm</td></tr>
+          <tr><td>15&nbsp;m (the template)</td><td class="rf-n">204&nbsp;mm</td><td class="rf-n">196&nbsp;mm</td></tr>
+          <tr><td>10&nbsp;m</td><td class="rf-n">195&nbsp;mm</td><td class="rf-n">187&nbsp;mm</td></tr>
+          <tr><td>5&nbsp;m</td><td class="rf-n">196&nbsp;mm</td><td class="rf-n">187&nbsp;mm</td></tr>
         </tbody>
         <caption>The figure settles from about 10&nbsp;m. At the template's 15&nbsp;m it is about 5 per cent high.</caption>
       </table></div>
       <h3>Steadiness</h3>
       <p>As the flow rises the level upstream of a bridge rises with it, without jumps, through
-        pressure flow and into overtopping: by at most 0.11&nbsp;m for each 10&nbsp;m&sup3;/s with eddy
+        pressure flow and into overtopping: by about 0.11&nbsp;m for each 10&nbsp;m&sup3;/s with eddy
         zones off, and 0.20&nbsp;m for each 20&nbsp;m&sup3;/s with them on, on the test reach.</p>
       <p class="rf-note"><b>These figures are internal consistency, not validation.</b> They show the
         engine solves the equations it states, correctly and steadily. None is a comparison with

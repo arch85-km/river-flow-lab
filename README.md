@@ -83,7 +83,8 @@ idealised channel with floodplains, not a survey) with one example bridge.
   the spacing you set; the line's corners are rounded first, and on a bend
   each overbank gets its own reach length. The levels come from the
   template shape until surveyed levels are entered, and the reach says so.
-- **Rivers from OpenStreetMap:** in the Map view, *Find rivers here* loads
+- **Rivers from OpenStreetMap:** with the Map view open, *Find rivers here*
+  (OpenStreetMap) in River loads
   the rivers and streams in view (up to 3 km across). Click one, then click
   where your reach starts and ends. OpenStreetMap draws waterways in the
   direction of flow, so that sets which end is upstream whatever order you
@@ -110,7 +111,7 @@ idealised channel with floodplains, not a survey) with one example bridge.
   flow on the bed with the force needed to move its grains (Shields'
   threshold), and names where the design starts or stops the bed moving.
   Without a bed material it hints from the channel speeds alone: sections
-  1.5 times faster or 0.6 times slower than the reach's typical speed,
+  at least 1.5 times, or at most 0.6 times, the reach's typical speed,
   places where the design changes the speed by 10% or more, and wet eddy
   zones. How deep the bed scours is not modelled, and the app says so.
 - **File** menu: export the view as PNG, the results as CSV, and save or
@@ -209,8 +210,8 @@ and the DOI to one value across `CITATION.cff`, `.zenodo.json`,
 `package.json`, `package-lock.json`, the app (`VERSION`, `RELEASED`, its
 citation) and both method-notes pages. `tests/release-guard.test.mjs` (25
 checks) proves each of its checks by breaking it. Then
-`tests/engine.test.mjs` (69 checks), `tests/overpass-proxy.mjs` (19 checks;
-skipped where PHP is not installed) and `tests/ui.test.mjs` (276 checks,
+`tests/engine.test.mjs` (73 checks), `tests/overpass-proxy.mjs` (19 checks;
+skipped where PHP is not installed) and `tests/ui.test.mjs` (288 checks,
 headless Chromium with WebGL through SwiftShader; every off-origin
 request is refused, except map tiles, place search and Overpass, which are
 answered from local fixtures in `tests/fixtures/`; the Overpass fixture is

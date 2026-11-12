@@ -271,6 +271,22 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   const sizes = [0.0002, 0.0007, 0.004, 0.03, 0.1].map(RFL.criticalShear);
   check('coarser grains need more force, from fine sand to cobbles', sizes.every((t, i) => !i || t > sizes[i - 1]), sizes.map(t => t.toFixed(2)).join(' < ') + ' N/m²');
   check('a dry channel has no bed force', RFL.bedShear({ sub: { ch: { A: 0, P: 0, K: 0, Q: 0 } } }) === null);
+  // Under a floating object the hull takes part of the friction. The bed's
+  // share follows Horton's equal-speed assumption: (n_bed / n_combined)^1.5 of
+  // the average. A smoother hull leaves more of the force on the bed, never less.
+  const pts = rect(10, 0), secs = [section(0, pts, 0.035), section(100, pts, 0.035)];
+  const under = hn => RFL.hydraulics(RFL.prepare({ sections: secs, floats: [{ x0: 0, x1: 100, y0: 0, y1: 10, draft: 0.3, n: hn }] }).preps[0], 2, 20);
+  const smooth = under(0.013), rough = under(0.035);
+  const ch = smooth.sub.ch, byHand = 1000 * 9.81 * (ch.A / ch.P) * Math.pow(ch.Q / ch.K, 2) * Math.pow(0.035 / ch.nE, 1.5);
+  check('under a hull the bed takes its own share of the friction', near(RFL.bedShear(smooth), byHand, 1e-9), `${RFL.bedShear(smooth).toFixed(3)} N/m², composite n ${ch.nE.toFixed(4)}`);
+  // On a reach the level finds itself: a long pontoon over the whole channel,
+  // and the force on the bed half way along. Before the bed took its own share,
+  // a smoother hull was reported as pushing less on the bed than a rough one.
+  const reach = []; for (let x = 0; x <= 1000; x += 20) reach.push(section(x, rect(10, 0.001 * x), 0.035));
+  const mid = hn => { const r = RFL.solve({ sections: reach, boundary: { type: 'normal', slope: 0.001 }, floats: hn ? [{ x0: 0, x1: 1000, y0: 0, y1: 10, draft: 0.3, n: hn }] : [] }, 20); return RFL.bedShear(r.sections.find(s => Math.abs(s.x - 500) < 1e-6)); };
+  const tSmooth = mid(0.013), tRough = mid(0.035);
+  check('a smoother hull does not lower the force on the bed', tSmooth > tRough, `hull n 0.013: ${tSmooth.toFixed(2)}, hull n 0.035: ${tRough.toFixed(2)}, no pontoon ${mid(null).toFixed(2)} N/m²`);
+  check('a hull as rough as the bed leaves the plain rho g R Sf', near(RFL.bedShear(rough), 1000 * 9.81 * (rough.sub.ch.A / rough.sub.ch.P) * Math.pow(rough.sub.ch.Q / rough.sub.ch.K, 2), 1e-9));
 }
 
 // 9. Yarnell's pier equation against a hand calculation
@@ -301,6 +317,29 @@ const base = { boundary: { type: 'normal', slope: 0.002 } };
   check('one section is refused', !!RFL.solve({ sections: [vsec(0)] }, 10).error);
   const r = RFL.solve({ ...base, sections: vsecs() }, 40);
   check('buildings: depth over floor', near(RFL.buildings(r, [{ id: 'b', x: 150, floor: 1 }])[0].depth, RFL.wsAt(r, 150) - 1, 1e-12));
+}
+
+// The method notes' table of afflux against section spacing, recomputed. The
+// table once went stale while the engine moved on, and nothing noticed, so the
+// figures are read from docs/method-notes.html and held to the engine here.
+{
+  const sec = x => {
+    const b = 100 - 0.001 * x;
+    return { id: 's' + x, x, pts: [[0, b + 3], [100, b + 2], [101, b], [121, b], [122, b + 2], [222, b + 3]],
+      banks: { left: 101, right: 121 }, n: { lob: 0.06, ch: 0.035, rob: 0.06 } };
+  };
+  const bridge = { id: 'A', x: 495, length: 10, lowChord: 104, highChord: 105, openLeft: 101, openRight: 121, piers: [{ y: 111, width: 2 }] };
+  const notes = readFileSync(new URL('../docs/method-notes.html', import.meta.url), 'utf8');
+  const bad = [];
+  for (const sp of [100, 50, 25, 15, 10, 5]) {
+    const sections = []; for (let x = 0; x <= 1000 + 1e-9; x += sp) sections.push(sec(x));
+    const model = { sections, boundary: { type: 'normal', slope: 0.001 }, obstructions: [], walls: [], eddy: { on: true, er: 2, cr: 1 } };
+    const w = RFL.solve({ ...model, bridges: [bridge] }, 150), wo = RFL.solve({ ...model, bridges: [], stations: w.sections.map(s => s.x) }, 150);
+    const afflux = Math.round(w.bridges[0].afflux * 1000), r300 = Math.round((RFL.wsAt(w, 805) - RFL.wsAt(wo, 805)) * 1000);
+    const row = notes.match(new RegExp(`<tr><td>${sp}&nbsp;m[^<]*</td><td class="rf-n">(\\d+)&nbsp;mm</td><td class="rf-n">(\\d+)&nbsp;mm</td></tr>`));
+    if (!row || +row[1] !== afflux || +row[2] !== r300) bad.push(`${sp} m: engine ${afflux}/${r300}, notes ${row ? row[1] + '/' + row[2] : 'no row'}`);
+  }
+  check('the notes\' section-spacing table matches the engine', !bad.length, bad.join('; ') || 'all six rows');
 }
 
 // Afflux is the biggest rise upstream of a bridge, not the level at the next

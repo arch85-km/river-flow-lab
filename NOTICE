@@ -3,7 +3,7 @@ River Flow Lab
 
 Two licences
 ------------
-Software (index.html, tools/, tests/): MIT License — see LICENSE.
+Software (index.html, server/, tools/, tests/): MIT License — see LICENSE.
 Documentation and teaching material (README, docs/, screenshots, figures):
 Creative Commons Attribution 4.0 International (CC BY 4.0),
 https://creativecommons.org/licenses/by/4.0/

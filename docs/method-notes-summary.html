@@ -372,7 +372,7 @@
       <li><b>It is one-dimensional.</b> It cannot follow water round the end of a wall or across a
         floodplain, and buildings report a depth but do not block the flow.</li>
       <li><b>Results near a bridge depend on section spacing.</b> On a test reach the afflux read
-        255&nbsp;mm with sections 100&nbsp;m apart and 188&nbsp;mm from 10&nbsp;m. Compare designs on
+        262&nbsp;mm with sections 100&nbsp;m apart and 195&nbsp;mm from 10&nbsp;m. Compare designs on
         the same sections and read the change.</li>
     </ol>
   </div>
@@ -396,7 +396,7 @@
           <tr><td><b>Depth over the floor</b></td><td class="rf-p">m</td><td>Each building</td></tr>
           <tr><td><b>Water level against flow</b></td><td class="rf-p">m</td><td>The chosen section, 28 flows</td></tr>
         </tbody>
-        <caption>The CSV carries every row above to three decimals, with the settings in its header.</caption>
+        <caption>The CSV carries every row above, with the settings in its header; levels are given to the millimetre.</caption>
       </table></div>
       <p>The water surface is found by the <b>standard-step method</b>: from the downstream end
         upwards, each section's level balances the energy equation with friction and with
@@ -424,11 +424,13 @@
         <div><span class="rf-chip is-out">Out</span><dt>Supercritical flow</dt>
           <dd>Where the flow is squeezed too hard, the section is held at critical depth and flagged.
             The flag marks where a fuller model would be needed.</dd></div>
-        <div><span class="rf-chip is-out">Out</span><dt>Culverts, sediment, debris, rain on the site</dt>
+        <div><span class="rf-chip is-out">Out</span><dt>Culverts, debris, rain on the site</dt>
           <dd>River flooding through open channels and bridges only. A blocked bridge opening can be
-            imitated with an obstruction. With the bed's material chosen, it says where the flow is
-            strong enough to move the bed, by Shields' threshold; how deep it scours and how the bed changes
-            are not modelled.</dd></div>
+            imitated with an obstruction.</dd></div>
+        <div><span class="rf-chip is-part">Partly</span><dt>Sediment</dt>
+          <dd>With the bed's material chosen, it says where the water can move the bed, where material
+            builds up and where the bed is stable, by Shields' threshold. How deep it wears away and how
+            the bed changes over time are not modelled.</dd></div>
         <div><span class="rf-chip is-part">Partly</span><dt>Buildings and eddies</dt>
           <dd>Buildings report the depth over their floor but do not block the flow; add an
             obstruction to make one an obstacle. Eddy zones behind a blockage are sized by ratios
@@ -449,8 +451,8 @@
             RK4 integration of the gradually varied flow equation. Normal and critical depth match
             their closed forms to four decimals.</dd></div>
         <div><span class="rf-chip is-part">+5%</span><dt>Section spacing at a bridge</dt>
-          <dd>The afflux on a test reach was 197&nbsp;mm at the template's 15&nbsp;m spacing against
-            188&nbsp;mm once settled at 10&nbsp;m, and 255&nbsp;mm at 100&nbsp;m. Closer sections
+          <dd>The afflux on a test reach was 204&nbsp;mm at the template's 15&nbsp;m spacing against
+            195&nbsp;mm once settled at 10&nbsp;m, and 262&nbsp;mm at 100&nbsp;m. Closer sections
             near a structure give a steadier figure.</dd></div>
         <div><span class="rf-chip is-part">1.44</span><dt>Weir over a bridge deck</dt>
           <dd>When water goes over a deck, the flow divides between the opening and a broad-crested
@@ -555,6 +557,14 @@
     <p class="rf-ref">Villemonte, J. R. (1947). &lsquo;Submerged weir discharge studies&rsquo;,
       <i>Engineering News-Record</i>, 139(26).
       <span style="color:var(--rf-ink3)">&mdash; Drowning of the deck weir.</span></p>
+    <p class="rf-ref">Shields, A. (1936). <i>Anwendung der Ähnlichkeitsmechanik und der Turbulenzforschung auf
+      die Geschiebebewegung</i>. Mitteilungen der Preußischen Versuchsanstalt für Wasserbau und Schiffbau,
+      26. Berlin.
+      <span style="color:var(--rf-ink3)">&mdash; The threshold of motion for grains on a bed.</span></p>
+    <p class="rf-ref">Soulsby, R. L. (1997). <i>Dynamics of Marine Sands: A Manual for Practical
+      Applications</i>. London: Thomas Telford.
+      <span style="color:var(--rf-ink3)">&mdash; The fit to Shields' curve that gives the threshold
+      from the grain size.</span></p>
 
   </div>
 </div>

@@ -123,8 +123,12 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   check('more flow raises the water', w1 > w0 + 0.1, `${w0.toFixed(3)} → ${w1.toFixed(3)} m`);
   await page.locator('#rf-q-range').fill('900'); await settle(page);
   const q = await page.evaluate(() => window.RFL_UI.state.flow.Q);
-  check('slider sets the flow', q > 40, `${q} m³/s`);
+  // the slider runs to 2.5 times the river-full flow (22.5 m³/s on the template)
+  check('slider sets the flow', q > 22.5, `${q} m³/s at nine-tenths of the slider`);
   check('flow pill follows the flow', (await page.textContent('#rf-pill-flow')).includes(q.toFixed(1)));
+  await page.locator('#rf-q-range').fill('1000'); await settle(page);
+  const qTop = await page.evaluate(() => window.RFL_UI.state.flow.Q);
+  check('the slider reaches 2.5 times the river-full flow', qTop >= 56 && qTop <= 57.5, `${qTop} m³/s at the top`);
 
   // bankfull preset puts the water at the lower bank of the chosen section
   await page.selectOption('#rf-view-sec', 'XS11'); await settle(page);
@@ -311,6 +315,7 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
     'empty river line': s => { s.geo = { line: [], yc: 0 }; },
     'wall set-back as text': s => { s.walls = s.walls.map(w => ({ ...w, setback: '2' })); },
     'boundary without a slope': s => { s.boundary = { type: 'normal' }; },
+    'a floating object with no length': s => { s.floats = [{ id: 'F1', x0: 100, x1: 100, y0: 20, y1: 24, draft: 0.5, height: 1 }]; },
   };
   const keep = await page.evaluate(() => JSON.stringify(window.RFL_UI.state.sections));
   for (const [what, spoil] of Object.entries(damaged)) {
@@ -674,7 +679,7 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   check('bed: the legend names the three states', /Moving:.*Building up:.*Stable:/.test(await page.textContent('#rf-legend')));
   await page.selectOption('#rf-bed', '100'); await settle(page); await settle(page);
   check('bed: cobbles are stable at this flow', /The bed is stable along the whole river at this flow: the water cannot move cobbles anywhere/.test(await notes()));
-  check('bed: with cobbles the whole channel shows stable grey, not building up', await page.$$eval('#rf-plan rect', r => { const f = r.map(e => e.getAttribute('fill')); return f.includes('#7e8c9a') && !f.includes('#2f7fd1') && !f.includes('#d8453b'); }));
+  check('bed: with cobbles the whole channel shows stable grey, not building up', await page.$$eval('#rf-plan rect', r => { const f = r.map(e => e.getAttribute('fill')); return f.includes('#4b5866') && !f.includes('#2f7fd1') && !f.includes('#d8453b'); }));
   await page.selectOption('#rf-bed', 'other');
   check('bed: Other grain size shows the size field', await page.locator('#rf-bed-d').isVisible());
   await page.fill('#rf-bed-d', '0.03'); await page.press('#rf-bed-d', 'Tab'); await settle(page);
@@ -687,6 +692,69 @@ const baseAt = (page, x) => page.evaluate(x => { const s = window.RFL_UI.base.se
   await page.selectOption('#rf-bed', ''); await settle(page); await settle(page);
   check('bed: clearing the material puts the colouring back to depth', await page.$eval('[data-waterby][aria-pressed="true"]', b => b.dataset.waterby) === 'depth');
   check('bed: no console errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// ---- the pre-release review's findings, held ----
+{
+  const { page, ctx, errors } = await openPage({ width: 1440, height: 900 });
+  // a mistyped survey must not leave the flow slider stuck at a huge range
+  await page.click('#rf-survey summary');
+  for (const [k, v] of [['w', 20], ['d', 2], ['L', 50], ['t', 0.1], ['k', 0.85]]) await page.fill('#rf-sv-' + k, String(v));
+  await page.click('#rf-sv-use'); await settle(page); await settle(page);
+  const big = await page.evaluate(() => window.RFL_UI.state.flow.Qmax);
+  await page.click('[data-preset="low"]'); await settle(page); await settle(page);
+  const back = await page.evaluate(() => window.RFL_UI.state.flow.Qmax);
+  check('review: the slider range comes back down after a mistyped survey', big > 10000 && back <= Math.ceil(22.5 * 2.5) + 1, `${big} then ${back} m³/s`);
+  // in Without, the bed state belongs to the river without the design
+  await page.click('[data-preset="flood"]'); await page.click('#rf-river-sec summary'); await page.selectOption('#rf-bed', '30'); await settle(page); await settle(page);
+  const st = await page.evaluate(() => [window.RFL_UI.bedState(195, false), window.RFL_UI.bedState(195, true)]);
+  check('review: the bed state in Without is read from the river without the design', st[0] === 'builds' && st[1] === 'moves', st.join(' / '));
+  // 'Other grain size' does not stick after opening a project with no bed
+  await page.selectOption('#rf-bed', 'other'); await page.fill('#rf-bed-d', '5'); await page.press('#rf-bed-d', 'Tab'); await settle(page);
+  const proj = await page.evaluate(() => { const s = JSON.parse(JSON.stringify(window.RFL_UI.state)); delete s.bed; return { app: 'River Flow Lab', state: s }; });
+  await page.setInputFiles('#rf-file', { name: 'nobed.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(proj)) });
+  await page.waitForFunction(() => window.RFL_UI.state.bed.d === null); await settle(page);
+  check('review: opening a project with no bed shows Not set, not Other', await page.inputValue('#rf-bed') === '' && await page.locator('#rf-bed-d').isHidden());
+  // the © card keeps the keyboard inside it
+  await page.click('#rf-credit');
+  let inside = true; for (let i = 0; i < 8; i++) { await page.keyboard.press('Tab'); inside = inside && await page.evaluate(() => !!document.activeElement.closest('#rf-about')); }
+  check('review: Tab stays inside the © card while it is open', inside);
+  await page.keyboard.press('Escape');
+  check('review: no console errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+{
+  // the tour starts with focus on Next
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } }), page = await ctx.newPage();
+  await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
+  await page.goto(origin + '/?tour=1'); await page.waitForSelector('#rf-tour:not([hidden])');
+  check('review: the tour starts with focus on Next', await page.evaluate(() => document.activeElement.id) === 'rf-tour-next');
+  await page.focus('#rf-tour-dont'); await page.keyboard.press('Escape');
+  check('review: Escape closes the tour from the opt-out box', await page.locator('#rf-tour').isHidden());
+  await ctx.close();
+}
+{
+  // on a phone the Plan tools clear the axis labels, and the scale note clears the bridge name
+  const { page, ctx } = await openPage({ width: 390, height: 844 });
+  await page.click('.rf-views [data-view="plan"]'); await settle(page);
+  const r = await page.evaluate(() => {
+    const box = e => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    const tools = [...document.querySelectorAll('.rf-stage-tools > *')].filter(e => !e.hidden && e.offsetParent).map(box);
+    const texts = [...document.querySelectorAll('#rf-plan svg text')].map(e => ({ t: e.textContent, b: box(e) }));
+    const note = texts.find(x => /scale/.test(x.t)), others = texts.filter(x => x !== note);
+    return { toolsOverText: texts.filter(x => tools.some(t => hit(t, x.b))).map(x => x.t), noteOver: note ? others.filter(x => hit(note.b, x.b)).map(x => x.t) : ['no note'] };
+  });
+  check('review: phone Plan tools clear the drawing\'s labels', !r.toolsOverText.length, r.toolsOverText.join(', '));
+  check('review: phone Plan scale note clears the other labels', !r.noteOver.length, r.noteOver.join(', '));
+  await ctx.close();
+}
+{
+  // the dark theme's 'stable' slate is light enough to see
+  const { page, ctx } = await openPage({ width: 1440, height: 900 }, 'dark');
+  await page.click('#rf-river-sec summary'); await page.selectOption('#rf-bed', '100'); await settle(page);
+  await page.click('[data-waterby="bed"]'); await settle(page);
+  check('review: dark theme uses the lighter slate for Stable', (await page.innerHTML('#rf-legend')).includes('#8b98a7'));
   await ctx.close();
 }
 
